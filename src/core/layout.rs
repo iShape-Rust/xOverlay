@@ -43,7 +43,7 @@ impl Layout {
     #[inline(always)]
     pub(crate) fn borders(&self, index: usize) -> (i32, i32) {
         let min = (index << self.column_width_power) as i32;
-        let max = ((index << (self.column_width_power + 1)) as i32).min(self.rect.max_x);
+        let max = (min + (1i32 << self.column_width_power)).min(self.rect.max_x);
         (min, max)
     }
 

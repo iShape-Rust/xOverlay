@@ -6,10 +6,11 @@
 extern crate alloc;
 
 pub mod core;
-pub(crate) mod build;
+pub(crate) mod graph;
 mod ortho;
 mod sub;
 mod geom;
+pub(crate) mod bind;
 
 pub use i_float;
 pub use i_shape;

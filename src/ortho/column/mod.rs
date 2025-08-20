@@ -1,8 +1,12 @@
-use crate::ortho::segm::OrthoSegment;
-use alloc::vec::Vec;
-use i_shape::util::reserve::Reserve;
+mod fill;
+mod filter;
+mod split;
+
 use crate::core::fill::SegmentFill;
 use crate::ortho::mapper::Counter;
+use crate::ortho::segment::OrthoSegment;
+use alloc::vec::Vec;
+use i_shape::util::reserve::Reserve;
 
 #[derive(Clone)]
 pub(crate) struct Column<C> {
@@ -13,6 +17,8 @@ pub(crate) struct Column<C> {
     pub(crate) border_points: Vec<i32>,
     pub(crate) min: i32,
     pub(crate) max: i32,
+    pub(crate) links_start: usize,
+    pub(crate) links_count: usize,
 }
 
 impl<C> Default for Column<C> {
@@ -26,6 +32,8 @@ impl<C> Default for Column<C> {
             border_points: Default::default(),
             min: 0,
             max: 0,
+            links_start: 0,
+            links_count: 0,
         }
     }
 }
@@ -43,5 +51,10 @@ impl<C> Column<C> {
         self.vr_fills.clear();
         self.min = min;
         self.max = max;
+    }
+
+    #[inline(always)]
+    pub(crate) fn links_end(&self) -> usize {
+        self.links_start + self.links_count
     }
 }

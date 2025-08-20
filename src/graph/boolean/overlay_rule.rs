@@ -1,206 +1,10 @@
-use crate::core::fill::{
-    ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, FillStrategy,
-    InclusionFilterStrategy, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP, SegmentFill,
-};
-use crate::core::fill_rule::FillRule;
-use crate::core::link::{OverlayLink, OverlayLinkFilter};
-use crate::core::overlay_rule::OverlayRule;
-use crate::core::shape_type::ShapeType;
-use crate::core::winding::WindingCount;
-use crate::ortho::column::Column;
 use alloc::vec::Vec;
 use i_shape::util::reserve::Reserve;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ShapeCountBoolean {
-    pub subj: i16,
-    pub clip: i16,
-}
-
-impl ShapeCountBoolean {
-    const SUBJ_DIRECT: ShapeCountBoolean = ShapeCountBoolean { subj: 1, clip: 0 };
-    const SUBJ_INVERT: ShapeCountBoolean = ShapeCountBoolean { subj: -1, clip: 0 };
-    const CLIP_DIRECT: ShapeCountBoolean = ShapeCountBoolean { subj: 0, clip: 1 };
-    const CLIP_INVERT: ShapeCountBoolean = ShapeCountBoolean { subj: 0, clip: -1 };
-}
-
-impl WindingCount for ShapeCountBoolean {
-    #[inline(always)]
-    fn is_not_empty(&self) -> bool {
-        self.subj != 0 || self.clip != 0
-    }
-
-    #[inline(always)]
-    fn new(subj: i16, clip: i16) -> Self {
-        Self { subj, clip }
-    }
-
-    #[inline(always)]
-    fn with_shape_type(shape_type: ShapeType) -> (Self, Self) {
-        match shape_type {
-            ShapeType::Subject => (
-                ShapeCountBoolean::SUBJ_DIRECT,
-                ShapeCountBoolean::SUBJ_INVERT,
-            ),
-            ShapeType::Clip => (
-                ShapeCountBoolean::CLIP_DIRECT,
-                ShapeCountBoolean::CLIP_INVERT,
-            ),
-        }
-    }
-
-    #[inline(always)]
-    fn add(self, count: Self) -> Self {
-        let subj = self.subj + count.subj;
-        let clip = self.clip + count.clip;
-
-        Self { subj, clip }
-    }
-
-    #[inline(always)]
-    fn apply(&mut self, count: Self) {
-        self.subj += count.subj;
-        self.clip += count.clip;
-    }
-
-    #[inline(always)]
-    fn invert(self) -> Self {
-        Self {
-            subj: -self.subj,
-            clip: -self.clip,
-        }
-    }
-}
-
-impl Column<ShapeCountBoolean> {
-    pub(crate) fn fill_boolean(&mut self, fill_rule: FillRule) {
-        match fill_rule {
-            FillRule::EvenOdd => self.fill_with_strategy::<EvenOddStrategy>(),
-            FillRule::NonZero => self.fill_with_strategy::<NonZeroStrategy>(),
-            FillRule::Positive => self.fill_with_strategy::<PositiveStrategy>(),
-            FillRule::Negative => self.fill_with_strategy::<NegativeStrategy>(),
-        }
-    }
-
-    pub(crate) fn count_included_links_with_overlay_rule(
-        &self,
-        overlay_rule: OverlayRule,
-    ) -> usize {
-        match overlay_rule {
-            OverlayRule::Subject => self.count_included_links::<SubjectFilter>(),
-            OverlayRule::Clip => self.count_included_links::<ClipFilter>(),
-            OverlayRule::Intersect => self.count_included_links::<IntersectFilter>(),
-            OverlayRule::Union => self.count_included_links::<UnionFilter>(),
-            OverlayRule::Difference => self.count_included_links::<DifferenceFilter>(),
-            OverlayRule::Xor => self.count_included_links::<XorFilter>(),
-            OverlayRule::InverseDifference => {
-                self.count_included_links::<InverseDifferenceFilter>()
-            }
-        }
-    }
-
-    pub(crate) fn copy_and_sort_links_into(
-        &self,
-        overlay_rule: OverlayRule,
-        target: &mut [OverlayLink],
-    ) {
-        match overlay_rule {
-            OverlayRule::Subject => self.copy_links_into::<SubjectFilter>(target),
-            OverlayRule::Clip => self.copy_links_into::<ClipFilter>(target),
-            OverlayRule::Intersect => self.copy_links_into::<IntersectFilter>(target),
-            OverlayRule::Union => self.copy_links_into::<UnionFilter>(target),
-            OverlayRule::Difference => self.copy_links_into::<DifferenceFilter>(target),
-            OverlayRule::Xor => self.copy_links_into::<XorFilter>(target),
-            OverlayRule::InverseDifference => {
-                self.copy_links_into::<InverseDifferenceFilter>(target)
-            }
-        }
-        target.sort_unstable_by(|link_0, link_1| {
-            link_0
-                .a
-                .point
-                .cmp(&link_1.a.point)
-                .then(link_0.b.point.cmp(&link_1.b.point))
-        });
-    }
-}
-
-struct EvenOddStrategy;
-struct NonZeroStrategy;
-struct PositiveStrategy;
-struct NegativeStrategy;
-
-impl FillStrategy<ShapeCountBoolean> for EvenOddStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
-        let subj_top = 1 & top.subj as SegmentFill;
-        let subj_bot = 1 & bot.subj as SegmentFill;
-        let clip_top = 1 & top.clip as SegmentFill;
-        let clip_bot = 1 & bot.clip as SegmentFill;
-
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
-    }
-}
-
-impl FillStrategy<ShapeCountBoolean> for NonZeroStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
-        let subj_top = (top.subj != 0) as SegmentFill;
-        let subj_bot = (bot.subj != 0) as SegmentFill;
-        let clip_top = (top.clip != 0) as SegmentFill;
-        let clip_bot = (bot.clip != 0) as SegmentFill;
-
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
-    }
-}
-
-impl FillStrategy<ShapeCountBoolean> for PositiveStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
-        let subj_top = (top.subj > 0) as SegmentFill;
-        let subj_bot = (bot.subj > 0) as SegmentFill;
-        let clip_top = (top.clip > 0) as SegmentFill;
-        let clip_bot = (bot.clip > 0) as SegmentFill;
-
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
-    }
-}
-
-impl FillStrategy<ShapeCountBoolean> for NegativeStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
-        let subj_top = (top.subj < 0) as SegmentFill;
-        let subj_bot = (bot.subj < 0) as SegmentFill;
-        let clip_top = (top.clip < 0) as SegmentFill;
-        let clip_bot = (bot.clip < 0) as SegmentFill;
-
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
-    }
-}
+use crate::core::fill::{InclusionFilterStrategy, SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
+use crate::core::overlay_rule::OverlayRule;
+use crate::graph::boolean::winding_count::ShapeCountBoolean;
+use crate::graph::link::{OverlayLink, OverlayLinkFilter};
+use crate::ortho::column::Column;
 
 struct SubjectFilter;
 struct ClipFilter;
@@ -462,5 +266,42 @@ fn filter_xor_into(links: &[OverlayLink], buffer: &mut Vec<bool>) {
     buffer.reserve_capacity(links.len());
     for link in links.iter() {
         buffer.push(!link.fill.is_xor());
+    }
+}
+
+impl Column<ShapeCountBoolean> {
+    pub(crate) fn count_links(
+        &self,
+        overlay_rule: OverlayRule,
+    ) -> usize {
+        match overlay_rule {
+            OverlayRule::Subject => self.count_included_links::<SubjectFilter>(),
+            OverlayRule::Clip => self.count_included_links::<ClipFilter>(),
+            OverlayRule::Intersect => self.count_included_links::<IntersectFilter>(),
+            OverlayRule::Union => self.count_included_links::<UnionFilter>(),
+            OverlayRule::Difference => self.count_included_links::<DifferenceFilter>(),
+            OverlayRule::Xor => self.count_included_links::<XorFilter>(),
+            OverlayRule::InverseDifference => {
+                self.count_included_links::<InverseDifferenceFilter>()
+            }
+        }
+    }
+
+    pub(crate) fn copy_links_into(
+        &self,
+        overlay_rule: OverlayRule,
+        links: &mut [OverlayLink],
+    ) {
+        match overlay_rule {
+            OverlayRule::Subject => self.copy_links_into_with_filter::<SubjectFilter>(links),
+            OverlayRule::Clip => self.copy_links_into_with_filter::<ClipFilter>(links),
+            OverlayRule::Intersect => self.copy_links_into_with_filter::<IntersectFilter>(links),
+            OverlayRule::Union => self.copy_links_into_with_filter::<UnionFilter>(links),
+            OverlayRule::Difference => self.copy_links_into_with_filter::<DifferenceFilter>(links),
+            OverlayRule::Xor => self.copy_links_into_with_filter::<XorFilter>(links),
+            OverlayRule::InverseDifference => {
+                self.copy_links_into_with_filter::<InverseDifferenceFilter>(links)
+            }
+        }
     }
 }

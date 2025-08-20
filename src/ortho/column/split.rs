@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use crate::core::winding::WindingCount;
 use crate::ortho::column::Column;
-use crate::ortho::segm::OrthoSegment;
+use crate::ortho::segment::OrthoSegment;
 use crate::sub::merge::Merge;
 
 struct Mark {
@@ -10,7 +10,7 @@ struct Mark {
 }
 
 impl<C: WindingCount + Clone> Column<C> {
-    pub(super) fn split(&mut self) {
+    pub(crate) fn split(&mut self) {
         self.vr_segments
             .sort_unstable_by(|s0, s1| s0.pos.cmp(&s1.pos).then(s0.min.cmp(&s1.min)));
         self.hz_segments

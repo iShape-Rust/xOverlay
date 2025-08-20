@@ -1,14 +1,14 @@
 use i_float::int::point::IntPoint;
 use i_shape::int::shape::IntContour;
-use crate::build::boolean::ShapeCountBoolean;
 use crate::core::layout::Layout;
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
+use crate::graph::boolean::winding_count::ShapeCountBoolean;
 use crate::ortho::error::OrthoError;
 use crate::ortho::mapper::Mapper;
 use crate::ortho::orientation::Orientation;
 use crate::ortho::overlay::OrthoOverlay;
-use crate::ortho::segm::OrthoSegment;
+use crate::ortho::segment::OrthoSegment;
 use crate::sub::seg_iter::{DropCollinear, SegmentIterable};
 
 const MIN_COUNT_PER_COLUMN_POWER: u32 = 6;
@@ -171,13 +171,13 @@ impl XYMinMaxRange for [IntPoint; 2] {
 mod tests {
     extern crate std;
 
-    use crate::build::boolean::ShapeCountBoolean;
     use crate::core::shape_type::ShapeType::Subject;
-    use crate::core::winding::WindingCount;
     use crate::ortho::overlay::OrthoOverlay;
-    use crate::ortho::segm::OrthoSegment;
+    use crate::ortho::segment::OrthoSegment;
     use i_float::int::point::IntPoint;
     use std::collections::HashSet;
+    use crate::core::winding::WindingCount;
+    use crate::graph::boolean::winding_count::ShapeCountBoolean;
 
     #[test]
     fn test_0() {

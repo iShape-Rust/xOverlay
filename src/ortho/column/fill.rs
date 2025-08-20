@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use crate::core::fill::{FillStrategy, SegmentFill, NONE};
 use crate::core::winding::WindingCount;
 use crate::ortho::column::Column;
-use crate::ortho::segm::OrthoSegment;
+use crate::ortho::segment::OrthoSegment;
 
 struct Anchor<C> {
     pos: i32,
@@ -27,7 +27,8 @@ impl<C: WindingCount> Column<C> {
 
             // add all vr in range s.min < y0
             while j < self.vr_segments.len() && self.vr_segments[j].min < y0 {
-                let fill = buffer.add_vr::<F>(&self.vr_segments[j]);
+                let vr = &self.vr_segments[j];
+                let fill = buffer.add_vr::<F>(vr);
                 unsafe {
                     *self.vr_fills.get_unchecked_mut(j) = fill;
                 }
@@ -36,7 +37,8 @@ impl<C: WindingCount> Column<C> {
 
             // add all hz with same y
             while i < self.hz_segments.len() && self.hz_segments[i].pos == y0 {
-                let fill = buffer.add_hz::<F>(&self.hz_segments[i]);
+                let hz = &self.hz_segments[i];
+                let fill = buffer.add_hz::<F>(hz);
                 unsafe {
                     *self.hz_fills.get_unchecked_mut(i) = fill;
                 }
@@ -49,8 +51,8 @@ impl<C: WindingCount> Column<C> {
 impl<C: WindingCount> CountBuffer<C> {
     fn new(min: i32, max: i32) -> Self {
         let mut counts = Vec::with_capacity(16);
-        counts.push(Anchor { pos: min, count: C::new(i16::MAX, i16::MAX) });
-        counts.push(Anchor { pos: max, count: C::new(0, 0) });
+        // counts.push(Anchor { pos: min, count: C::new(i16::MAX, i16::MAX) });
+        counts.push(Anchor { pos: max + 1, count: C::new(0, 0) });
         Self {
             counts
         }
@@ -82,16 +84,20 @@ impl<C: WindingCount> CountBuffer<C> {
                     self.counts.remove(index);
                 } else if remove_right {
                     self.counts.remove(index + 1);
+                } else {
+                    self.counts[index + 1].count = new_count;
                 }
 
                 fill
             }
             Err(index) => {
-                let count = unsafe { self.counts.get_unchecked(index + 1).count };
+                let count = unsafe { self.counts.get_unchecked(index).count };
                 let (new_count, fill) = F::add_and_fill(s.count, count);
 
-                self.counts.insert(index, Anchor { pos: s.min, count });
-                self.counts.insert(index + 1, Anchor { pos: s.max, count: new_count });
+                let a0 = Anchor { pos: s.min, count };
+                let a1 = Anchor { pos: s.max, count: new_count };
+
+                self.counts.splice(index..index, [a0, a1]);
                 fill
             }
         }
@@ -100,7 +106,7 @@ impl<C: WindingCount> CountBuffer<C> {
     #[inline]
     fn add_vr<F: FillStrategy<C>>(&self, s: &OrthoSegment<C>) -> SegmentFill {
         let index = self.counts.binary_search_by(|a|a.pos.cmp(&s.pos)).unwrap();
-        let count = unsafe { self.counts.get_unchecked(index + 1).count };
+        let count = self.counts[index + 1].count;
         let (_, fill) = F::add_and_fill(s.count, count);
         fill
     }
@@ -109,9 +115,9 @@ impl<C: WindingCount> CountBuffer<C> {
 #[cfg(test)]
 mod tests {
     use alloc::vec;
-    use crate::build::boolean::ShapeCountBoolean;
+    use crate::graph::boolean::winding_count::ShapeCountBoolean;
     use crate::ortho::column::Column;
-    use crate::ortho::segm::OrthoSegment;
+    use crate::ortho::segment::OrthoSegment;
 
     #[test]
     fn test_0() {
@@ -150,6 +156,8 @@ mod tests {
             border_points: vec![],
             min: 0,
             max: 10,
+            links_start: 0,
+            links_count: 0,
         };
 
 
