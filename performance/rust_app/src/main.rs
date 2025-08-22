@@ -127,7 +127,7 @@ fn run_test_2(multithreading: bool) {
 }
 
 fn run_test_3(multithreading: bool) {
-    println!("run Spiral test");
+    println!("run WindMill test");
     for i in 1..21 {
         let n = 1 << i;
         WindMillTest::run(n, OverlayRule::Difference, 100.0, multithreading)
