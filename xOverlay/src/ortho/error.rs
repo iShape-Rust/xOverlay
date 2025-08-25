@@ -1,4 +1,5 @@
 #[derive(Debug)]
-pub enum OrthoError {
-    NotValidPath
+pub enum OverlayError {
+    NotValidPath,
+    EmptyPath
 }

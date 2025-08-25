@@ -19,8 +19,9 @@ pub struct IntOverlayOptions {
     /// Minimum area threshold to include a contour in the result.
     pub min_output_area: u64,
 
-    /// Log of minimum segments count per column
-    pub min_count_per_column_power: u32
+    pub avg_count_per_column: usize,
+
+    pub max_parts_count: usize,
 }
 
 impl Default for IntOverlayOptions {
@@ -30,28 +31,22 @@ impl Default for IntOverlayOptions {
             output_direction: ContourDirection::CounterClockwise,
             preserve_output_collinear: false,
             min_output_area: 0,
-            min_count_per_column_power: 6,
+            avg_count_per_column: 64 * 1024,
+            max_parts_count: 1024,
         }
     }
 }
 
 impl IntOverlayOptions {
     pub fn keep_all_points() -> Self {
-        Self {
-            preserve_input_collinear: true,
-            output_direction: ContourDirection::CounterClockwise,
-            preserve_output_collinear: true,
-            min_output_area: 0,
-            min_count_per_column_power: 6,
-        }
+        let mut options = Self::default();
+        options.preserve_input_collinear = true;
+        options.preserve_output_collinear = true;
+        options
     }
     pub fn keep_output_points() -> Self {
-        Self {
-            preserve_input_collinear: false,
-            output_direction: ContourDirection::CounterClockwise,
-            preserve_output_collinear: true,
-            min_output_area: 0,
-            min_count_per_column_power: 6,
-        }
+        let mut options = Self::default();
+        options.preserve_output_collinear = true;
+        options
     }
 }

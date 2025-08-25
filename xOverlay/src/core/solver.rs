@@ -1,11 +1,43 @@
+#[derive(Debug, Clone, Copy)]
+pub enum CPUCount {
+    Auto,
+    Fixed(usize),
+    Single,
+}
+
 pub struct Solver {
-    pub multithreading: bool
+    pub cpu: CPUCount,
 }
 
 impl Default for Solver {
     fn default() -> Self {
         Self {
-            multithreading: true,
+            cpu: CPUCount::Auto,
+        }
+    }
+}
+
+impl Solver {
+    pub(crate) fn cpu_count(&self) -> usize {
+        #[cfg(feature = "allow_multithreading")]
+        {
+            extern crate std;
+            return match self.cpu {
+                CPUCount::Auto => match std::thread::available_parallelism() {
+                    Ok(value) => value.get(),
+                    Err(_) => 1,
+                },
+                CPUCount::Fixed(count) => count,
+                CPUCount::Single => 1,
+            }
+        }
+
+        1
+    }
+
+    pub fn single() -> Self {
+        Self {
+            cpu: CPUCount::Single,
         }
     }
 }

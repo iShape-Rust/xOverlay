@@ -1,8 +1,8 @@
 use crate::core::fill::{FillStrategy, SegmentFill};
 use crate::core::fill_rule::FillRule;
 use crate::core::winding::WindingCount;
+use crate::gear::section::Section;
 use crate::graph::boolean::winding_count::ShapeCountBoolean;
-use crate::ortho::column::Column;
 
 struct EvenOddStrategy;
 struct NonZeroStrategy;
@@ -81,13 +81,13 @@ impl FillStrategy<ShapeCountBoolean> for NegativeStrategy {
     }
 }
 
-impl Column<ShapeCountBoolean> {
+impl Section {
     pub(crate) fn fill_boolean(&mut self, fill_rule: FillRule) {
-        match fill_rule {
-            FillRule::EvenOdd => self.fill_with_strategy::<EvenOddStrategy>(),
-            FillRule::NonZero => self.fill_with_strategy::<NonZeroStrategy>(),
-            FillRule::Positive => self.fill_with_strategy::<PositiveStrategy>(),
-            FillRule::Negative => self.fill_with_strategy::<NegativeStrategy>(),
-        }
+        // match fill_rule {
+        //     FillRule::EvenOdd => self.fill_with_strategy::<EvenOddStrategy>(),
+        //     FillRule::NonZero => self.fill_with_strategy::<NonZeroStrategy>(),
+        //     FillRule::Positive => self.fill_with_strategy::<PositiveStrategy>(),
+        //     FillRule::Negative => self.fill_with_strategy::<NegativeStrategy>(),
+        // }
     }
 }

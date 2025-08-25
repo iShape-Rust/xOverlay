@@ -1,7 +1,7 @@
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ShapeCountBoolean {
     pub subj: i16,
     pub clip: i16,

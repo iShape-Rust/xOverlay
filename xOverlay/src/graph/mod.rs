@@ -2,7 +2,6 @@ pub(crate) mod end;
 pub(crate) mod link;
 mod node;
 pub(crate) mod boolean;
-pub(crate) mod column;
 mod build;
 mod extract;
 mod nearest_vector;
