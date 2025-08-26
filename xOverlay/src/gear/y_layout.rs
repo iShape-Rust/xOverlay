@@ -6,8 +6,7 @@ pub(super) struct YLayout {
     max_y: i32,
     part_log_height: u32,
     parts_count: usize,
-    single_shift_height: i32,
-    double_shift_height: i32,
+    max_height: i32
 }
 
 impl YLayout {
@@ -18,30 +17,26 @@ impl YLayout {
     }
 
     #[inline(always)]
+    pub(super) fn max_height(&self) -> i32 {
+        self.max_height
+    }
+
+    #[inline(always)]
     pub(super) fn bottom_index(&self, y: i32) -> usize {
-        let y0 = y - self.min_y;
-        y0 as usize >> self.part_log_height
+        let dy = (y - self.min_y) as usize;
+        dy >> self.part_log_height
     }
 
     #[inline(always)]
-    pub(super) fn top_unit_index(&self, y: i32) -> usize {
-        let y0 = y - self.min_y;
-        let y1 = (y0 + 1).min(self.max_y);
-        y1 as usize >> self.part_log_height
+    pub(super) fn bottom_index_clamp_min(&self, y: i32) -> usize {
+        let dy = (y.max(self.min_y) - self.min_y) as usize;
+        dy >> self.part_log_height
     }
 
     #[inline(always)]
-    pub(super) fn top_single_index(&self, y: i32) -> usize {
-        let y0 = y - self.min_y;
-        let y1 = (y0 + self.single_shift_height).min(self.max_y);
-        y1 as usize >> self.part_log_height
-    }
-
-    #[inline(always)]
-    pub(super) fn top_double_index(&self, y: i32) -> usize {
-        let y0 = y - self.min_y;
-        let y1 = (y0 + self.double_shift_height).min(self.max_y);
-        y1 as usize >> self.part_log_height
+    pub(super) fn bottom_index_clamp_max(&self, y: i32) -> usize {
+        let dy = (y - self.min_y).max(self.max_y) as usize;
+        dy >> self.part_log_height
     }
 
     pub(super) fn new(rect: IntRect, part_log_height: u32) -> Self {
@@ -52,8 +47,7 @@ impl YLayout {
             max_y: rect.max_y,
             part_log_height,
             parts_count,
-            single_shift_height: part_height + 1,
-            double_shift_height: 2 * part_height + 1
+            max_height: part_height,
         }
 
     }

@@ -1,14 +1,15 @@
 use crate::core::winding::WindingCount;
 use alloc::vec::Vec;
+use crate::gear::segment::Segment;
 
-pub(crate) trait Merge<C> {
+pub(crate) trait Merge {
     fn merge_if_needed(&mut self);
     fn merge_after(&mut self, after: usize) -> usize;
 }
 
-impl<C: WindingCount, S: CountMergeable<C>> Merge<C> for Vec<S> {
+impl Merge for Vec<Segment> {
     fn merge_if_needed(&mut self) {
-        // data is already sorted by pos and min
+        // data is already sorted
 
         if self.len() < 2 {
             return;
@@ -33,10 +34,9 @@ impl<C: WindingCount, S: CountMergeable<C>> Merge<C> for Vec<S> {
 
         while i < self.len() {
             if prev.is_same_geometry(&self[i]) {
-                let count = prev.count().add(self[i].count());
-                prev.update(count);
+                prev.dir = prev.dir.add(self[i].dir);
             } else {
-                if prev.count().is_not_empty() {
+                if prev.dir.is_not_empty() {
                     self[j] = prev;
                     j += 1;
                 }
@@ -45,7 +45,7 @@ impl<C: WindingCount, S: CountMergeable<C>> Merge<C> for Vec<S> {
             i += 1;
         }
 
-        if prev.count().is_not_empty() {
+        if prev.dir.is_not_empty() {
             self[j] = prev.clone();
             j += 1;
         }
@@ -54,8 +54,9 @@ impl<C: WindingCount, S: CountMergeable<C>> Merge<C> for Vec<S> {
     }
 }
 
-pub(crate) trait CountMergeable<C: WindingCount>: Clone {
-    fn is_same_geometry(&self, other: &Self) -> bool;
-    fn count(&self) -> C;
-    fn update(&mut self, count: C);
+impl Segment {
+    #[inline(always)]
+    fn is_same_geometry(&self, other: &Self) -> bool {
+        self.pos == other.pos && self.range == other.range
+    }
 }

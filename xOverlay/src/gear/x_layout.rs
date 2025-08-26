@@ -1,5 +1,6 @@
 use i_float::int::rect::IntRect;
 use i_shape::int::shape::IntContour;
+use crate::geom::range::LineRange;
 
 #[derive(Clone)]
 pub(crate) struct XLayout {
@@ -31,17 +32,10 @@ impl XLayout {
     }
 
     #[inline(always)]
-    pub(crate) fn index_inner_border_check(&self, pos: i32) -> (usize, bool) {
-        let dx = (pos - self.rect.min_x) as usize;
-        let i = dx >> self.part_log_width;
-        let xi = i << self.part_log_width;
-        let border = dx == xi;
-
-        if border {
-            (i - 1, i < self.parts_count)
-        } else {
-            (i, false)
-        }
+    pub(crate) fn indices_by_range(&self, range: LineRange) -> (usize, usize) {
+        let i0 = self.index(range.min);
+        let i1 = self.index(range.max);
+        (i0, i1)
     }
 
     #[inline(always)]
@@ -52,12 +46,13 @@ impl XLayout {
     #[inline(always)]
     pub(crate) fn borders(&self, index: usize) -> (i32, i32) {
         let min = self.rect.min_x + (index << self.part_log_width) as i32;
-        let max = (min + (1i32 << self.part_log_width)).min(self.rect.max_x);
+        let width = 1i32 << self.part_log_width;
+        let max = (min + width - 1).min(self.rect.max_x);
         (min, max)
     }
 
     #[inline(always)]
-    pub(crate) fn indices(&self, x0: i32, x1: i32) -> (usize, usize, bool) {
+    pub(crate) fn indices_by_xx(&self, x0: i32, x1: i32) -> (usize, usize) {
         let (min_x, max_x) = if x0 < x1 {
             (x0, x1)
         } else {
@@ -65,8 +60,8 @@ impl XLayout {
         };
 
         let i0 = self.index(min_x);
-        let (i1, border) = self.index_inner_border_check(max_x);
-        (i0, i1, border)
+        let i1 = self.index(max_x);
+        (i0, i1)
     }
 
     pub(crate) fn with_rect(rect: IntRect, elements_count: usize, avg_count_per_column: usize, max_parts_count: usize) -> Self {

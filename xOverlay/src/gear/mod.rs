@@ -1,6 +1,6 @@
 pub(crate) mod section;
 pub(crate) mod x_layout;
-mod segment;
+pub(crate) mod segment;
 mod split;
 pub(crate) mod x_mapper;
 pub mod init;
@@ -9,3 +9,5 @@ mod source;
 mod y_layout;
 mod split_buffer;
 mod y_mapper;
+mod merge;
+pub(crate) mod seg_iter;

@@ -131,7 +131,7 @@ impl PointFilter for DropCollinear {
 
 #[cfg(test)]
 mod tests {
-    use crate::sub::seg_iter::{DropCollinear, SegmentIterable};
+    use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
     use alloc::vec;
     use alloc::vec::Vec;
     use i_float::int::point::IntPoint;

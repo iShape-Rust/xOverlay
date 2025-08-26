@@ -16,22 +16,22 @@ impl Overlay {
 
     fn serial_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
         for s in self.sections.iter_mut() {
-            s.split_border();
+            s.process();
         }
 
     }
 
     fn parallel_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
         self.sections.iter_mut().for_each(|s|{
-            s.split_border();
+            s.process();
 
         })
     }
 }
 
 impl Section {
-    
+
     fn process(&mut self) {
-        self.split_border();
+        
     }
 }

@@ -6,20 +6,18 @@ use core::cmp::Ordering;
 use i_shape::int::shape::IntContour;
 
 pub(crate) struct XPart {
-    pub(crate) hz: usize,
-    pub(crate) vr: usize,
-    pub(crate) dg_pos: usize,
-    pub(crate) dg_neg: usize,
-    pub(crate) border: usize,
+    pub(crate) count_hz: usize,
+    pub(crate) count_vr: usize,
+    pub(crate) count_dp: usize,
+    pub(crate) count_dn: usize,
 }
 
 pub(crate) struct XMapper {
     layout: XLayout,
     pub(crate) hz_parts: Vec<usize>,
     pub(crate) vr_parts: Vec<usize>,
-    pub(crate) dg_pos_parts: Vec<usize>,
-    pub(crate) dg_neg_parts: Vec<usize>,
-    pub(crate) borders: Vec<usize>,
+    pub(crate) dp_parts: Vec<usize>,
+    pub(crate) dn_parts: Vec<usize>,
 }
 
 impl XMapper {
@@ -30,9 +28,8 @@ impl XMapper {
             layout,
             hz_parts: vec![0; n],
             vr_parts: vec![0; n],
-            dg_pos_parts: vec![0; n],
-            dg_neg_parts: vec![0; n],
-            borders: vec![0; n],
+            dp_parts: vec![0; n],
+            dn_parts: vec![0; n],
         }
     }
 
@@ -55,7 +52,7 @@ impl XMapper {
                     *self.vr_parts.get_unchecked_mut(index) += 1;
                 }
             } else {
-                let (i0, i1, border) = self.layout.indices(p0.x, pi.x);
+                let (i0, i1) = self.layout.indices_by_xx(p0.x, pi.x);
 
                 match pi.y.cmp(&p0.y) {
                     Ordering::Equal => {
@@ -70,7 +67,7 @@ impl XMapper {
                         // positive diagonal
                         for index in i0..=i1 {
                             unsafe {
-                                *self.dg_pos_parts.get_unchecked_mut(index) += 1;
+                                *self.dp_parts.get_unchecked_mut(index) += 1;
                             }
                         }
                     }
@@ -78,14 +75,9 @@ impl XMapper {
                         // negative diagonal
                         for index in i0..=i1 {
                             unsafe {
-                                *self.dg_neg_parts.get_unchecked_mut(index) += 1;
+                                *self.dn_parts.get_unchecked_mut(index) += 1;
                             }
                         }
-                    }
-                }
-                if border {
-                    unsafe {
-                        *self.borders.get_unchecked_mut(i1 + 1) += 1;
                     }
                 }
             }
@@ -93,84 +85,62 @@ impl XMapper {
         }
     }
 
-    pub(crate) fn add_vr_list(&mut self, list: &[Segment]) {
-        for vr in list.iter() {
-            let index = self.layout.index(vr.pos);
+    #[inline]
+    pub(super) fn add_vr_segments(&mut self, segments: &[Segment]) {
+        Self::add_segments_by_pos(&self.layout, segments, &mut self.vr_parts)
+    }
+
+    #[inline]
+    pub(super) fn add_hz_segments(&mut self, segments: &[Segment]) {
+        Self::add_segments_by_min(&self.layout, segments, &mut self.hz_parts)
+    }
+
+    #[inline]
+    pub(super) fn add_dp_segments(&mut self, segments: &[Segment]) {
+        Self::add_segments_by_min(&self.layout, segments, &mut self.dp_parts)
+    }
+
+    #[inline]
+    pub(super) fn add_dn_segments(&mut self, segments: &[Segment]) {
+        Self::add_segments_by_min(&self.layout, segments, &mut self.dn_parts)
+    }
+
+    fn add_segments_by_pos(layout: &XLayout, segments: &[Segment], counter: &mut [usize]) {
+        for s in segments.iter() {
+            let index = layout.index(s.pos);
             unsafe {
-                *self.vr_parts.get_unchecked_mut(index) += 1;
+                *counter.get_unchecked_mut(index) += 1;
             }
         }
     }
 
-    pub(crate) fn add_hz_list(&mut self, list: &[Segment]) {
-        for hz in list.iter() {
-            let (i0, i1, border) = self.layout.indices(hz.min, hz.max);
-            for index in i0..=i1 {
-                unsafe {
-                    *self.hz_parts.get_unchecked_mut(index) += 1;
-                }
-            }
-            if border {
-                unsafe {
-                    *self.borders.get_unchecked_mut(i1 + 1) += 1;
-                }
-            }
-        }
-    }
-
-    pub(crate) fn add_dg_pos_list(&mut self, list: &[Segment]) {
-        for dg in list.iter() {
-            let (i0, i1, border) = self.layout.indices(dg.min, dg.max);
-            for index in i0..=i1 {
-                unsafe {
-                    *self.dg_pos_parts.get_unchecked_mut(index) += 1;
-                }
-            }
-            if border {
-                unsafe {
-                    *self.borders.get_unchecked_mut(i1 + 1) += 1;
-                }
-            }
-        }
-    }
-
-    pub(crate) fn add_dg_neg_list(&mut self, list: &[Segment]) {
-        for dg in list.iter() {
-            let (i0, i1, border) = self.layout.indices(dg.min, dg.max);
-            for index in i0..=i1 {
-                unsafe {
-                    *self.dg_neg_parts.get_unchecked_mut(index) += 1;
-                }
-            }
-            if border {
-                unsafe {
-                    *self.borders.get_unchecked_mut(i1 + 1) += 1;
-                }
+    fn add_segments_by_min(layout: &XLayout, segments: &[Segment], counter: &mut [usize]) {
+        for s in segments.iter() {
+            let index = layout.index(s.range.min);
+            unsafe {
+                *counter.get_unchecked_mut(index) += 1;
             }
         }
     }
 
     pub(crate) fn iter_by_parts(&self) -> impl Iterator<Item =XPart> {
-        let (hz, vr, dp, dn, br) = (
+        let (hz, vr, dp, dn) = (
             &self.hz_parts[..],
             &self.vr_parts[..],
-            &self.dg_pos_parts[..],
-            &self.dg_neg_parts[..],
-            &self.borders[..],
+            &self.dp_parts[..],
+            &self.dn_parts[..],
         );
         debug_assert!(hz.len() == vr.len()
             && hz.len() == dp.len()
-            && hz.len() == dn.len()
-            && hz.len() == br.len());
+            && hz.len() == dn.len());
 
         let n = hz.len();
         (0..n).map(move |i| unsafe {
             XPart {
-                hz: *hz.get_unchecked(i),
-                vr: *vr.get_unchecked(i),
-                dg_pos: *dp.get_unchecked(i),
-                dg_neg: *dn.get_unchecked(i),
-                border: *br.get_unchecked(i),
+                count_hz: *hz.get_unchecked(i),
+                count_vr: *vr.get_unchecked(i),
+                count_dp: *dp.get_unchecked(i),
+                count_dn: *dn.get_unchecked(i),
             }
         })
     }

@@ -6,7 +6,7 @@ use crate::core::winding::WindingCount;
 use crate::graph::boolean::winding_count::ShapeCountBoolean;
 use crate::ortho::error::OverlayError;
 use crate::core::overlay::Overlay;
-use crate::sub::seg_iter::{DropCollinear, SegmentIterable};
+use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
 use i_float::int::point::IntPoint;
 use i_float::int::rect::IntRect;
 use i_shape::int::shape::IntContour;
@@ -14,6 +14,7 @@ use crate::gear::x_layout::XLayout;
 use crate::gear::x_mapper::XMapper;
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
+use crate::geom::range::LineRange;
 
 impl Overlay {
     pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Result<Self, OverlayError> {
@@ -125,7 +126,7 @@ impl Overlay {
         let x0 = segment[0].x;
 
         // vertical
-        let (min_y, max_y, dir) = segment.y_range(direct, invert);
+        let (range, dir) = segment.y_range(direct, invert);
         let index = self.layout.index(x0);
         unsafe {
             self.sections
@@ -134,8 +135,7 @@ impl Overlay {
                 .vr_list
                 .push(Segment {
                     pos: x0,
-                    min: min_y,
-                    max: max_y,
+                    range,
                     dir,
                 });
         }
@@ -150,11 +150,10 @@ impl Overlay {
     ) {
         let y0 = segment[0].y;
 
-        let (min_x, max_x, dir) = segment.x_range(direct, invert);
-        let i0 = self.layout.index(min_x);
-        let (i1, inner_border) = self.layout.index_inner_border_check(max_x);
+        let (range, dir) = segment.x_range(direct, invert);
+        let (i0, i1) = self.layout.indices_by_range(range);
 
-        let mut x0 = min_x;
+        let mut x0 = range.min;
 
         for index in i0..i1 {
             let xi = self.layout.left_border(index + 1);
@@ -165,8 +164,7 @@ impl Overlay {
                     .hz_list
                     .push(Segment {
                         pos: y0,
-                        min: x0,
-                        max: xi,
+                        range: LineRange::with_min_max(x0, xi),
                         dir,
                     });
             }
@@ -177,17 +175,9 @@ impl Overlay {
         unsafe {
             self.sections.get_unchecked_mut(i1).source.hz_list.push(Segment {
                 pos: y0,
-                min: x0,
-                max: max_x,
+                range: LineRange::with_min_max(x0, range.max),
                 dir,
             });
-        }
-
-        if inner_border {
-            let i2 = i1 + 1;
-            unsafe {
-                self.sections.get_unchecked_mut(i2).border_points.push(y0);
-            }
         }
     }
 
@@ -200,7 +190,7 @@ impl Overlay {
     ) {
         let (a, b, dir) = segment.xy_range(direct, invert);
         let i0 = self.layout.index(a.x);
-        let (i1, inner_border) = self.layout.index_inner_border_check(b.x);
+        let i1 = self.layout.index(b.x);
 
         let mut x0 = a.x;
 
@@ -217,11 +207,10 @@ impl Overlay {
                     self.sections
                         .get_unchecked_mut(index)
                         .source
-                        .dg_pos_list
+                        .dp_list
                         .push(Segment {
                             pos: yi,
-                            min: x0,
-                            max: xi,
+                            range: LineRange::with_min_max(x0, xi),
                             dir,
                         });
                 }
@@ -231,21 +220,11 @@ impl Overlay {
 
             // add last
             unsafe {
-                self.sections.get_unchecked_mut(i1).source.dg_pos_list.push(Segment {
+                self.sections.get_unchecked_mut(i1).source.dp_list.push(Segment {
                     pos: yi,
-                    min: x0,
-                    max: b.x,
+                    range: LineRange::with_min_max(x0, b.x),
                     dir,
                 });
-            }
-
-            if inner_border {
-                let dx = b.x.wrapping_sub(a.x);
-                yi = y0.wrapping_add(dx);
-                let i2 = i1 + 1;
-                unsafe {
-                    self.sections.get_unchecked_mut(i2).border_points.push(yi);
-                }
             }
         } else {
             // negative diagonal
@@ -260,11 +239,10 @@ impl Overlay {
                     self.sections
                         .get_unchecked_mut(index)
                         .source
-                        .dg_neg_list
+                        .dn_list
                         .push(Segment {
                             pos: yi,
-                            min: x0,
-                            max: xi,
+                            range: LineRange::with_min_max(x0, xi),
                             dir,
                         });
                 }
@@ -274,21 +252,11 @@ impl Overlay {
 
             // add last
             unsafe {
-                self.sections.get_unchecked_mut(i1).source.dg_neg_list.push(Segment {
+                self.sections.get_unchecked_mut(i1).source.dn_list.push(Segment {
                     pos: yi,
-                    min: x0,
-                    max: b.x,
+                    range: LineRange::with_min_max(x0, b.x),
                     dir,
                 });
-            }
-
-            if inner_border {
-                let dx = b.x.wrapping_sub(a.x);
-                yi = y0.wrapping_sub(dx);
-                let i2 = i1 + 1;
-                unsafe {
-                    self.sections.get_unchecked_mut(i2).border_points.push(yi);
-                }
             }
         }
     }
@@ -299,12 +267,12 @@ trait XYMinMaxRange {
         &self,
         direct: ShapeCountBoolean,
         invert: ShapeCountBoolean,
-    ) -> (i32, i32, ShapeCountBoolean);
+    ) -> (LineRange, ShapeCountBoolean);
     fn y_range(
         &self,
         direct: ShapeCountBoolean,
         invert: ShapeCountBoolean,
-    ) -> (i32, i32, ShapeCountBoolean);
+    ) -> (LineRange, ShapeCountBoolean);
 
     fn xy_range(
         &self,
@@ -319,11 +287,11 @@ impl XYMinMaxRange for [IntPoint; 2] {
         &self,
         direct: ShapeCountBoolean,
         invert: ShapeCountBoolean,
-    ) -> (i32, i32, ShapeCountBoolean) {
+    ) -> (LineRange, ShapeCountBoolean) {
         if self[0].x < self[1].x {
-            (self[0].x, self[1].x, direct)
+            (LineRange::with_min_max(self[0].x, self[1].x), direct)
         } else {
-            (self[1].x, self[0].x, invert)
+            (LineRange::with_min_max(self[1].x, self[0].x), invert)
         }
     }
 
@@ -332,11 +300,11 @@ impl XYMinMaxRange for [IntPoint; 2] {
         &self,
         direct: ShapeCountBoolean,
         invert: ShapeCountBoolean,
-    ) -> (i32, i32, ShapeCountBoolean) {
+    ) -> (LineRange, ShapeCountBoolean) {
         if self[0].y < self[1].y {
-            (self[0].y, self[1].y, direct)
+            (LineRange::with_min_max(self[0].y, self[1].y), direct)
         } else {
-            (self[1].y, self[0].y, invert)
+            (LineRange::with_min_max(self[1].y, self[0].y), invert)
         }
     }
 
@@ -368,19 +336,19 @@ mod tests {
     use crate::core::solver::Solver;
     use crate::core::overlay::Overlay;
     use crate::gear::segment::Segment;
+    use crate::geom::range::LineRange;
 
     impl Segment {
-        fn with_shape(z0: i32, z1: i32, pos: i32, shape: ShapeType) -> Self {
+        pub(crate) fn test_with_shape(z0: i32, z1: i32, pos: i32, shape: ShapeType) -> Self {
             let (direct, invert) = ShapeCountBoolean::with_shape_type(shape);
-            let (min, max, dir) = if z0 < z1 {
-                (z0, z1, direct)
+            let (range, dir) = if z0 < z1 {
+                (LineRange::with_min_max(z0, z1), direct)
             } else {
-                (z1, z0, invert)
+                (LineRange::with_min_max(z1, z0), invert)
             };
             Self {
                 pos,
-                min,
-                max,
+                range,
                 dir,
             }
         }
@@ -401,16 +369,16 @@ mod tests {
         let section = &overlay.sections[0];
 
         let must_be_hz_set: HashSet<_> = [
-            Segment::with_shape(0, 10, 0, Subject),
-            Segment::with_shape(10, 0, 10, Subject),
+            Segment::test_with_shape(0, 10, 0, Subject),
+            Segment::test_with_shape(10, 0, 10, Subject),
         ]
         .iter()
         .copied()
         .collect();
 
         let must_be_vr_set: HashSet<_> = [
-            Segment::with_shape(10, 0, 0, Subject),
-            Segment::with_shape(0, 10, 10, Subject),
+            Segment::test_with_shape(10, 0, 0, Subject),
+            Segment::test_with_shape(0, 10, 10, Subject),
         ]
         .iter()
         .copied()
@@ -421,7 +389,6 @@ mod tests {
 
         assert_eq!(must_be_hz_set, value_hz_set);
         assert_eq!(must_be_vr_set, value_vr_set);
-        assert_eq!(section.border_points.len(), 0);
     }
 
     #[test]
@@ -444,16 +411,16 @@ mod tests {
         let column = &overlay.sections[0];
 
         let must_be_hz_set: HashSet<_> = [
-            Segment::with_shape(0, 10, 0, Subject),
-            Segment::with_shape(10, 0, 10, Subject),
+            Segment::test_with_shape(0, 10, 0, Subject),
+            Segment::test_with_shape(10, 0, 10, Subject),
         ]
         .iter()
         .copied()
         .collect();
 
         let must_be_vr_set: HashSet<_> = [
-            Segment::with_shape(10, 0, 0, Subject),
-            Segment::with_shape(0, 10, 10, Subject),
+            Segment::test_with_shape(10, 0, 0, Subject),
+            Segment::test_with_shape(0, 10, 10, Subject),
         ]
         .iter()
         .copied()
@@ -464,7 +431,6 @@ mod tests {
 
         assert_eq!(must_be_hz_set, value_hz_set);
         assert_eq!(must_be_vr_set, value_vr_set);
-        assert_eq!(column.border_points.len(), 0);
     }
 
 
@@ -488,32 +454,32 @@ mod tests {
         let section = &overlay.sections[0];
 
         let must_be_hz_set: HashSet<_> = [
-            Segment::with_shape(2, 1, 3, Subject),
-            Segment::with_shape(1, 2, 0, Subject),
+            Segment::test_with_shape(2, 1, 3, Subject),
+            Segment::test_with_shape(1, 2, 0, Subject),
         ]
             .iter()
             .copied()
             .collect();
 
         let must_be_vr_set: HashSet<_> = [
-            Segment::with_shape(2, 1, 0, Subject),
-            Segment::with_shape(1, 2, 3, Subject),
+            Segment::test_with_shape(2, 1, 0, Subject),
+            Segment::test_with_shape(1, 2, 3, Subject),
         ]
             .iter()
             .copied()
             .collect();
 
         let must_be_dg_pos_set: HashSet<_> = [
-            Segment::with_shape(2, 3, 0, Subject),
-            Segment::with_shape(1, 0, 2, Subject),
+            Segment::test_with_shape(2, 3, 0, Subject),
+            Segment::test_with_shape(1, 0, 2, Subject),
         ]
             .iter()
             .copied()
             .collect();
 
         let must_be_dg_neg_set: HashSet<_> = [
-            Segment::with_shape(0, 1, 0, Subject),
-            Segment::with_shape(3, 2, 2, Subject),
+            Segment::test_with_shape(0, 1, 0, Subject),
+            Segment::test_with_shape(3, 2, 2, Subject),
         ]
             .iter()
             .copied()
@@ -521,13 +487,12 @@ mod tests {
 
         let value_hz_set: HashSet<_> = section.source.hz_list.iter().copied().collect();
         let value_vr_set: HashSet<_> = section.source.vr_list.iter().copied().collect();
-        let value_dg_pos_set: HashSet<_> = section.source.dg_pos_list.iter().copied().collect();
-        let value_dg_neg_set: HashSet<_> = section.source.dg_neg_list.iter().copied().collect();
+        let value_dg_pos_set: HashSet<_> = section.source.dp_list.iter().copied().collect();
+        let value_dg_neg_set: HashSet<_> = section.source.dn_list.iter().copied().collect();
 
         assert_eq!(must_be_hz_set, value_hz_set);
         assert_eq!(must_be_vr_set, value_vr_set);
         assert_eq!(must_be_dg_pos_set, value_dg_pos_set);
         assert_eq!(must_be_dg_neg_set, value_dg_neg_set);
-        assert_eq!(section.border_points.len(), 0);
     }
 }
