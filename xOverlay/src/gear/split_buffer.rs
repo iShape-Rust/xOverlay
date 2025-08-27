@@ -45,7 +45,7 @@ pub(super) struct YMark {
     pub(super) y: i32,
 }
 
-pub(super) struct MarkResult {
+pub(super) struct Intersection {
     pub(super) vr_marks: Vec<YMark>,
     pub(super) hz_marks: Vec<XMark>,
     pub(super) dp_marks: Vec<XMark>,
@@ -162,11 +162,11 @@ impl SplitBuffer {
                     continue;
                 }
 
-                if dp.y_range.strict_contains(y) {
+                if dp.parent_x_range.strict_contains(x) {
                     self.dp_marks.push(XMark { index: dp.index, x });
                 }
 
-                if hz.x_range.strict_contains(x) {
+                if hz.parent_x_range.strict_contains(x) {
                     self.hz_marks.push(XMark { index: hz.index, x });
                 }
             }
@@ -187,11 +187,11 @@ impl SplitBuffer {
                     continue;
                 }
 
-                if dn.y_range.strict_contains(y) {
+                if dn.parent_x_range.strict_contains(x) {
                     self.dn_marks.push(XMark { index: dn.index, x });
                 }
 
-                if hz.x_range.strict_contains(x) {
+                if hz.parent_x_range.strict_contains(x) {
                     self.hz_marks.push(XMark { index: hz.index, x });
                 }
             }
@@ -300,7 +300,7 @@ impl SplitBuffer {
         IntPoint::new(x, y)
     }
 
-    pub(super) fn into_marks(mut self) -> MarkResult {
+    pub(super) fn into_marks(mut self) -> Intersection {
         self.hz_marks
             .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
         self.vr_marks
@@ -310,7 +310,7 @@ impl SplitBuffer {
         self.dn_marks
             .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
 
-        MarkResult {
+        Intersection {
             vr_marks: self.vr_marks,
             hz_marks: self.hz_marks,
             dp_marks: self.dp_marks,
@@ -437,13 +437,11 @@ impl SplitDn {
 impl SplitDp {
     #[inline(always)]
     pub(super) fn find_y(&self, x: i32) -> i32 {
-        debug_assert!(!self.x_range.not_contains(x));
         PositiveDiagonal::new(self.x_range, self.y_range.min).find_y(x)
     }
 
     #[inline(always)]
     pub(super) fn find_x(&self, y: i32) -> i32 {
-        debug_assert!(!self.y_range.not_contains(y));
         PositiveDiagonal::new(self.x_range, self.y_range.min).find_x(y)
     }
 }
@@ -451,13 +449,11 @@ impl SplitDp {
 impl SplitDn {
     #[inline(always)]
     pub(super) fn find_y(&self, x: i32) -> i32 {
-        debug_assert!(!self.x_range.not_contains(x));
         NegativeDiagonal::new(self.x_range, self.y_range.min).find_y(x)
     }
 
     #[inline(always)]
     pub(super) fn find_x(&self, y: i32) -> i32 {
-        debug_assert!(!self.y_range.not_contains(y));
         NegativeDiagonal::new(self.x_range, self.y_range.min).find_x(y)
     }
 }

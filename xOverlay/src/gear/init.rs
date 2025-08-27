@@ -262,7 +262,7 @@ impl Overlay {
     }
 }
 
-trait XYMinMaxRange {
+pub(crate) trait XYMinMaxRange {
     fn x_range(
         &self,
         direct: ShapeCountBoolean,

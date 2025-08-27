@@ -4,6 +4,7 @@ use i_float::int::rect::IntRect;
 use crate::gear::x_layout::XLayout;
 use crate::gear::source::GeometrySource;
 
+#[derive(Clone)]
 pub(crate) struct Section {
     pub(crate) source: GeometrySource,
     pub(crate) layout: XLayout,

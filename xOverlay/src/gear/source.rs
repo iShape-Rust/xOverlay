@@ -27,7 +27,7 @@ impl GeometrySource {
         map
     }
 
-    fn mapper(&self, layout: XLayout) -> XMapper {
+    pub(super) fn mapper(&self, layout: XLayout) -> XMapper {
         let mut mapper = XMapper::new(layout);
 
 

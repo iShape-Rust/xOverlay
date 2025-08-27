@@ -1,7 +1,11 @@
 use crate::gear::merge::Merge;
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
-use crate::gear::split_buffer::{MarkResult, SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, YMark};
+use crate::gear::source::GeometrySource;
+use crate::gear::split_buffer::{
+    Intersection, SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, YMark,
+};
+use crate::gear::x_mapper::XMapper;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
@@ -14,6 +18,23 @@ impl Section {
             .source
             .map_by_columns(&self.layout, &mut source_by_columns);
 
+        let intersection = self.intersect(&mut source_by_columns, &map_by_columns);
+
+        if intersection.is_empty() {
+            swap(&mut self.source, &mut source_by_columns);
+        } else {
+            self.split_by_marks(&mut source_by_columns, intersection);
+            map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
+        }
+
+        self.sort_and_merge(&map_by_columns);
+    }
+
+    fn intersect(
+        &mut self,
+        source_by_columns: &mut GeometrySource,
+        map_by_columns: &XMapper,
+    ) -> Intersection {
         let mut start_vr = 0;
         let mut start_hz = 0;
         let mut start_dp = 0;
@@ -93,32 +114,30 @@ impl Section {
             start_dn += part.count_dn;
         }
 
-        let result = split_buffer.into_marks();
+        split_buffer.into_marks()
+    }
 
-        if result.is_empty() {
-            swap(&mut self.source, &mut source_by_columns);
-        } else {
-            source_by_columns.vr_list.split_as_vr(&result.vr_marks);
-            source_by_columns.hz_list.split_as_hz(&result.hz_marks);
-            source_by_columns.dp_list.split_as_dp(&result.dp_marks);
-            source_by_columns.dn_list.split_as_dn(&result.dn_marks);
+    fn split_by_marks(&mut self, source_by_columns: &mut GeometrySource, result: Intersection) {
+        source_by_columns.vr_list.split_as_vr(&result.vr_marks);
+        source_by_columns.hz_list.split_as_hz(&result.hz_marks);
+        source_by_columns.dp_list.split_as_dp(&result.dp_marks);
+        source_by_columns.dn_list.split_as_dn(&result.dn_marks);
 
-            self.source
-                .vr_list
-                .resize(source_by_columns.vr_list.len(), Default::default());
-            self.source
-                .hz_list
-                .resize(source_by_columns.hz_list.len(), Default::default());
-            self.source
-                .dp_list
-                .resize(source_by_columns.dp_list.len(), Default::default());
-            self.source
-                .dn_list
-                .resize(source_by_columns.dn_list.len(), Default::default());
+        self.source
+            .vr_list
+            .resize(source_by_columns.vr_list.len(), Default::default());
+        self.source
+            .hz_list
+            .resize(source_by_columns.hz_list.len(), Default::default());
+        self.source
+            .dp_list
+            .resize(source_by_columns.dp_list.len(), Default::default());
+        self.source
+            .dn_list
+            .resize(source_by_columns.dn_list.len(), Default::default());
+    }
 
-            map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
-        }
-
+    fn sort_and_merge(&mut self, map_by_columns: &XMapper) {
         Self::sort_vertically_by_min(&mut self.source.vr_list, &map_by_columns.vr_parts);
         self.source.vr_list.merge_if_needed();
 
@@ -452,7 +471,7 @@ impl Segment {
     }
 }
 
-impl MarkResult {
+impl Intersection {
     fn is_empty(&self) -> bool {
         self.vr_marks.is_empty()
             && self.hz_marks.is_empty()
@@ -463,13 +482,23 @@ impl MarkResult {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::fill_rule::FillRule::{Negative, Positive};
+    use crate::core::overlay_rule::OverlayRule::Intersect;
     use crate::core::shape_type::ShapeType;
+    use crate::core::winding::WindingCount;
     use crate::gear::section::Section;
+    use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
     use crate::gear::segment::Segment;
     use crate::gear::source::GeometrySource;
+    use crate::gear::split_buffer::{Intersection, SplitBuffer, SplitDn, SplitDp, XMark, YMark};
     use crate::gear::x_layout::XLayout;
+    use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
     use alloc::vec;
+    use alloc::vec::Vec;
+    use i_float::int::point::IntPoint;
     use i_float::int::rect::IntRect;
+    use i_shape::int::path::IntPath;
+    use rand::Rng;
 
     impl GeometrySource {
         fn test_count(&self) -> usize {
@@ -711,9 +740,7 @@ mod tests {
                 Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
             ],
             hz_list: vec![],
-            dp_list: vec![
-                Segment::test_with_shape(0, 5, 0, ShapeType::Subject),
-            ],
+            dp_list: vec![Segment::test_with_shape(0, 5, 0, ShapeType::Subject)],
             dn_list: vec![],
         };
 
@@ -735,9 +762,7 @@ mod tests {
                 Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
             ],
             hz_list: vec![],
-            dp_list: vec![
-                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
-            ],
+            dp_list: vec![Segment::test_with_shape(0, 6, 0, ShapeType::Subject)],
             dn_list: vec![],
         };
 
@@ -855,13 +880,8 @@ mod tests {
         let source = GeometrySource {
             vr_list: vec![],
             hz_list: vec![],
-            dp_list: vec![
-                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
-            ],
-            dn_list: vec![
-                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
-
-            ],
+            dp_list: vec![Segment::test_with_shape(0, 2, 0, ShapeType::Subject)],
+            dn_list: vec![Segment::test_with_shape(0, 2, 0, ShapeType::Subject)],
         };
 
         let mut section = Section::test_new(source, rect, 3, 5);
@@ -878,13 +898,8 @@ mod tests {
         let source = GeometrySource {
             vr_list: vec![],
             hz_list: vec![],
-            dp_list: vec![
-                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
-            ],
-            dn_list: vec![
-                Segment::test_with_shape(2, 4, 0, ShapeType::Subject),
-
-            ],
+            dp_list: vec![Segment::test_with_shape(0, 2, 0, ShapeType::Subject)],
+            dn_list: vec![Segment::test_with_shape(2, 4, 0, ShapeType::Subject)],
         };
 
         let mut section = Section::test_new(source, rect, 3, 5);
@@ -893,5 +908,442 @@ mod tests {
 
         assert_eq!(section.source.dp_list.len(), 1);
         assert_eq!(section.source.dn_list.len(), 1);
+    }
+
+    #[test]
+    fn test_16() {
+        let contour = vec![
+            IntPoint::new(0, 0),
+            IntPoint::new(0, 2),
+            IntPoint::new(-4, 2),
+            IntPoint::new(-2, 4),
+            IntPoint::new(-2, 0),
+        ];
+
+        let mut section = if let Some(s) = contour_to_section(&contour, 7, 8) {
+            s
+        } else {
+            return;
+        };
+        let result_0 = section.source.brute_force_intersection();
+        let result_1 = section.test_intersection();
+
+        assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+        assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+        assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+        assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+    }
+
+    #[test]
+    fn test_17() {
+        let contour = vec![
+            IntPoint::new(0, 0),
+            IntPoint::new(2, 0),
+            IntPoint::new(2, 2),
+            IntPoint::new(-2, -2),
+            IntPoint::new(-8, -2),
+            IntPoint::new(0, -2),
+        ];
+
+        let mut section = if let Some(s) = contour_to_section(&contour, 7, 8) {
+            s
+        } else {
+            return;
+        };
+        let result_0 = section.source.brute_force_intersection();
+        let result_1 = section.test_intersection();
+
+        assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+        assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+        assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+        assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+    }
+
+    #[test]
+    fn test_random_0() {
+        for _ in 0..1000 {
+            let mut section = if let Some(s) = get_random_90_deg_section(16, 6, 4, 6) {
+                s
+            } else {
+                return;
+            };
+
+            let result_0 = section.source.brute_force_intersection();
+            let result_1 = section.test_intersection();
+
+            assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+            assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+            assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+            assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+        }
+    }
+
+    #[test]
+    fn test_random_1() {
+        for _ in 0..1000 {
+            let mut section = if let Some(s) = get_random_90_deg_section(64, 8, 7, 8) {
+                s
+            } else {
+                return;
+            };
+            let result_0 = section.source.brute_force_intersection();
+            let result_1 = section.test_intersection();
+
+            assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+            assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+            assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+            assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+        }
+    }
+
+    #[test]
+    fn test_random_2() {
+        for _ in 0..10_000 {
+            let contour = random_45_deg_contour(4, 3);
+            let mut section = if let Some(s) = contour_to_section(&contour, 7, 8) {
+                s
+            } else {
+                return;
+            };
+            let result_0 = section.source.brute_force_intersection();
+            let result_1 = section.test_intersection();
+
+            let test_0 = result_0.vr_marks.len() != result_1.vr_marks.len();
+            let test_1 = result_0.hz_marks.len() != result_1.hz_marks.len();
+            let test_2 = result_0.dp_marks.len() != result_1.dp_marks.len();
+            let test_3 = result_0.dn_marks.len() != result_1.dn_marks.len();
+
+            if test_0 || test_1 || test_2 || test_3 {
+                assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+                assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+                assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+                assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+            }
+        }
+    }
+
+    #[test]
+    fn test_random_3() {
+        for _ in 0..10_000 {
+            let mut section = if let Some(s) = get_random_45_deg_section(64, 8, 7, 8) {
+                s
+            } else {
+                return;
+            };
+            let result_0 = section.source.brute_force_intersection();
+            let result_1 = section.test_intersection();
+
+            assert_eq!(result_0.vr_marks.len(), result_1.vr_marks.len());
+            assert_eq!(result_0.hz_marks.len(), result_1.hz_marks.len());
+            assert_eq!(result_0.dp_marks.len(), result_1.dp_marks.len());
+            assert_eq!(result_0.dn_marks.len(), result_1.dn_marks.len());
+        }
+    }
+
+    fn random_90_deg_contour(n: usize, radius: i32) -> Vec<IntPoint> {
+        let mut x = 0;
+        let mut y = 0;
+
+        let mut contour = IntPath::new();
+        let mut rng = rand::rng();
+        let range = -radius..=radius;
+
+        contour.push(IntPoint::new(x, y));
+        for i in 0..n {
+            let ds = rng.random_range(range.clone());
+            if i % 2 == 0 {
+                x += ds;
+            } else {
+                y += ds;
+            }
+            contour.push(IntPoint::new(x, y));
+        }
+
+        if x != 0 {
+            contour.push(IntPoint::new(0, y));
+        }
+        contour
+    }
+
+    fn random_45_deg_contour(n: usize, radius: i32) -> Vec<IntPoint> {
+        let mut x = 0;
+        let mut y = 0;
+
+        let mut contour = IntPath::new();
+        let mut rng = rand::rng();
+        let range = -radius..=radius;
+
+        contour.push(IntPoint::new(x, y));
+        for i in 0..n {
+            let ds = 2 * rng.random_range(range.clone());
+            match i % 3 {
+                0 => {
+                    x += ds;
+                }
+                1 => {
+                    y += ds;
+                }
+                _ => {
+                    x += ds;
+                    y += ds;
+                }
+            }
+
+            contour.push(IntPoint::new(x, y));
+        }
+
+        if x != 0 {
+            contour.push(IntPoint::new(0, y));
+        }
+        contour
+    }
+
+    fn contour_to_section(
+        contour: &[IntPoint],
+        avg_count_per_column: usize,
+        max_parts_count: usize,
+    ) -> Option<Section> {
+        let iter = contour.segment_iter::<DropCollinear>()?;
+        let mut hz_list = Vec::new();
+        let mut vr_list = Vec::new();
+        let mut dp_list = Vec::new();
+        let mut dn_list = Vec::new();
+
+        for s in iter {
+            if s[0].x == s[1].x {
+                vr_list.push(Segment::test_with_shape(
+                    s[0].y,
+                    s[1].y,
+                    s[0].x,
+                    ShapeType::Subject,
+                ));
+            } else if s[0].y == s[1].y {
+                hz_list.push(Segment::test_with_shape(
+                    s[0].x,
+                    s[1].x,
+                    s[0].y,
+                    ShapeType::Subject,
+                ));
+            } else {
+                let (a, b) = if s[0].x < s[1].x {
+                    (s[0], s[1])
+                } else {
+                    (s[1], s[0])
+                };
+
+                if a.y < b.y {
+                    dp_list.push(Segment::test_with_shape(
+                        a.x,
+                        b.x,
+                        a.y,
+                        ShapeType::Subject,
+                    ))
+                } else {
+                    dn_list.push(Segment::test_with_shape(
+                        a.x,
+                        b.x,
+                        b.y,
+                        ShapeType::Subject,
+                    ))
+                }
+            }
+        }
+
+        let source = GeometrySource {
+            vr_list,
+            hz_list,
+            dp_list,
+            dn_list,
+        };
+
+        let rect = IntRect::with_points(&contour)?;
+
+        Some(Section::test_new(
+            source,
+            rect,
+            avg_count_per_column,
+            max_parts_count,
+        ))
+    }
+
+    fn get_random_45_deg_section(
+        n: usize,
+        radius: i32,
+        avg_count_per_column: usize,
+        max_parts_count: usize,
+    ) -> Option<Section> {
+        let contour = random_45_deg_contour(n, radius);
+        contour_to_section(&contour, avg_count_per_column, max_parts_count)
+    }
+
+    fn get_random_90_deg_section(
+        n: usize,
+        radius: i32,
+        avg_count_per_column: usize,
+        max_parts_count: usize,
+    ) -> Option<Section> {
+        let contour = random_90_deg_contour(n, radius);
+        contour_to_section(&contour, avg_count_per_column, max_parts_count)
+    }
+
+    impl Section {
+        fn test_intersection(&mut self) -> Intersection {
+            let mut source_by_columns = self.source.new_same_size();
+            let map_by_columns = self
+                .source
+                .map_by_columns(&self.layout, &mut source_by_columns);
+
+            self.intersect(&mut source_by_columns, &map_by_columns)
+        }
+    }
+
+    impl GeometrySource {
+        fn brute_force_intersection(&self) -> Intersection {
+            let mut intersection = Intersection {
+                vr_marks: vec![],
+                hz_marks: vec![],
+                dp_marks: vec![],
+                dn_marks: vec![],
+            };
+
+            for vr in self.vr_list.iter() {
+                let x = vr.pos;
+                for hz in self.hz_list.iter() {
+                    let y = hz.pos;
+                    if hz.range.not_contains(x) || vr.range.not_contains(y) {
+                        continue;
+                    }
+
+                    if hz.range.strict_contains(x) {
+                        intersection.hz_marks.push(XMark { index: 0, x });
+                    }
+
+                    if vr.range.strict_contains(y) {
+                        intersection.vr_marks.push(YMark { index: 0, y });
+                    }
+                }
+
+                for dp in self.dp_list.iter() {
+                    if dp.range.not_contains(x) {
+                        continue;
+                    }
+
+                    let y = PositiveDiagonal::new(dp.range, dp.pos).find_y(x);
+
+                    if vr.range.not_contains(y) {
+                        continue;
+                    }
+
+                    if dp.range.strict_contains(x) {
+                        intersection.dp_marks.push(XMark { index: 0, x });
+                    }
+
+                    if vr.range.strict_contains(y) {
+                        intersection.vr_marks.push(YMark { index: 0, y });
+                    }
+                }
+
+                for dn in self.dn_list.iter() {
+                    if dn.range.not_contains(x) {
+                        continue;
+                    }
+
+                    let y = NegativeDiagonal::new(dn.range, dn.pos).find_y(x);
+                    if vr.range.not_contains(y) {
+                        continue;
+                    }
+
+                    if dn.range.strict_contains(x) {
+                        intersection.dn_marks.push(XMark { index: 0, x });
+                    }
+
+                    if vr.range.strict_contains(y) {
+                        intersection.vr_marks.push(YMark { index: 0, y });
+                    }
+                }
+            }
+
+            for hz in self.hz_list.iter() {
+                let y = hz.pos;
+                for dp in self.dp_list.iter() {
+                    if dp.y_range_dp().not_contains(y) {
+                        continue;
+                    }
+
+                    let x = PositiveDiagonal::new(dp.range, dp.pos).find_x(y);
+                    if hz.range.not_contains(x) {
+                        continue;
+                    }
+
+                    if dp.y_range_dp().strict_contains(y) {
+                        intersection.dp_marks.push(XMark { index: 0, x });
+                    }
+
+                    if hz.range.strict_contains(x) {
+                        intersection.hz_marks.push(XMark { index: 0, x });
+                    }
+                }
+
+                for dn in self.dn_list.iter() {
+                    if dn.y_range_dn().not_contains(y) {
+                        continue;
+                    }
+
+                    let x = NegativeDiagonal::new(dn.range, dn.pos).find_x(y);
+                    if hz.range.not_contains(x) {
+                        continue;
+                    }
+
+                    if dn.y_range_dn().strict_contains(y) {
+                        intersection.dn_marks.push(XMark { index: 0, x });
+                    }
+
+                    if hz.range.strict_contains(x) {
+                        intersection.hz_marks.push(XMark { index: 0, x });
+                    }
+                }
+            }
+
+            for dp in self.dp_list.iter() {
+                for dn in self.dn_list.iter() {
+                    let p = Self::test_cross_dgs(dp, dn);
+
+                    if dp.range.strict_contains(p.x) {
+                        intersection.dp_marks.push(XMark { index: 0, x: p.x });
+                    }
+
+                    if dn.range.strict_contains(p.x) {
+                        intersection.dn_marks.push(XMark { index: 0, x: p.x });
+                    }
+                }
+            }
+
+            intersection
+        }
+
+        #[inline(always)]
+        fn test_cross_dgs(dp: &Segment, dn: &Segment) -> IntPoint {
+            let sp = dp.y_range_dp().min.wrapping_sub(dp.range.min);
+            let sn = dn.y_range_dn().min.wrapping_add(dn.range.max);
+
+            let y = sp.wrapping_add(sn) >> 1;
+            let x = PositiveDiagonal::new(dp.range, dp.pos).find_x(y);
+
+            IntPoint::new(x, y)
+        }
+    }
+}
+
+impl Segment {
+    fn y_range_dp(&self) -> LineRange {
+        let min_y = self.pos;
+        let max_y = PositiveDiagonal::new(self.range, self.pos).find_y(self.range.max);
+        LineRange::with_min_max(min_y, max_y)
+    }
+
+    fn y_range_dn(&self) -> LineRange {
+        let min_y = self.pos;
+        let max_y = NegativeDiagonal::new(self.range, self.pos).find_y(self.range.min);
+        LineRange::with_min_max(min_y, max_y)
     }
 }
