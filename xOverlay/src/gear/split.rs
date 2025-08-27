@@ -1,7 +1,7 @@
 use crate::gear::merge::Merge;
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
-use crate::gear::split_buffer::{MarkResult, SplitBuffer, XMark, YMark};
+use crate::gear::split_buffer::{MarkResult, SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, YMark};
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
@@ -41,35 +41,46 @@ impl Section {
             // prepare column data
 
             // hz
-            self.clean_by_min_x(min_x, &mut hz_buffer);
-            self.add(start_hz, hz_slice, &mut hz_buffer);
+            self.clean_by_min_x_hz(min_x, &mut hz_buffer);
+            self.add_hz(start_hz, hz_slice, &mut hz_buffer);
 
             // dn
-            self.clean_by_min_x(min_x, &mut dn_buffer);
-            self.add(start_dn, dn_slice, &mut dn_buffer);
+            self.clean_by_min_x_dn(min_x, &mut dn_buffer);
+            self.add_dn(start_dn, dn_slice, &mut dn_buffer);
 
             // dp
-            self.clean_by_min_x_for_dp(min_x, &mut dp_buffer);
-            self.add(start_dp, dp_slice, &mut dp_buffer);
+            self.clean_by_min_x_dp(min_x, &mut dp_buffer);
+            self.add_dp(start_dp, dp_slice, &mut dp_buffer);
 
             // fill buffer
-            let limit_x = max_x + 1;
-            split_buffer.add_hz_edges(limit_x, &hz_buffer);
-            split_buffer.add_dp_edges(limit_x, &dp_buffer);
-            split_buffer.add_dn_edges(limit_x, &dn_buffer);
+            split_buffer.add_hz_edges(max_x, &hz_buffer);
+            split_buffer.add_dp_edges(max_x, &dp_buffer);
+            split_buffer.add_dn_edges(max_x, &dn_buffer);
 
             // split
 
-            // vr
-            for (vr_index, vr) in vr_slice.iter().enumerate() {
-                let e = IndexEdge {
-                    index: vr_index as u32,
-                    pos: vr.pos,
-                    range: vr.range,
-                };
-                split_buffer.intersect_vr(e);
+            // vr x hz
+            if split_buffer.is_not_empty_hz() {
+                for (index, vr) in vr_slice.iter().enumerate() {
+                    split_buffer.intersect_vr_and_hz(IndexEdge::new_vr(index, vr));
+                }
             }
 
+            // vr x dp
+            if split_buffer.is_not_empty_dp() {
+                for (index, vr) in vr_slice.iter().enumerate() {
+                    split_buffer.intersect_vr_and_dp(IndexEdge::new_vr(index, vr));
+                }
+            }
+
+            // vr x dn
+            if split_buffer.is_not_empty_dp() {
+                for (index, vr) in vr_slice.iter().enumerate() {
+                    split_buffer.intersect_vr_and_dn(IndexEdge::new_vr(index, vr));
+                }
+            }
+
+            // all rest in the buffer
             split_buffer.intersect();
 
             start_vr += part.count_vr;
@@ -118,15 +129,14 @@ impl Section {
     }
 
     #[inline]
-    fn clean_by_min_x_for_dp(&mut self, min_x: i32, buffer: &mut Vec<IndexEdge>) {
-        buffer.retain_mut(|e| {
-            if e.range.min < min_x {
+    fn clean_by_min_x_dp(&mut self, min_x: i32, buffer: &mut Vec<SplitDp>) {
+        buffer.retain_mut(|dp| {
+            if dp.x_range.max < min_x {
                 false
             } else {
-                let x = min_x;
-                let dx = x - e.range.min;
-                e.range.min = x;
-                e.pos += dx;
+                let new_min_y = dp.find_y(min_x);
+                dp.x_range.min = min_x;
+                dp.y_range.max = new_min_y;
 
                 true
             }
@@ -134,21 +144,50 @@ impl Section {
     }
 
     #[inline]
-    fn clean_by_min_x(&mut self, min_x: i32, buffer: &mut Vec<IndexEdge>) {
-        buffer.retain_mut(|e| {
-            if e.range.min < min_x {
+    fn clean_by_min_x_dn(&mut self, min_x: i32, buffer: &mut Vec<SplitDn>) {
+        buffer.retain_mut(|dn| {
+            if dn.x_range.max < min_x {
                 false
             } else {
-                e.range.min = min_x;
+                let new_max_y = dn.find_y(min_x);
+                dn.x_range.min = min_x;
+                dn.y_range.max = new_max_y;
+
                 true
             }
         });
     }
 
-    fn add(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<IndexEdge>) {
+    #[inline]
+    fn clean_by_min_x_hz(&mut self, min_x: i32, buffer: &mut Vec<SplitHz>) {
+        buffer.retain_mut(|e| {
+            if e.x_range.max < min_x {
+                false
+            } else {
+                e.x_range.min = min_x;
+                true
+            }
+        });
+    }
+
+    fn add_hz(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitHz>) {
         for (i, s) in new_segments.iter().enumerate() {
             let index = offset + i;
-            buffer.push(IndexEdge::new(index, s));
+            buffer.push(SplitHz::with_segment(index, s));
+        }
+    }
+
+    fn add_dp(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitDp>) {
+        for (i, s) in new_segments.iter().enumerate() {
+            let index = offset + i;
+            buffer.push(SplitDp::with_segment(index, s));
+        }
+    }
+
+    fn add_dn(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitDn>) {
+        for (i, s) in new_segments.iter().enumerate() {
+            let index = offset + i;
+            buffer.push(SplitDn::with_segment(index, s));
         }
     }
 
@@ -191,10 +230,10 @@ pub(super) struct IndexEdge {
 
 impl IndexEdge {
     #[inline(always)]
-    fn new(index: usize, segment: &Segment) -> Self {
+    pub(super) fn new_vr(index: usize, segment: &Segment) -> Self {
         Self {
             index: index as u32,
-            pos: segment.pos, // for vr -> x, hz -> y, dg -> min y
+            pos: segment.pos,
             range: segment.range,
         }
     }
@@ -426,7 +465,7 @@ mod tests {
     use i_float::int::rect::IntRect;
 
     impl GeometrySource {
-        fn count(&self) -> usize {
+        fn test_count(&self) -> usize {
             self.vr_list.len() + self.hz_list.len() + self.dp_list.len() + self.dn_list.len()
         }
     }
@@ -441,7 +480,7 @@ mod tests {
             Self {
                 layout: XLayout::with_rect(
                     rect,
-                    source.count(),
+                    source.test_count(),
                     avg_count_per_column,
                     max_parts_count,
                 ),
@@ -467,10 +506,90 @@ mod tests {
             dn_list: vec![],
         };
 
+        let original = source.test_count();
         let mut section = Section::test_new(source, rect, 3, 5);
 
         section.split();
 
-        assert_eq!(section.source.count(), 7);
+        assert_eq!(section.source.test_count(), original);
     }
+
+    #[test]
+    fn test_1() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 4, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 2, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 4, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![Segment::test_with_shape(0, 5, 5, ShapeType::Subject)],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let original = source.test_count();
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.test_count(), original);
+    }
+
+    #[test]
+    fn test_2() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 4, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 2, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 4, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![Segment::test_with_shape(0, 5, 4, ShapeType::Subject)],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.hz_list.len(), 5);
+    }
+
+    #[test]
+    fn test_3() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 4, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 2, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 4, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![
+                Segment::test_with_shape(0, 5, 4, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 0, ShapeType::Subject)
+            ],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.hz_list.len(), 10);
+    }
+
 }

@@ -1,23 +1,18 @@
+use crate::gear::split_buffer::{SplitDn, SplitDp, SplitHz};
+use crate::gear::y_layout::YLayout;
+use crate::geom::range::LineRange;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Range;
-use crate::gear::split::IndexEdge;
-use crate::gear::y_layout::YLayout;
-
-pub(super) struct YPart {
-    pub(super) hz: usize,
-    pub(super) dg_pos: usize,
-    pub(super) dg_neg: usize,
-}
 
 pub(super) struct YMapper {
-    pub(super) layout: YLayout,
+    pub(super) parts_layout: YLayout,
     pub(super) hz_parts_count: Vec<usize>,
-    pub(super) dg_pos_parts_count: Vec<usize>,
-    pub(super) dg_neg_parts_count: Vec<usize>,
+    pub(super) dp_parts_count: Vec<usize>,
+    pub(super) dn_parts_count: Vec<usize>,
     pub(super) hz_parts_start: Vec<usize>,
-    pub(super) dg_pos_parts_start: Vec<usize>,
-    pub(super) dg_neg_parts_start: Vec<usize>,
+    pub(super) dp_parts_start: Vec<usize>,
+    pub(super) dn_parts_start: Vec<usize>,
 }
 
 impl YMapper {
@@ -25,88 +20,84 @@ impl YMapper {
     pub(super) fn new(layout: YLayout) -> Self {
         let n = layout.count();
         Self {
-            layout,
+            parts_layout: layout,
             hz_parts_count: vec![0; n],
-            dg_pos_parts_count: vec![0; n],
-            dg_neg_parts_count: vec![0; n],
+            dp_parts_count: vec![0; n],
+            dn_parts_count: vec![0; n],
+
             hz_parts_start: vec![0; n],
-            dg_pos_parts_start: vec![0; n],
-            dg_neg_parts_start: vec![0; n],
+            dp_parts_start: vec![0; n],
+            dn_parts_start: vec![0; n],
         }
     }
 
-    pub(super) fn map_hz_edges(&mut self, edges: &[IndexEdge]) {
+    pub(super) fn map_hz(&mut self, slice: &[SplitHz]) {
         self.hz_parts_count.fill(0);
-        Self::count_edges_by_pos(&self.layout, &mut self.hz_parts_count, edges);
+
+        // count space
+        for hz in slice {
+            let index = self.parts_layout.index(hz.y);
+            unsafe { *self.hz_parts_count.get_unchecked_mut(index) += 1 };
+        }
+
         Self::prepare_count_and_start(&mut self.hz_parts_count, &mut self.hz_parts_start);
     }
 
-    pub(super) fn map_dp_edges(&mut self, edges: &[IndexEdge]) {
-        self.dg_pos_parts_count.fill(0);
-        Self::count_edges_by_min(&self.layout, &mut self.dg_pos_parts_count, edges);
-        Self::prepare_count_and_start(&mut self.dg_pos_parts_count, &mut self.dg_pos_parts_start);
+    pub(super) fn map_dp(&mut self, slice: &[SplitDp]) {
+        self.dp_parts_count.fill(0);
+
+        // count space
+        for dp in slice {
+            let index = self.parts_layout.index(dp.y_range.min);
+            unsafe { *self.dp_parts_count.get_unchecked_mut(index) += 1 };
+        }
+
+        Self::prepare_count_and_start(&mut self.dp_parts_count, &mut self.dp_parts_start);
     }
 
-    pub(super) fn map_dn_edges(&mut self, edges: &[IndexEdge]) {
-        self.dg_neg_parts_count.fill(0);
-        Self::count_edges_by_min(&self.layout, &mut self.dg_neg_parts_count, edges);
-        Self::prepare_count_and_start(&mut self.dg_neg_parts_count, &mut self.dg_neg_parts_start);
+    pub(super) fn map_dn_edges(&mut self, slice: &[SplitDn]) {
+        self.dn_parts_count.fill(0);
+
+        // count space
+        for dn in slice {
+            let index = self.parts_layout.index(dn.y_range.min);
+            unsafe { *self.dn_parts_count.get_unchecked_mut(index) += 1 };
+        }
+
+        Self::prepare_count_and_start(&mut self.dn_parts_count, &mut self.dn_parts_start);
     }
 
     #[inline(always)]
     pub(super) fn next_hz_index(&mut self, y: i32) -> usize {
-        let index = self.layout.bottom_index(y);
-        let count = unsafe {
-            self.hz_parts_count.get_unchecked_mut(index)
+        let part = self.parts_layout.index(y);
+        let (start, count) = unsafe {
+            (*self.hz_parts_start.get_unchecked(part), self.hz_parts_count.get_unchecked_mut(part))
         };
-        let result = *count;
-        *count = result + 1;
+        let result = start + *count;
+        *count += 1;
         result
     }
 
     #[inline(always)]
-    pub(super) fn next_dg_pos_index(&mut self, y: i32) -> usize {
-        let index = self.layout.bottom_index(y);
-        let count = unsafe {
-            self.dg_pos_parts_count.get_unchecked_mut(index)
+    pub(super) fn next_dp_index(&mut self, y: i32) -> usize {
+        let part = self.parts_layout.index(y);
+        let (start, count) = unsafe {
+            (*self.dp_parts_start.get_unchecked(part), self.dp_parts_count.get_unchecked_mut(part))
         };
-        let result = *count;
-        *count = result + 1;
+        let result = start + *count;
+        *count += 1;
         result
     }
 
     #[inline(always)]
-    pub(super) fn next_dg_neg_index(&mut self, y: i32) -> usize {
-        let index = self.layout.bottom_index(y);
-        let count = unsafe {
-            self.dg_neg_parts_count.get_unchecked_mut(index)
+    pub(super) fn next_dn_index(&mut self, y: i32) -> usize {
+        let part = self.parts_layout.index(y);
+        let (start, count) = unsafe {
+            (*self.dn_parts_start.get_unchecked(part), self.dn_parts_count.get_unchecked_mut(part))
         };
-        let result = *count;
-        *count = result + 1;
+        let result = start + *count;
+        *count += 1;
         result
-    }
-
-
-    #[inline]
-    fn count_edges_by_min(layout: &YLayout, count_buffer: &mut [usize], edges: &[IndexEdge]) {
-        count_buffer.fill(0);
-        for e in edges.iter() {
-            let index = layout.bottom_index(e.range.min);
-            unsafe {
-                *count_buffer.get_unchecked_mut(index) += 1;
-            }
-        }
-    }
-
-    #[inline]
-    fn count_edges_by_pos(layout: &YLayout, count_buffer: &mut [usize], edges: &[IndexEdge]) {
-        count_buffer.fill(0);
-        for e in edges.iter() {
-            let index = layout.bottom_index(e.pos);
-            unsafe {
-                *count_buffer.get_unchecked_mut(index) += 1;
-            }
-        }
     }
 
     #[inline]
@@ -120,29 +111,63 @@ impl YMapper {
     }
 
     #[inline(always)]
-    pub(super) fn range_hz_for_indices(&self, i0: usize, i1: usize) -> Range<usize> {
-        Self::range_for_indices(i0, i1, &self.hz_parts_start, &self.hz_parts_start)
+    fn range_hz_for_indices(&self, parts: Range<usize>) -> Range<usize> {
+        Self::range_for_indices(parts, &self.hz_parts_start, &self.hz_parts_count)
     }
 
     #[inline(always)]
-    pub(super) fn range_dp_for_indices(&self, i0: usize, i1: usize) -> Range<usize> {
-        Self::range_for_indices(i0, i1, &self.dg_pos_parts_start, &self.dg_pos_parts_start)
+    fn range_dp_for_indices(&self, parts: Range<usize>) -> Range<usize> {
+        Self::range_for_indices(parts, &self.dp_parts_start, &self.dp_parts_count)
     }
 
     #[inline(always)]
-    pub(super) fn range_dn_for_indices(&self, i0: usize, i1: usize) -> Range<usize> {
-        Self::range_for_indices(i0, i1, &self.dg_neg_parts_start, &self.dg_neg_parts_start)
+    fn range_dn_for_indices(&self, parts: Range<usize>) -> Range<usize> {
+        Self::range_for_indices(parts, &self.dn_parts_start, &self.dn_parts_count)
     }
 
     #[inline(always)]
-    fn range_for_indices(i0: usize, i1: usize, start: &[usize], count: &[usize]) -> Range<usize> {
+    fn range_for_indices(parts: Range<usize>, start: &[usize], count: &[usize]) -> Range<usize> {
         unsafe {
-            let &start_0 = start.get_unchecked(i0);
-            let &start_1 = start.get_unchecked(i1);
-            let &count_1 = count.get_unchecked(i1);
+            let &start_0 = start.get_unchecked(parts.start);
+            let &start_1 = start.get_unchecked(parts.end);
+            let &count_1 = count.get_unchecked(parts.end);
 
             start_0..start_1 + count_1
         }
+    }
+
+    #[inline(always)]
+    pub(super) fn indices_by_range_hz(&self, y_range: LineRange) -> Range<usize> {
+        let parts = self.parts_layout.indices_by_range(y_range);
+        self.range_hz_for_indices(parts)
+    }
+
+    // dp
+
+    #[inline(always)]
+    pub(super) fn indices_by_range_bottom_offset_dp(&self, y_range: LineRange) -> Range<usize> {
+        let parts = self.parts_layout.indices_by_range(y_range);
+        self.range_dp_for_indices(parts)
+    }
+
+    #[inline(always)]
+    pub(super) fn indices_bottom_offset_dp(&self, y: i32) -> Range<usize> {
+        let parts = self.parts_layout.indices_bottom_offset(y);
+        self.range_dp_for_indices(parts)
+    }
+
+    // dn
+
+    #[inline(always)]
+    pub(super) fn indices_by_range_bottom_offset_dn(&self, y_range: LineRange) -> Range<usize> {
+        let parts = self.parts_layout.indices_by_range(y_range);
+        self.range_dn_for_indices(parts)
+    }
+
+    #[inline(always)]
+    pub(super) fn indices_bottom_offset_dn(&self, y: i32) -> Range<usize> {
+        let parts = self.parts_layout.indices_bottom_offset(y);
+        self.range_dn_for_indices(parts)
     }
 }
 
@@ -160,7 +185,7 @@ mod tests {
             IntPoint::new(10, 10),
             IntPoint::new(0, 10),
         ]
-            .to_vec()];
+        .to_vec()];
 
         let mut mapper = XMapper::new(XLayout::with_subj_and_clip(&subj, &[], 2).unwrap());
 

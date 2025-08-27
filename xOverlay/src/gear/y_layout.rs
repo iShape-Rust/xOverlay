@@ -1,4 +1,6 @@
+use core::ops::Range;
 use i_float::int::rect::IntRect;
+use crate::geom::range::LineRange;
 
 #[derive(Clone)]
 pub(super) struct YLayout {
@@ -17,25 +19,41 @@ impl YLayout {
     }
 
     #[inline(always)]
-    pub(super) fn max_height(&self) -> i32 {
-        self.max_height
-    }
-
-    #[inline(always)]
-    pub(super) fn bottom_index(&self, y: i32) -> usize {
+    pub(super) fn index(&self, y: i32) -> usize {
         let dy = (y - self.min_y) as usize;
         dy >> self.part_log_height
     }
 
     #[inline(always)]
-    pub(super) fn bottom_index_clamp_min(&self, y: i32) -> usize {
+    pub(super) fn indices_bottom_offset(&self, y: i32) -> Range<usize> {
+        let start = self.index_clamp_min(y - self.max_height);
+        let end = self.index_clamp_max(y);
+        start..end
+    }
+
+    #[inline(always)]
+    pub(super) fn indices_by_range(&self, range: LineRange) -> Range<usize> {
+        let start = self.index(range.min);
+        let end = self.index_clamp_max(range.max);
+        start..end
+    }
+
+    #[inline(always)]
+    pub(super) fn indices_by_range_bottom_offset(&self, range: LineRange) -> Range<usize> {
+        let start = self.index_clamp_min(range.min - self.max_height);
+        let end = self.index_clamp_max(range.max);
+        start..end
+    }
+
+    #[inline(always)]
+    fn index_clamp_min(&self, y: i32) -> usize {
         let dy = (y.max(self.min_y) - self.min_y) as usize;
         dy >> self.part_log_height
     }
 
     #[inline(always)]
-    pub(super) fn bottom_index_clamp_max(&self, y: i32) -> usize {
-        let dy = (y - self.min_y).max(self.max_y) as usize;
+    fn index_clamp_max(&self, y: i32) -> usize {
+        let dy = (y.min(self.max_y) - self.min_y) as usize;
         dy >> self.part_log_height
     }
 

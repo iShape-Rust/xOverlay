@@ -1,4 +1,3 @@
-use i_float::int::point::IntPoint;
 use crate::geom::range::LineRange;
 
 pub(crate) struct PositiveDiagonal {
@@ -39,7 +38,7 @@ pub(crate) trait Diagonal {
 impl Diagonal for PositiveDiagonal {
     #[inline(always)]
     fn find_y(&self, x: i32) -> i32 {
-        let dx = self.x_range.max - x;
+        let dx = x - self.x_range.min;
         self.min_y + dx
     }
 
