@@ -25,8 +25,7 @@ impl Section {
         let mut dp_buffer = Vec::with_capacity(source_by_columns.dp_list.len() >> scale);
         let mut dn_buffer = Vec::with_capacity(source_by_columns.dn_list.len() >> scale);
 
-        let mut split_buffer =
-            SplitBuffer::new(self.layout.boundary().clone(), self.layout.log_width());
+        let mut split_buffer = SplitBuffer::new(self.layout.y_range(), self.layout.log_width());
 
         for (column_index, part) in map_by_columns.iter_by_parts().enumerate() {
             let (min_x, max_x) = self.layout.borders(column_index);
@@ -59,24 +58,26 @@ impl Section {
 
             // split
 
-            // vr x hz
-            if split_buffer.is_not_empty_hz() {
-                for (index, vr) in vr_slice.iter().enumerate() {
-                    split_buffer.intersect_vr_and_hz(IndexEdge::new_vr(index, vr));
+            if !vr_slice.is_empty() {
+                // vr x hz
+                if split_buffer.is_not_empty_hz() {
+                    for (index, vr) in vr_slice.iter().enumerate() {
+                        split_buffer.intersect_vr_and_hz(IndexEdge::new_vr(index, vr));
+                    }
                 }
-            }
 
-            // vr x dp
-            if split_buffer.is_not_empty_dp() {
-                for (index, vr) in vr_slice.iter().enumerate() {
-                    split_buffer.intersect_vr_and_dp(IndexEdge::new_vr(index, vr));
+                // vr x dp
+                if split_buffer.is_not_empty_dp() {
+                    for (index, vr) in vr_slice.iter().enumerate() {
+                        split_buffer.intersect_vr_and_dp(IndexEdge::new_vr(index, vr));
+                    }
                 }
-            }
 
-            // vr x dn
-            if split_buffer.is_not_empty_dp() {
-                for (index, vr) in vr_slice.iter().enumerate() {
-                    split_buffer.intersect_vr_and_dn(IndexEdge::new_vr(index, vr));
+                // vr x dn
+                if split_buffer.is_not_empty_dp() {
+                    for (index, vr) in vr_slice.iter().enumerate() {
+                        split_buffer.intersect_vr_and_dn(IndexEdge::new_vr(index, vr));
+                    }
                 }
             }
 
@@ -249,8 +250,8 @@ trait SplitSegments {
 impl SplitSegments for Vec<Segment> {
     #[inline]
     fn split_as_vr(&mut self, marks: &[YMark]) {
-        let mut m0 = if let Some(first) = marks.first() {
-            first.clone()
+        let mut m0 = if let Some(&m) = marks.first() {
+            m
         } else {
             return;
         };
@@ -259,7 +260,7 @@ impl SplitSegments for Vec<Segment> {
 
         for &m in marks.iter().skip(1) {
             if m.index == m0.index {
-                if m.y == m.y {
+                if m.y == m0.y {
                     continue;
                 }
 
@@ -277,8 +278,8 @@ impl SplitSegments for Vec<Segment> {
 
     #[inline]
     fn split_as_hz(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(first) = marks.first() {
-            first.clone()
+        let mut m0 = if let Some(&m) = marks.first() {
+            m
         } else {
             return;
         };
@@ -305,8 +306,8 @@ impl SplitSegments for Vec<Segment> {
 
     #[inline]
     fn split_as_dp(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(first) = marks.first() {
-            first.clone()
+        let mut m0 = if let Some(&m) = marks.first() {
+            m
         } else {
             return;
         };
@@ -333,8 +334,8 @@ impl SplitSegments for Vec<Segment> {
 
     #[inline]
     fn split_as_dn(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(first) = marks.first() {
-            first.clone()
+        let mut m0 = if let Some(&m) = marks.first() {
+            m
         } else {
             return;
         };
@@ -388,9 +389,9 @@ impl Segment {
 
     #[inline(always)]
     fn cut_tail_dp(&mut self, mid: i32) -> Self {
-        let y = PositiveDiagonal::new(self.range, self.pos).find_y(mid);
+        let mid_y = PositiveDiagonal::new(self.range, self.pos).find_y(mid);
         let tail = Self {
-            pos: y,
+            pos: mid_y,
             range: LineRange::with_min_max(mid, self.range.max),
             dir: self.dir,
         };
@@ -402,7 +403,7 @@ impl Segment {
 
     #[inline(always)]
     fn cut_head_dp(&mut self, mid: i32) -> Self {
-        let y = PositiveDiagonal::new(self.range, self.pos).find_y(mid);
+        let mid_y = PositiveDiagonal::new(self.range, self.pos).find_y(mid);
         let head = Self {
             pos: self.pos,
             range: LineRange::with_min_max(self.range.min, mid),
@@ -410,36 +411,36 @@ impl Segment {
         };
 
         self.range.min = mid;
-        self.pos = y;
+        self.pos = mid_y;
 
         head
     }
 
     #[inline(always)]
     fn cut_tail_dn(&mut self, mid: i32) -> Self {
-        let y = NegativeDiagonal::new(self.range, self.pos).find_y(mid);
+        let mid_y = NegativeDiagonal::new(self.range, self.pos).find_y(mid);
         let tail = Self {
-            pos: y,
+            pos: self.pos,
             range: LineRange::with_min_max(mid, self.range.max),
             dir: self.dir,
         };
 
         self.range.max = mid;
+        self.pos = mid_y;
 
         tail
     }
 
     #[inline(always)]
     fn cut_head_dn(&mut self, mid: i32) -> Self {
-        let y = NegativeDiagonal::new(self.range, self.pos).find_y(mid);
+        let mid_y = NegativeDiagonal::new(self.range, self.pos).find_y(mid);
         let head = Self {
-            pos: self.pos,
+            pos: mid_y,
             range: LineRange::with_min_max(self.range.min, mid),
             dir: self.dir,
         };
 
         self.range.min = mid;
-        self.pos = y;
 
         head
     }
@@ -578,7 +579,7 @@ mod tests {
             ],
             hz_list: vec![
                 Segment::test_with_shape(0, 5, 4, ShapeType::Subject),
-                Segment::test_with_shape(0, 5, 0, ShapeType::Subject)
+                Segment::test_with_shape(0, 5, 0, ShapeType::Subject),
             ],
             dp_list: vec![],
             dn_list: vec![],
@@ -592,4 +593,299 @@ mod tests {
         assert_eq!(section.source.hz_list.len(), 10);
     }
 
+    #[test]
+    fn test_4() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 4, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 3, ShapeType::Subject),
+            ],
+            hz_list: vec![
+                Segment::test_with_shape(0, 4, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 4, 3, ShapeType::Subject),
+            ],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.hz_list.len(), 6);
+    }
+
+    #[test]
+    fn test_5() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 6, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![
+                Segment::test_with_shape(0, 6, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
+            ],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 12);
+        assert_eq!(section.source.hz_list.len(), 12);
+    }
+
+    #[test]
+    fn test_6() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 6, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![
+                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 2, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 4, ShapeType::Subject),
+            ],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 9);
+        assert_eq!(section.source.hz_list.len(), 12);
+    }
+
+    #[test]
+    fn test_7() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 6, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![
+                Segment::test_with_shape(0, 5, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 2, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 4, ShapeType::Subject),
+            ],
+            dp_list: vec![],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 9);
+        assert_eq!(section.source.hz_list.len(), 9);
+    }
+
+    #[test]
+    fn test_8() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 6, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 6, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 5, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.dp_list.len(), 3);
+    }
+
+    #[test]
+    fn test_9() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 5, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 5);
+        assert_eq!(section.source.dp_list.len(), 4);
+    }
+
+    #[test]
+    fn test_10() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 5, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 5, 0, ShapeType::Subject),
+                Segment::test_with_shape(3, 5, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.dp_list.len(), 4);
+    }
+
+    #[test]
+    fn test_11() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![
+                Segment::test_with_shape(0, 5, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
+            ],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
+                Segment::test_with_shape(3, 6, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.vr_list.len(), 6);
+        assert_eq!(section.source.dp_list.len(), 6);
+    }
+
+    #[test]
+    fn test_12() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![],
+            hz_list: vec![
+                Segment::test_with_shape(0, 5, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
+            ],
+            dp_list: vec![
+                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
+                Segment::test_with_shape(3, 6, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.hz_list.len(), 6);
+        assert_eq!(section.source.dp_list.len(), 6);
+    }
+
+    #[test]
+    fn test_13() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![],
+            hz_list: vec![
+                Segment::test_with_shape(0, 5, 1, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 3, ShapeType::Subject),
+                Segment::test_with_shape(0, 5, 5, ShapeType::Subject),
+            ],
+            dp_list: vec![],
+            dn_list: vec![
+                Segment::test_with_shape(0, 6, 0, ShapeType::Subject),
+                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
+            ],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.hz_list.len(), 6);
+        assert_eq!(section.source.dn_list.len(), 6);
+    }
+
+    #[test]
+    fn test_14() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![
+                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
+
+            ],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.dp_list.len(), 2);
+        assert_eq!(section.source.dn_list.len(), 2);
+    }
+
+    #[test]
+    fn test_15() {
+        let rect = IntRect::new(0, 16, 0, 16);
+        let source = GeometrySource {
+            vr_list: vec![],
+            hz_list: vec![],
+            dp_list: vec![
+                Segment::test_with_shape(0, 2, 0, ShapeType::Subject),
+            ],
+            dn_list: vec![
+                Segment::test_with_shape(2, 4, 0, ShapeType::Subject),
+
+            ],
+        };
+
+        let mut section = Section::test_new(source, rect, 3, 5);
+
+        section.split();
+
+        assert_eq!(section.source.dp_list.len(), 1);
+        assert_eq!(section.source.dn_list.len(), 1);
+    }
 }

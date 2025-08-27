@@ -57,12 +57,13 @@ impl YLayout {
         dy >> self.part_log_height
     }
 
-    pub(super) fn new(rect: IntRect, part_log_height: u32) -> Self {
-        let parts_count = (rect.height() as usize >> part_log_height) + 1;
+    pub(super) fn new(y_range: LineRange, part_log_height: u32) -> Self {
+        let height = y_range.max.abs_diff(y_range.min) as usize;
+        let parts_count = (height >> part_log_height) + 1;
         let part_height = 1 << part_log_height;
         Self {
-            min_y: rect.min_y,
-            max_y: rect.max_y,
+            min_y: y_range.min,
+            max_y: y_range.max,
             part_log_height,
             parts_count,
             max_height: part_height,
@@ -73,13 +74,12 @@ impl YLayout {
 
 #[cfg(test)]
 mod tests {
-    use i_float::int::rect::IntRect;
     use crate::gear::y_layout::YLayout;
+    use crate::geom::range::LineRange;
 
     #[test]
     fn test_0() {
-        let rect = IntRect::new(0, 8, 0, 16);
-        let layout = YLayout::new(rect, 4);
+        let layout = YLayout::new(LineRange::with_min_max(0, 16), 4);
 
         assert_eq!(layout.parts_count, 2);
     }

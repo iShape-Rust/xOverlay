@@ -1,6 +1,6 @@
+use crate::geom::range::LineRange;
 use i_float::int::rect::IntRect;
 use i_shape::int::shape::IntContour;
-use crate::geom::range::LineRange;
 
 #[derive(Clone)]
 pub(crate) struct XLayout {
@@ -10,10 +10,14 @@ pub(crate) struct XLayout {
 }
 
 impl XLayout {
-
     #[inline(always)]
     pub(crate) fn boundary(&self) -> &IntRect {
         &self.rect
+    }
+
+    #[inline(always)]
+    pub(crate) fn y_range(&self) -> LineRange {
+        LineRange::with_min_max(self.rect.min_y, self.rect.max_y)
     }
 
     #[inline(always)]
@@ -53,18 +57,19 @@ impl XLayout {
 
     #[inline(always)]
     pub(crate) fn indices_by_xx(&self, x0: i32, x1: i32) -> (usize, usize) {
-        let (min_x, max_x) = if x0 < x1 {
-            (x0, x1)
-        } else {
-            (x1, x0)
-        };
+        let (min_x, max_x) = if x0 < x1 { (x0, x1) } else { (x1, x0) };
 
         let i0 = self.index(min_x);
         let i1 = self.index(max_x);
         (i0, i1)
     }
 
-    pub(crate) fn with_rect(rect: IntRect, elements_count: usize, avg_count_per_column: usize, max_parts_count: usize) -> Self {
+    pub(crate) fn with_rect(
+        rect: IntRect,
+        elements_count: usize,
+        avg_count_per_column: usize,
+        max_parts_count: usize,
+    ) -> Self {
         let width = 1 + rect.width() as usize;
 
         let approximate_width = avg_count_per_column * width / elements_count;
@@ -96,7 +101,11 @@ impl XLayout {
         }
     }
 
-    pub(crate) fn with_subj_and_clip(subj: &[IntContour], clip: &[IntContour], cpu_count: usize) -> Option<Self> {
+    pub(crate) fn with_subj_and_clip(
+        subj: &[IntContour],
+        clip: &[IntContour],
+        cpu_count: usize,
+    ) -> Option<Self> {
         let subj_rect = IntRect::with_iter(subj.iter().flatten());
         let clip_rect = IntRect::with_iter(clip.iter().flatten());
         let rect = match (subj_rect, clip_rect) {
@@ -136,21 +145,20 @@ impl XLayout {
 
 #[cfg(test)]
 mod tests {
+    use crate::gear::x_layout::XLayout;
     use alloc::vec;
     use i_float::int::point::IntPoint;
     use i_float::int::rect::IntRect;
-    use crate::gear::x_layout::XLayout;
 
     #[test]
     fn test_0() {
-        let subj = [
-            [
-                IntPoint::new(0, 0),
-                IntPoint::new(10, 0),
-                IntPoint::new(10, 10),
-                IntPoint::new(0, 10),
-            ].to_vec()
-        ];
+        let subj = [[
+            IntPoint::new(0, 0),
+            IntPoint::new(10, 0),
+            IntPoint::new(10, 10),
+            IntPoint::new(0, 10),
+        ]
+        .to_vec()];
 
         let layout = XLayout::with_subj_and_clip(&subj, &[], 1).unwrap();
 
@@ -160,14 +168,8 @@ mod tests {
     #[test]
     fn test_1() {
         let subj = [
-            vec![
-                IntPoint::new(0, 0),
-                IntPoint::new(3, 0),
-            ],
-            vec![
-                IntPoint::new(4, 0),
-                IntPoint::new(7, 0),
-            ]
+            vec![IntPoint::new(0, 0), IntPoint::new(3, 0)],
+            vec![IntPoint::new(4, 0), IntPoint::new(7, 0)],
         ];
 
         let layout = XLayout::with_subj_and_clip(&subj, &[], 1).unwrap();

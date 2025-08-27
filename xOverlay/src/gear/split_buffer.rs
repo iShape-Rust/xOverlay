@@ -5,7 +5,6 @@ use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use i_float::int::rect::IntRect;
 use i_key_sort::bin_key::index::{BinKey, BinLayout};
 use i_key_sort::sort::key_sort::KeyBinSort;
 use crate::gear::segment::Segment;
@@ -66,8 +65,8 @@ pub(super) struct SplitBuffer {
 }
 
 impl SplitBuffer {
-    pub(super) fn new(rect: IntRect, log_height: u32) -> Self {
-        let layout = YLayout::new(rect, log_height);
+    pub(super) fn new(y_range: LineRange, log_height: u32) -> Self {
+        let layout = YLayout::new(y_range, log_height);
         let mapper = YMapper::new(layout);
 
         Self {
@@ -293,7 +292,10 @@ impl SplitBuffer {
 
     #[inline(always)]
     fn cross_dgs(dp: &SplitDp, dn: &SplitDn) -> IntPoint {
-        let y = (dp.y_range.min + dn.y_range.max) >> 1;
+        let dy = dp.y_range.min.wrapping_add(dn.y_range.min);
+        let dx = dp.x_range.min.wrapping_add(dn.x_range.max);
+
+        let y = dy.wrapping_add(dx) >> 1;
         let x = dp.find_x(y);
         IntPoint::new(x, y)
     }
@@ -330,6 +332,10 @@ impl SplitHz {
 
     #[inline(always)]
     fn left_part(&self, max_x: i32) -> Self {
+        if self.x_range.max <= max_x {
+            return self.clone();
+        }
+
         Self {
             index: self.index,
             y: self.y,
@@ -358,11 +364,14 @@ impl SplitDp {
 
     #[inline(always)]
     fn left_part(&self, max_x: i32) -> Self {
-        let new_max_x = self.x_range.max.min(max_x);
-        let x_range = LineRange::with_min_max(self.x_range.min, new_max_x);
+        if self.x_range.max <= max_x {
+            return self.clone();
+        }
 
-        let new_max_y = self.find_y(max_x);
-        let y_range = LineRange::with_min_max(self.y_range.min, new_max_y);
+        let x_range = LineRange::with_min_max(self.x_range.min, max_x);
+
+        let max_y = self.find_y(max_x);
+        let y_range = LineRange::with_min_max(self.y_range.min, max_y);
 
         Self {
             index: self.index,
@@ -396,7 +405,7 @@ impl SplitDn {
     #[inline(always)]
     pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
         let min_y = segment.pos;
-        let max_y = NegativeDiagonal::new(segment.range, min_y).find_y(segment.range.max);
+        let max_y = NegativeDiagonal::new(segment.range, min_y).find_y(segment.range.min);
         Self {
             index: index as u32,
             x_range: segment.range,
@@ -407,11 +416,14 @@ impl SplitDn {
 
     #[inline(always)]
     fn left_part(&self, max_x: i32) -> Self {
-        let new_max_x = self.x_range.max.min(max_x);
-        let x_range = LineRange::with_min_max(self.x_range.min, new_max_x);
+        if self.x_range.max <= max_x {
+            return self.clone();
+        }
+        let max_x = max_x;
+        let x_range = LineRange::with_min_max(self.x_range.min, max_x);
 
-        let new_min_y = self.find_y(max_x);
-        let y_range = LineRange::with_min_max(new_min_y, self.y_range.max);
+        let min_y = self.find_y(max_x);
+        let y_range = LineRange::with_min_max(min_y, self.y_range.max);
 
         Self {
             index: self.index,
