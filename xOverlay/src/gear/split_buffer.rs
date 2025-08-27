@@ -121,7 +121,7 @@ impl SplitBuffer {
     }
 
     pub(super) fn add_dn_edges(&mut self, max_x: i32, slice: &[SplitDn]) {
-        self.mapper.map_dn_edges(slice);
+        self.mapper.map_dn(slice);
         self.dn_edges.resize(slice.len(), SplitDn::default());
         for dn in slice {
             let map_index = self.mapper.next_dn_index(dn.y_range.min);
@@ -292,10 +292,10 @@ impl SplitBuffer {
 
     #[inline(always)]
     fn cross_dgs(dp: &SplitDp, dn: &SplitDn) -> IntPoint {
-        let dy = dp.y_range.min.wrapping_add(dn.y_range.min);
-        let dx = dp.x_range.min.wrapping_add(dn.x_range.max);
+        let sp = dp.y_range.min.wrapping_sub(dp.x_range.min);
+        let sn = dn.y_range.min.wrapping_add(dn.x_range.max);
 
-        let y = dy.wrapping_add(dx) >> 1;
+        let y = sp.wrapping_add(sn) >> 1;
         let x = dp.find_x(y);
         IntPoint::new(x, y)
     }

@@ -72,7 +72,7 @@ impl XLayout {
     ) -> Self {
         let width = 1 + rect.width() as usize;
 
-        let approximate_width = avg_count_per_column * width / elements_count;
+        let approximate_width = avg_count_per_column * width / elements_count.max(1);
         let part_log_width = approximate_width.ilog2();
 
         let part_width = 1 << part_log_width;

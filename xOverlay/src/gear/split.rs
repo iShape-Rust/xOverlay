@@ -61,21 +61,24 @@ impl Section {
             if !vr_slice.is_empty() {
                 // vr x hz
                 if split_buffer.is_not_empty_hz() {
-                    for (index, vr) in vr_slice.iter().enumerate() {
+                    for (offset, vr) in vr_slice.iter().enumerate() {
+                        let index = start_vr + offset;
                         split_buffer.intersect_vr_and_hz(IndexEdge::new_vr(index, vr));
                     }
                 }
 
                 // vr x dp
                 if split_buffer.is_not_empty_dp() {
-                    for (index, vr) in vr_slice.iter().enumerate() {
+                    for (offset, vr) in vr_slice.iter().enumerate() {
+                        let index = start_vr + offset;
                         split_buffer.intersect_vr_and_dp(IndexEdge::new_vr(index, vr));
                     }
                 }
 
                 // vr x dn
-                if split_buffer.is_not_empty_dp() {
-                    for (index, vr) in vr_slice.iter().enumerate() {
+                if split_buffer.is_not_empty_dn() {
+                    for (offset, vr) in vr_slice.iter().enumerate() {
+                        let index = start_vr + offset;
                         split_buffer.intersect_vr_and_dn(IndexEdge::new_vr(index, vr));
                     }
                 }
@@ -137,8 +140,7 @@ impl Section {
             } else {
                 let new_min_y = dp.find_y(min_x);
                 dp.x_range.min = min_x;
-                dp.y_range.max = new_min_y;
-
+                dp.y_range.min = new_min_y;
                 true
             }
         });
@@ -255,6 +257,7 @@ impl SplitSegments for Vec<Segment> {
         } else {
             return;
         };
+        self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail(m0.y) };
 
@@ -283,6 +286,7 @@ impl SplitSegments for Vec<Segment> {
         } else {
             return;
         };
+        self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail(m0.x) };
 
@@ -311,6 +315,7 @@ impl SplitSegments for Vec<Segment> {
         } else {
             return;
         };
+        self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail_dp(m0.x) };
 
@@ -339,6 +344,7 @@ impl SplitSegments for Vec<Segment> {
         } else {
             return;
         };
+        self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail_dn(m0.x) };
 

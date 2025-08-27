@@ -1,5 +1,4 @@
 use core::ops::Range;
-use i_float::int::rect::IntRect;
 use crate::geom::range::LineRange;
 
 #[derive(Clone)]

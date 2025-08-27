@@ -55,7 +55,7 @@ impl YMapper {
         Self::prepare_count_and_start(&mut self.dp_parts_count, &mut self.dp_parts_start);
     }
 
-    pub(super) fn map_dn_edges(&mut self, slice: &[SplitDn]) {
+    pub(super) fn map_dn(&mut self, slice: &[SplitDn]) {
         self.dn_parts_count.fill(0);
 
         // count space
@@ -146,7 +146,7 @@ impl YMapper {
 
     #[inline(always)]
     pub(super) fn indices_by_range_bottom_offset_dp(&self, y_range: LineRange) -> Range<usize> {
-        let parts = self.parts_layout.indices_by_range(y_range);
+        let parts = self.parts_layout.indices_by_range_bottom_offset(y_range);
         self.range_dp_for_indices(parts)
     }
 
@@ -160,7 +160,7 @@ impl YMapper {
 
     #[inline(always)]
     pub(super) fn indices_by_range_bottom_offset_dn(&self, y_range: LineRange) -> Range<usize> {
-        let parts = self.parts_layout.indices_by_range(y_range);
+        let parts = self.parts_layout.indices_by_range_bottom_offset(y_range);
         self.range_dn_for_indices(parts)
     }
 
