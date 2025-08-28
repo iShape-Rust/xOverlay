@@ -4,6 +4,11 @@ use crate::geom::range::LineRange;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Range;
+use crate::gear::fill_buffer::{FillDg, FillHz};
+
+pub(super) trait MinY {
+    fn min_y(&self) -> i32;
+}
 
 pub(super) struct YMapper {
     pub(super) parts_layout: YLayout,
@@ -31,36 +36,36 @@ impl YMapper {
         }
     }
 
-    pub(super) fn map_hz(&mut self, slice: &[SplitHz]) {
+    pub(super) fn map_hz<T: MinY>(&mut self, slice: &[T]) {
         self.hz_parts_count.fill(0);
 
         // count space
         for hz in slice {
-            let index = self.parts_layout.index(hz.y);
+            let index = self.parts_layout.index(hz.min_y());
             unsafe { *self.hz_parts_count.get_unchecked_mut(index) += 1 };
         }
 
         Self::prepare_count_and_start(&mut self.hz_parts_count, &mut self.hz_parts_start);
     }
 
-    pub(super) fn map_dp(&mut self, slice: &[SplitDp]) {
+    pub(super) fn map_dp<T: MinY>(&mut self, slice: &[T]) {
         self.dp_parts_count.fill(0);
 
         // count space
         for dp in slice {
-            let index = self.parts_layout.index(dp.y_range.min);
+            let index = self.parts_layout.index(dp.min_y());
             unsafe { *self.dp_parts_count.get_unchecked_mut(index) += 1 };
         }
 
         Self::prepare_count_and_start(&mut self.dp_parts_count, &mut self.dp_parts_start);
     }
 
-    pub(super) fn map_dn(&mut self, slice: &[SplitDn]) {
+    pub(super) fn map_dn<T: MinY>(&mut self, slice: &[T]) {
         self.dn_parts_count.fill(0);
 
         // count space
         for dn in slice {
-            let index = self.parts_layout.index(dn.y_range.min);
+            let index = self.parts_layout.index(dn.min_y());
             unsafe { *self.dn_parts_count.get_unchecked_mut(index) += 1 };
         }
 
@@ -168,6 +173,41 @@ impl YMapper {
     pub(super) fn indices_bottom_offset_dn(&self, y: i32) -> Range<usize> {
         let parts = self.parts_layout.indices_bottom_offset(y);
         self.range_dn_for_indices(parts)
+    }
+}
+
+impl MinY for SplitHz {
+    #[inline(always)]
+    fn min_y(&self) -> i32 {
+        self.y
+    }
+}
+
+impl MinY for FillHz {
+    #[inline(always)]
+    fn min_y(&self) -> i32 {
+        self.y
+    }
+}
+
+impl MinY for SplitDp {
+    #[inline(always)]
+    fn min_y(&self) -> i32 {
+        self.y_range.min
+    }
+}
+
+impl MinY for FillDg {
+    #[inline(always)]
+    fn min_y(&self) -> i32 {
+        self.min_y
+    }
+}
+
+impl MinY for SplitDn {
+    #[inline(always)]
+    fn min_y(&self) -> i32 {
+        self.y_range.min
     }
 }
 

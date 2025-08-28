@@ -6,7 +6,6 @@ use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 use i_key_sort::bin_key::index::{BinKey, BinLayout};
-use i_key_sort::sort::key_sort::KeyBinSort;
 use crate::gear::segment::Segment;
 
 #[derive(Debug, Clone, Default)]
@@ -45,23 +44,16 @@ pub(super) struct YMark {
     pub(super) y: i32,
 }
 
-pub(super) struct Intersection {
+pub(super) struct SplitBuffer {
+    pub(super) mapper: YMapper,
+    pub(super) hz_edges: Vec<SplitHz>,
+    pub(super) dp_edges: Vec<SplitDp>,
+    pub(super) dn_edges: Vec<SplitDn>,
+
     pub(super) vr_marks: Vec<YMark>,
     pub(super) hz_marks: Vec<XMark>,
     pub(super) dp_marks: Vec<XMark>,
     pub(super) dn_marks: Vec<XMark>,
-}
-
-pub(super) struct SplitBuffer {
-    mapper: YMapper,
-    hz_edges: Vec<SplitHz>,
-    dp_edges: Vec<SplitDp>,
-    dn_edges: Vec<SplitDn>,
-
-    vr_marks: Vec<YMark>,
-    hz_marks: Vec<XMark>,
-    dp_marks: Vec<XMark>,
-    dn_marks: Vec<XMark>,
 }
 
 impl SplitBuffer {
@@ -81,19 +73,11 @@ impl SplitBuffer {
         }
     }
 
-    #[inline(always)]
-    pub(super) fn is_not_empty_hz(&self) -> bool {
-        !self.hz_edges.is_empty()
-    }
-
-    #[inline(always)]
-    pub(super) fn is_not_empty_dp(&self) -> bool {
-        !self.dp_edges.is_empty()
-    }
-
-    #[inline(always)]
-    pub(super) fn is_not_empty_dn(&self) -> bool {
-        !self.dn_edges.is_empty()
+    pub(super) fn is_empty(&self) -> bool {
+        self.vr_marks.is_empty()
+            && self.hz_marks.is_empty()
+            && self.dp_marks.is_empty()
+            && self.dn_marks.is_empty()
     }
 
     pub(super) fn add_hz_edges(&mut self, max_x: i32, slice: &[SplitHz]) {
@@ -135,15 +119,15 @@ impl SplitBuffer {
 
     #[inline]
     pub(super) fn intersect(&mut self) {
-        if self.is_not_empty_hz() {
-            if self.is_not_empty_dp() {
+        if !self.hz_edges.is_empty() {
+            if !self.dp_edges.is_empty() {
                 self.intersect_hz_and_dp();
             }
-            if self.is_not_empty_dn() {
+            if !self.dn_edges.is_empty() {
                 self.intersect_hz_and_dn();
             }
         }
-        if self.is_not_empty_dp() && self.is_not_empty_dn() {
+        if !self.dp_edges.is_empty() && !self.dn_edges.is_empty() {
             self.intersect_dgs();
         }
     }
@@ -299,24 +283,6 @@ impl SplitBuffer {
         let x = dp.find_x(y);
         IntPoint::new(x, y)
     }
-
-    pub(super) fn into_marks(mut self) -> Intersection {
-        self.hz_marks
-            .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-        self.vr_marks
-            .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.y.cmp(&m1.y)));
-        self.dp_marks
-            .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-        self.dn_marks
-            .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-
-        Intersection {
-            vr_marks: self.vr_marks,
-            hz_marks: self.hz_marks,
-            dp_marks: self.dp_marks,
-            dn_marks: self.dn_marks,
-        }
-    }
 }
 
 impl SplitHz {
@@ -378,24 +344,6 @@ impl SplitDp {
             x_range,
             y_range,
             parent_x_range: self.parent_x_range,
-        }
-    }
-
-    #[inline(always)]
-    fn with_limit(edge: &IndexEdge, limit_x: i32) -> Self {
-        let min_x = edge.range.min;
-        let max_x = edge.range.max.min(limit_x);
-        let x_range = LineRange::with_min_max(min_x, max_x);
-
-        let min_y = edge.pos;
-        let max_y = PositiveDiagonal::new(x_range, edge.pos).find_y(max_x);
-        let y_range = LineRange::with_min_max(min_y, max_y);
-
-        Self {
-            index: edge.index,
-            x_range,
-            y_range,
-            parent_x_range: edge.range,
         }
     }
 }

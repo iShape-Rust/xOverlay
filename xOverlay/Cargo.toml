@@ -11,12 +11,14 @@ readme = "README.md"
 [dependencies]
 i_float = "~1.15.0"
 i_shape = "~1.14.0"
-i_key_sort = "~0.6.0"
+#i_key_sort = "~0.6.0"
 i_tree = "~0.16.0"
+
 
 rayon = { optional = true, version = "^1.11" }
 #i_float = { path = "../iFloat" }
 #i_shape = { path = "../iShape" }
+i_key_sort = { path = "../../iKeySort" }
 
 [features]
 default = []

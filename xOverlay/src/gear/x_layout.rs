@@ -114,8 +114,9 @@ impl XLayout {
             (None, Some(r1)) => r1,
             _ => return None,
         };
+        let count = subj.len() + clip.len();
 
-        let part_log_width = if cpu_count == 1 {
+        let part_log_width = if cpu_count == 1 || count <= 4 {
             (2 * rect.width() - 1).ilog2()
         } else {
             let width = 1 + rect.width() as u32;

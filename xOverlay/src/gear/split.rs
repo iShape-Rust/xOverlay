@@ -2,39 +2,20 @@ use crate::gear::merge::Merge;
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
 use crate::gear::source::GeometrySource;
-use crate::gear::split_buffer::{
-    Intersection, SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, YMark,
-};
+use crate::gear::split_buffer::{SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, YMark};
 use crate::gear::x_mapper::XMapper;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
+use alloc::vec;
 use alloc::vec::Vec;
-use core::mem::swap;
+use i_key_sort::sort::layout::BinStore;
 
 impl Section {
-    pub(super) fn split(&mut self) {
-        let mut source_by_columns = self.source.new_same_size();
-        let mut map_by_columns = self
-            .source
-            .map_by_columns(&self.layout, &mut source_by_columns);
-
-        let intersection = self.intersect(&mut source_by_columns, &map_by_columns);
-
-        if intersection.is_empty() {
-            swap(&mut self.source, &mut source_by_columns);
-        } else {
-            self.split_by_marks(&mut source_by_columns, intersection);
-            map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
-        }
-
-        self.sort_and_merge(&map_by_columns);
-    }
-
-    fn intersect(
+    pub(super) fn intersect(
         &mut self,
         source_by_columns: &mut GeometrySource,
         map_by_columns: &XMapper,
-    ) -> Intersection {
+    ) -> SplitBuffer {
         let mut start_vr = 0;
         let mut start_hz = 0;
         let mut start_dp = 0;
@@ -61,16 +42,16 @@ impl Section {
             // prepare column data
 
             // hz
-            self.clean_by_min_x_hz(min_x, &mut hz_buffer);
-            self.add_hz(start_hz, hz_slice, &mut hz_buffer);
-
-            // dn
-            self.clean_by_min_x_dn(min_x, &mut dn_buffer);
-            self.add_dn(start_dn, dn_slice, &mut dn_buffer);
+            hz_buffer.clean_by_min_x(min_x);
+            hz_buffer.add(start_hz, hz_slice);
 
             // dp
-            self.clean_by_min_x_dp(min_x, &mut dp_buffer);
-            self.add_dp(start_dp, dp_slice, &mut dp_buffer);
+            dp_buffer.clean_by_min_x(min_x);
+            dp_buffer.add(start_dp, dp_slice);
+
+            // dn
+            dn_buffer.clean_by_min_x(min_x);
+            dn_buffer.add(start_dn, dn_slice);
 
             // fill buffer
             split_buffer.add_hz_edges(max_x, &hz_buffer);
@@ -81,7 +62,7 @@ impl Section {
 
             if !vr_slice.is_empty() {
                 // vr x hz
-                if split_buffer.is_not_empty_hz() {
+                if !split_buffer.hz_edges.is_empty() {
                     for (offset, vr) in vr_slice.iter().enumerate() {
                         let index = start_vr + offset;
                         split_buffer.intersect_vr_and_hz(IndexEdge::new_vr(index, vr));
@@ -89,7 +70,7 @@ impl Section {
                 }
 
                 // vr x dp
-                if split_buffer.is_not_empty_dp() {
+                if !split_buffer.dp_edges.is_empty() {
                     for (offset, vr) in vr_slice.iter().enumerate() {
                         let index = start_vr + offset;
                         split_buffer.intersect_vr_and_dp(IndexEdge::new_vr(index, vr));
@@ -97,7 +78,7 @@ impl Section {
                 }
 
                 // vr x dn
-                if split_buffer.is_not_empty_dn() {
+                if !split_buffer.dn_edges.is_empty() {
                     for (offset, vr) in vr_slice.iter().enumerate() {
                         let index = start_vr + offset;
                         split_buffer.intersect_vr_and_dn(IndexEdge::new_vr(index, vr));
@@ -114,14 +95,26 @@ impl Section {
             start_dn += part.count_dn;
         }
 
-        split_buffer.into_marks()
+        split_buffer
     }
 
-    fn split_by_marks(&mut self, source_by_columns: &mut GeometrySource, result: Intersection) {
-        source_by_columns.vr_list.split_as_vr(&result.vr_marks);
-        source_by_columns.hz_list.split_as_hz(&result.hz_marks);
-        source_by_columns.dp_list.split_as_dp(&result.dp_marks);
-        source_by_columns.dn_list.split_as_dn(&result.dn_marks);
+    pub(super) fn split_by_marks(
+        &mut self,
+        source_by_columns: &mut GeometrySource,
+        split_buffer: &SplitBuffer,
+    ) {
+        source_by_columns
+            .vr_list
+            .split_as_vr(&split_buffer.vr_marks);
+        source_by_columns
+            .hz_list
+            .split_as_hz(&split_buffer.hz_marks);
+        source_by_columns
+            .dp_list
+            .split_as_dp(&split_buffer.dp_marks);
+        source_by_columns
+            .dn_list
+            .split_as_dn(&split_buffer.dn_marks);
 
         self.source
             .vr_list
@@ -137,37 +130,155 @@ impl Section {
             .resize(source_by_columns.dn_list.len(), Default::default());
     }
 
-    fn sort_and_merge(&mut self, map_by_columns: &XMapper) {
-        Self::sort_vertically_by_min(&mut self.source.vr_list, &map_by_columns.vr_parts);
+    pub(super) fn sort_and_merge(&mut self, map_by_columns: &XMapper) {
+        let &max_vr_count = map_by_columns.vr_parts.iter().max().unwrap_or(&0);
+        let &max_hz_count = map_by_columns.hz_parts.iter().max().unwrap_or(&0);
+        let &max_dp_count = map_by_columns.dp_parts.iter().max().unwrap_or(&0);
+        let &max_dn_count = map_by_columns.dn_parts.iter().max().unwrap_or(&0);
+
+        let max_count = max_vr_count
+            .max(max_hz_count)
+            .max(max_dp_count)
+            .max(max_dn_count);
+
+        let y_range = self.layout.y_range();
+        let mut bin_store = BinStore::new_anyway(y_range.min, y_range.max, max_count);
+        let mut buffer = vec![Segment::default(); max_count];
+
+        Self::sort_vertically_by_min(
+            &mut self.source.vr_list,
+            &map_by_columns.vr_parts,
+            &mut buffer,
+            &mut bin_store,
+        );
+
         self.source.vr_list.merge_if_needed();
 
-        Self::sort_vertically_by_pos(&mut self.source.hz_list, &map_by_columns.hz_parts);
+        Self::sort_vertically_by_pos(
+            &mut self.source.hz_list,
+            &map_by_columns.hz_parts,
+            &mut buffer,
+            &mut bin_store,
+        );
         self.source.hz_list.merge_if_needed();
 
-        Self::sort_vertically_by_pos(&mut self.source.dp_list, &map_by_columns.dp_parts);
+        Self::sort_vertically_by_pos(
+            &mut self.source.dp_list,
+            &map_by_columns.dp_parts,
+            &mut buffer,
+            &mut bin_store,
+        );
         self.source.dp_list.merge_if_needed();
 
-        Self::sort_vertically_by_pos(&mut self.source.dn_list, &map_by_columns.dn_parts);
+        Self::sort_vertically_by_pos(
+            &mut self.source.dn_list,
+            &map_by_columns.dn_parts,
+            &mut buffer,
+            &mut bin_store,
+        );
         self.source.dn_list.merge_if_needed();
     }
 
-    #[inline]
-    fn clean_by_min_x_dp(&mut self, min_x: i32, buffer: &mut Vec<SplitDp>) {
-        buffer.retain_mut(|dp| {
-            if dp.x_range.max < min_x {
+    fn sort_vertically_by_min(
+        segments: &mut [Segment],
+        counts: &[usize],
+        buffer: &mut Vec<Segment>,
+        bin_store: &mut BinStore<i32>,
+    ) {
+        let mut start = 0;
+        for &count in counts.iter() {
+            if count < 2 {
+                start += count;
+                continue;
+            }
+            let source = &mut segments[start..start + count];
+            let target = &mut buffer[0..count];
+
+            bin_store.reserve_bins_space_with_key(source.iter().map(|s| s.range.min));
+            bin_store.prepare_bins();
+            bin_store.copy_by_key(source, target, |s| s.range.min);
+
+            bin_store.sort_by_bins(target, |s0, s1| {
+                s0.range
+                    .min
+                    .cmp(&s1.range.min)
+                    .then(s0.pos.cmp(&s1.pos))
+                    .then(s0.range.max.cmp(&s1.range.max))
+            });
+            bin_store.clear();
+
+            // copy sorted elements back to slice
+            source.copy_from_slice(target);
+
+            start += count;
+        }
+    }
+
+
+    fn sort_vertically_by_pos(
+        segments: &mut [Segment],
+        counts: &[usize],
+        buffer: &mut Vec<Segment>,
+        bin_store: &mut BinStore<i32>,
+    ) {
+        let mut start = 0;
+        for &count in counts.iter() {
+            if count < 2 {
+                start += count;
+                continue;
+            }
+            let source = &mut segments[start..start + count];
+            let target = &mut buffer[0..count];
+
+            bin_store.reserve_bins_space_with_key(source.iter().map(|s| s.pos));
+            bin_store.prepare_bins();
+            bin_store.copy_by_key(source, target, |s| s.pos);
+
+            bin_store.sort_by_bins(target, |s0, s1| {
+                s0.pos
+                    .cmp(&s1.pos)
+                    .then(s0.range.min.cmp(&s1.range.min))
+                    .then(s0.range.max.cmp(&s1.range.max))
+            });
+
+            bin_store.clear();
+
+            // copy sorted elements back to slice
+            source.copy_from_slice(target);
+
+            start += count;
+        }
+    }
+}
+
+trait SplitSwipe {
+    fn clean_by_min_x(&mut self, min_x: i32);
+    fn add(&mut self, offset: usize, new_segments: &[Segment]);
+}
+
+impl SplitSwipe for Vec<SplitHz> {
+    fn clean_by_min_x(&mut self, min_x: i32) {
+        self.retain_mut(|e| {
+            if e.x_range.max < min_x {
                 false
             } else {
-                let new_min_y = dp.find_y(min_x);
-                dp.x_range.min = min_x;
-                dp.y_range.min = new_min_y;
+                e.x_range.min = min_x;
                 true
             }
         });
     }
 
-    #[inline]
-    fn clean_by_min_x_dn(&mut self, min_x: i32, buffer: &mut Vec<SplitDn>) {
-        buffer.retain_mut(|dn| {
+    fn add(&mut self, offset: usize, new_segments: &[Segment]) {
+        for (i, s) in new_segments.iter().enumerate() {
+            let index = offset + i;
+            self.push(SplitHz::with_segment(index, s));
+        }
+    }
+}
+
+impl SplitSwipe for Vec<SplitDp> {
+    fn clean_by_min_x(&mut self, min_x: i32) {
+        self.retain_mut(|dn| {
             if dn.x_range.max < min_x {
                 false
             } else {
@@ -180,65 +291,33 @@ impl Section {
         });
     }
 
-    #[inline]
-    fn clean_by_min_x_hz(&mut self, min_x: i32, buffer: &mut Vec<SplitHz>) {
-        buffer.retain_mut(|e| {
-            if e.x_range.max < min_x {
+    fn add(&mut self, offset: usize, new_segments: &[Segment]) {
+        for (i, s) in new_segments.iter().enumerate() {
+            let index = offset + i;
+            self.push(SplitDp::with_segment(index, s));
+        }
+    }
+}
+
+impl SplitSwipe for Vec<SplitDn> {
+    fn clean_by_min_x(&mut self, min_x: i32) {
+        self.retain_mut(|dn| {
+            if dn.x_range.max < min_x {
                 false
             } else {
-                e.x_range.min = min_x;
+                let new_max_y = dn.find_y(min_x);
+                dn.x_range.min = min_x;
+                dn.y_range.max = new_max_y;
+
                 true
             }
         });
     }
 
-    fn add_hz(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitHz>) {
+    fn add(&mut self, offset: usize, new_segments: &[Segment]) {
         for (i, s) in new_segments.iter().enumerate() {
             let index = offset + i;
-            buffer.push(SplitHz::with_segment(index, s));
-        }
-    }
-
-    fn add_dp(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitDp>) {
-        for (i, s) in new_segments.iter().enumerate() {
-            let index = offset + i;
-            buffer.push(SplitDp::with_segment(index, s));
-        }
-    }
-
-    fn add_dn(&mut self, offset: usize, new_segments: &[Segment], buffer: &mut Vec<SplitDn>) {
-        for (i, s) in new_segments.iter().enumerate() {
-            let index = offset + i;
-            buffer.push(SplitDn::with_segment(index, s));
-        }
-    }
-
-    fn sort_vertically_by_min(segments: &mut [Segment], counts: &[usize]) {
-        let mut start = 0;
-        for &count in counts.iter() {
-            let slice = &mut segments[start..start + count];
-            slice.sort_unstable_by(|s0, s1| {
-                s0.range
-                    .min
-                    .cmp(&s1.range.min)
-                    .then(s0.pos.cmp(&s1.pos))
-                    .then(s0.range.max.cmp(&s1.range.max))
-            });
-            start += count;
-        }
-    }
-
-    fn sort_vertically_by_pos(segments: &mut [Segment], counts: &[usize]) {
-        let mut start = 0;
-        for &count in counts.iter() {
-            let slice = &mut segments[start..start + count];
-            slice.sort_unstable_by(|s0, s1| {
-                s0.pos
-                    .cmp(&s1.pos)
-                    .then(s0.range.min.cmp(&s1.range.min))
-                    .then(s0.range.max.cmp(&s1.range.max))
-            });
-            start += count;
+            self.push(SplitDn::with_segment(index, s));
         }
     }
 }
@@ -471,32 +550,22 @@ impl Segment {
     }
 }
 
-impl Intersection {
-    fn is_empty(&self) -> bool {
-        self.vr_marks.is_empty()
-            && self.hz_marks.is_empty()
-            && self.dp_marks.is_empty()
-            && self.dn_marks.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::core::fill_rule::FillRule::{Negative, Positive};
-    use crate::core::overlay_rule::OverlayRule::Intersect;
     use crate::core::shape_type::ShapeType;
-    use crate::core::winding::WindingCount;
     use crate::gear::section::Section;
     use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
     use crate::gear::segment::Segment;
     use crate::gear::source::GeometrySource;
-    use crate::gear::split_buffer::{Intersection, SplitBuffer, SplitDn, SplitDp, XMark, YMark};
+    use crate::gear::split_buffer::{SplitBuffer, XMark, YMark};
     use crate::gear::x_layout::XLayout;
     use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
     use alloc::vec;
     use alloc::vec::Vec;
+    use core::mem::swap;
     use i_float::int::point::IntPoint;
     use i_float::int::rect::IntRect;
+    use i_key_sort::sort::key_sort::KeyBinSort;
     use i_shape::int::path::IntPath;
     use rand::Rng;
 
@@ -504,6 +573,13 @@ mod tests {
         fn test_count(&self) -> usize {
             self.vr_list.len() + self.hz_list.len() + self.dp_list.len() + self.dn_list.len()
         }
+    }
+
+    struct Intersection {
+        vr_marks: Vec<YMark>,
+        hz_marks: Vec<XMark>,
+        dp_marks: Vec<XMark>,
+        dn_marks: Vec<XMark>,
     }
 
     impl Section {
@@ -521,6 +597,44 @@ mod tests {
                     max_parts_count,
                 ),
                 source,
+            }
+        }
+
+        fn test_split(&mut self) {
+            let mut source_by_columns = self.source.new_same_size();
+            let mut map_by_columns = self
+                .source
+                .map_by_columns(&self.layout, &mut source_by_columns);
+
+            let buffer = self.intersect(&mut source_by_columns, &map_by_columns);
+
+            if buffer.is_empty() {
+                swap(&mut self.source, &mut source_by_columns);
+            } else {
+                self.split_by_marks(&mut source_by_columns, &buffer);
+                map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
+            }
+
+            self.sort_and_merge(&map_by_columns);
+        }
+    }
+
+    impl SplitBuffer {
+        fn test_into_marks(mut self) -> Intersection {
+            self.hz_marks
+                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+            self.vr_marks
+                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.y.cmp(&m1.y)));
+            self.dp_marks
+                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+            self.dn_marks
+                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+            Intersection {
+                vr_marks: self.vr_marks,
+                hz_marks: self.hz_marks,
+                dp_marks: self.dp_marks,
+                dn_marks: self.dn_marks,
             }
         }
     }
@@ -545,7 +659,7 @@ mod tests {
         let original = source.test_count();
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.test_count(), original);
     }
@@ -570,7 +684,7 @@ mod tests {
         let original = source.test_count();
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.test_count(), original);
     }
@@ -594,7 +708,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.hz_list.len(), 5);
@@ -622,7 +736,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.hz_list.len(), 10);
@@ -646,7 +760,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.hz_list.len(), 6);
@@ -672,7 +786,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 12);
         assert_eq!(section.source.hz_list.len(), 12);
@@ -698,7 +812,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 9);
         assert_eq!(section.source.hz_list.len(), 12);
@@ -724,7 +838,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 9);
         assert_eq!(section.source.hz_list.len(), 9);
@@ -746,7 +860,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.dp_list.len(), 3);
@@ -768,7 +882,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 5);
         assert_eq!(section.source.dp_list.len(), 4);
@@ -793,7 +907,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.dp_list.len(), 4);
@@ -818,7 +932,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.vr_list.len(), 6);
         assert_eq!(section.source.dp_list.len(), 6);
@@ -843,7 +957,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.hz_list.len(), 6);
         assert_eq!(section.source.dp_list.len(), 6);
@@ -868,7 +982,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.hz_list.len(), 6);
         assert_eq!(section.source.dn_list.len(), 6);
@@ -886,7 +1000,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.dp_list.len(), 2);
         assert_eq!(section.source.dn_list.len(), 2);
@@ -904,7 +1018,7 @@ mod tests {
 
         let mut section = Section::test_new(source, rect, 3, 5);
 
-        section.split();
+        section.test_split();
 
         assert_eq!(section.source.dp_list.len(), 1);
         assert_eq!(section.source.dn_list.len(), 1);
@@ -1132,19 +1246,9 @@ mod tests {
                 };
 
                 if a.y < b.y {
-                    dp_list.push(Segment::test_with_shape(
-                        a.x,
-                        b.x,
-                        a.y,
-                        ShapeType::Subject,
-                    ))
+                    dp_list.push(Segment::test_with_shape(a.x, b.x, a.y, ShapeType::Subject))
                 } else {
-                    dn_list.push(Segment::test_with_shape(
-                        a.x,
-                        b.x,
-                        b.y,
-                        ShapeType::Subject,
-                    ))
+                    dn_list.push(Segment::test_with_shape(a.x, b.x, b.y, ShapeType::Subject))
                 }
             }
         }
@@ -1187,7 +1291,7 @@ mod tests {
     }
 
     impl Section {
-        fn test_intersection(&mut self) -> Intersection {
+        fn test_intersection(&mut self) -> SplitBuffer {
             let mut source_by_columns = self.source.new_same_size();
             let map_by_columns = self
                 .source

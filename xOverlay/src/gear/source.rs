@@ -13,6 +13,11 @@ pub(crate) struct GeometrySource {
 }
 
 impl GeometrySource {
+
+    pub(crate) fn count(&self) -> usize {
+        self.vr_list.len() + self.hz_list.len() + self.dp_list.len() + self.dn_list.len()
+    }
+
     pub(super) fn map_by_columns(&self, layout: &XLayout, output: &mut Self) -> XMapper {
         let map = self.mapper(layout.clone());
 
