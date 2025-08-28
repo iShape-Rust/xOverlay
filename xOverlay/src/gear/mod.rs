@@ -13,3 +13,4 @@ mod merge;
 pub(crate) mod seg_iter;
 mod fill;
 mod fill_buffer;
+mod count_buffer;

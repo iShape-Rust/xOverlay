@@ -1,17 +1,15 @@
-use core::mem::swap;
 use crate::core::fill_rule::FillRule;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
 use crate::gear::fill_buffer::FillBuffer;
 use crate::gear::section::Section;
 use crate::gear::split_buffer::SplitBuffer;
+use core::mem::swap;
 
 impl Overlay {
-
     pub(crate) fn process_overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
         if self.solver.cpu_count() == 1 {
             self.serial_process(fill_rule, overlay_rule);
-
         } else {
             self.parallel_process(fill_rule, overlay_rule);
         }
@@ -19,22 +17,19 @@ impl Overlay {
 
     fn serial_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
         for s in self.sections.iter_mut() {
-            s.process();
+            s.process(fill_rule, overlay_rule);
         }
-
     }
 
     fn parallel_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
-        self.sections.iter_mut().for_each(|s|{
-            s.process();
+        self.sections.iter_mut().for_each(|s| {
+            s.process(fill_rule, overlay_rule);
         })
     }
 }
 
 impl Section {
-
-    fn process(&mut self) {
-
+    fn process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) {
         // split by columns
 
         let mut source_by_columns = self.source.new_same_size();
@@ -59,6 +54,6 @@ impl Section {
 
         // fill
 
-        self.fill(FillBuffer::new(split_buffer), map_by_columns);
+        self.fill(fill_rule, FillBuffer::new(split_buffer), map_by_columns);
     }
 }

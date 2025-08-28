@@ -1,3 +1,6 @@
+use crate::core::fill::FillStrategy;
+use crate::core::winding::WindingCount;
+use crate::gear::count_buffer::CountBuffer;
 use crate::gear::fill::FillResult;
 use crate::gear::segment::Segment;
 use crate::gear::split_buffer::SplitBuffer;
@@ -11,6 +14,7 @@ use i_key_sort::sort::layout::BinStore;
 #[derive(Debug, Clone, Default)]
 pub(super) struct FillHz {
     pub(super) index: u32,
+    pub(super) dir: ShapeCountBoolean,
     pub(super) y: i32,
     pub(super) x_range: LineRange,
 }
@@ -76,13 +80,14 @@ impl FillBuffer {
         }
     }
 
-    pub(super) fn fill(
+    pub(super) fn fill<F: FillStrategy<ShapeCountBoolean>>(
         &mut self,
         start_vr: usize,
         vr_segments: &[Segment],
         result: &mut FillResult,
         buffer: &mut Vec<FillDg>,
         bin_store: &mut BinStore<i32>,
+        count_buffer: &mut CountBuffer,
     ) {
         // sort dp and dn
         if self.dn_edges.len() > 1 {
@@ -93,9 +98,44 @@ impl FillBuffer {
             self.dn_edges.sort_diagonals_by_min_y(buffer, bin_store);
         }
 
+        let mut i = 0;
+        let mut j = 0;
+        while i < self.hz_edges.len() {
+            let y0 = self.hz_edges[i].y;
 
+            // add all vr in range s.min < y0
+            while j < vr_segments.len() && vr_segments[j].range.min < y0 {
+                let vr = &vr_segments[j];
+                let fill = count_buffer.get_fill::<F>(vr.dir, vr.pos);
+                let vr_index = start_vr + j;
+                unsafe {
+                    *result.vr.get_unchecked_mut(vr_index) = fill;
+                }
+                j += 1;
+            }
 
+            // add all hz with same y
+            while i < self.hz_edges.len() && self.hz_edges[i].y == y0 {
+                let hz = &self.hz_edges[i];
+                let fill = count_buffer.add_hz::<F, FillHz>(hz);
+                let hz_index = hz.index as usize;
+                if hz_index < result.hz.len() {
+                    result.hz[hz_index] = fill;
+                }
 
+                i += 1;
+            }
+        }
+
+        while j < vr_segments.len() {
+            let vr = &vr_segments[j];
+            let (_, fill) = F::add_and_fill(vr.dir, ShapeCountBoolean::empty());
+            let vr_index = start_vr + j;
+            unsafe {
+                *result.vr.get_unchecked_mut(vr_index) = fill;
+            }
+            j += 1;
+        }
     }
 }
 
@@ -104,6 +144,7 @@ impl FillHz {
     pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
         Self {
             index: index as u32,
+            dir: segment.dir,
             y: segment.pos,
             x_range: segment.range,
         }
@@ -117,6 +158,7 @@ impl FillHz {
 
         Self {
             index: self.index,
+            dir: self.dir,
             y: self.y,
             x_range: LineRange {
                 min: self.x_range.min,
