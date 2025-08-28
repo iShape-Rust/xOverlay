@@ -54,6 +54,9 @@ impl Section {
 
         // fill
 
-        self.fill(fill_rule, FillBuffer::new(split_buffer), map_by_columns);
+        let result = self.fill(fill_rule, FillBuffer::new(split_buffer), map_by_columns);
+
+
+
     }
 }
