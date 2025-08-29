@@ -1,15 +1,15 @@
 use crate::core::fill::FillStrategy;
-use crate::core::winding::WindingCount;
 use crate::gear::count_buffer::CountBuffer;
-use crate::gear::fill::FillResult;
 use crate::gear::segment::Segment;
 use crate::gear::split_buffer::SplitBuffer;
 use crate::gear::y_mapper::YMapper;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal};
 use crate::geom::range::LineRange;
-use crate::graph::boolean::winding_count::ShapeCountBoolean;
+use crate::gear::winding_count::ShapeCountBoolean;
 use alloc::vec::Vec;
 use i_key_sort::sort::layout::BinStore;
+use crate::core::winding::WindingCount;
+use crate::gear::fill_source::FillSource;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FillHz {
@@ -82,13 +82,16 @@ impl FillBuffer {
 
     pub(super) fn fill<F: FillStrategy<ShapeCountBoolean>>(
         &mut self,
+        max: i32,
         start_vr: usize,
         vr_segments: &[Segment],
-        result: &mut FillResult,
+        source: &mut FillSource,
         buffer: &mut Vec<FillDg>,
         bin_store: &mut BinStore<i32>,
         count_buffer: &mut CountBuffer,
     ) {
+        count_buffer.reset(max);
+
         // sort dp and dn
         if self.dn_edges.len() > 1 {
             self.dn_edges.sort_diagonals_by_min_y(buffer, bin_store);
@@ -109,7 +112,7 @@ impl FillBuffer {
                 let fill = count_buffer.get_fill::<F>(vr.dir, vr.pos);
                 let vr_index = start_vr + j;
                 unsafe {
-                    *result.vr.get_unchecked_mut(vr_index) = fill;
+                    *source.vr.get_unchecked_mut(vr_index) = fill;
                 }
                 j += 1;
             }
@@ -119,8 +122,8 @@ impl FillBuffer {
                 let hz = &self.hz_edges[i];
                 let fill = count_buffer.add_hz::<F, FillHz>(hz);
                 let hz_index = hz.index as usize;
-                if hz_index < result.hz.len() {
-                    result.hz[hz_index] = fill;
+                if hz_index < source.hz.len() {
+                    source.hz[hz_index] = fill;
                 }
 
                 i += 1;
@@ -132,7 +135,7 @@ impl FillBuffer {
             let (_, fill) = F::add_and_fill(vr.dir, ShapeCountBoolean::empty());
             let vr_index = start_vr + j;
             unsafe {
-                *result.vr.get_unchecked_mut(vr_index) = fill;
+                *source.vr.get_unchecked_mut(vr_index) = fill;
             }
             j += 1;
         }
@@ -222,7 +225,7 @@ impl SortDiagonalsByMinY for [FillDg] {
         buffer.resize(self.len(), Default::default());
         let target = buffer.as_mut_slice();
 
-        bin_store.reserve_bins_space_with_key(self.iter().map(|s| s.min_y));
+        bin_store.reserve_bins_with_key(self.iter().map(|s| s.min_y));
         bin_store.prepare_bins();
         bin_store.copy_by_key(self, target, |s| s.min_y);
 

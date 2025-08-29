@@ -22,14 +22,4 @@ impl LineRange {
     pub(crate) fn strict_contains(&self, val: i32) -> bool {
         self.min < val && val < self.max
     }
-
-    #[inline(always)]
-    pub(crate) fn not_overlaps(&self, other: &Self) -> bool {
-        self.max < other.min || other.max < self.min
-    }
-
-    #[inline(always)]
-    pub(crate) fn strict_overlaps(&self, other: &Self) -> bool {
-        self.min < other.max && other.min < self.max
-    }
 }

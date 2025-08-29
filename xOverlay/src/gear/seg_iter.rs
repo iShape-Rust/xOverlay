@@ -100,25 +100,7 @@ pub(crate) trait PointFilter {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub(crate) struct DropOppositeCollinear;
-#[derive(Copy, Clone, Debug)]
 pub(crate) struct DropCollinear;
-
-impl PointFilter for DropOppositeCollinear {
-    #[inline(always)]
-    fn keep_vertex(p0: IntPoint, p1: IntPoint, p2: IntPoint) -> bool {
-        let a = p1.subtract(p0);
-        let b = p1.subtract(p2);
-
-        if a.cross_product(b) != 0 {
-            // not collinear
-            return true;
-        }
-
-        // collinear – keep only if we keep going same direction
-        a.dot_product(b) < 0
-    }
-}
 
 impl PointFilter for DropCollinear {
     #[inline(always)]

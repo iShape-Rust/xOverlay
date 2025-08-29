@@ -101,20 +101,20 @@ impl Section {
     pub(super) fn split_by_marks(
         &mut self,
         source_by_columns: &mut GeometrySource,
-        split_buffer: &SplitBuffer,
+        split_buffer: &mut SplitBuffer,
     ) {
         source_by_columns
             .vr_list
-            .split_as_vr(&split_buffer.vr_marks);
+            .split_as_vr(&mut split_buffer.vr_marks);
         source_by_columns
             .hz_list
-            .split_as_hz(&split_buffer.hz_marks);
+            .split_as_hz(&mut split_buffer.hz_marks);
         source_by_columns
             .dp_list
-            .split_as_dp(&split_buffer.dp_marks);
+            .split_as_dp(&mut split_buffer.dp_marks);
         source_by_columns
             .dn_list
-            .split_as_dn(&split_buffer.dn_marks);
+            .split_as_dn(&mut split_buffer.dn_marks);
 
         self.source
             .vr_list
@@ -130,7 +130,7 @@ impl Section {
             .resize(source_by_columns.dn_list.len(), Default::default());
     }
 
-    pub(super) fn sort_and_merge(&mut self, map_by_columns: &XMapper) {
+    pub(super) fn sort_and_merge(&mut self, map_by_columns: &XMapper) -> bool {
         let &max_vr_count = map_by_columns.vr_parts.iter().max().unwrap_or(&0);
         let &max_hz_count = map_by_columns.hz_parts.iter().max().unwrap_or(&0);
         let &max_dp_count = map_by_columns.dp_parts.iter().max().unwrap_or(&0);
@@ -152,7 +152,7 @@ impl Section {
             &mut bin_store,
         );
 
-        self.source.vr_list.merge_if_needed();
+        let mut any_merge = self.source.vr_list.merge_if_needed();
 
         Self::sort_vertically_by_pos(
             &mut self.source.hz_list,
@@ -160,7 +160,7 @@ impl Section {
             &mut buffer,
             &mut bin_store,
         );
-        self.source.hz_list.merge_if_needed();
+        any_merge |= self.source.hz_list.merge_if_needed();
 
         Self::sort_vertically_by_pos(
             &mut self.source.dp_list,
@@ -168,7 +168,7 @@ impl Section {
             &mut buffer,
             &mut bin_store,
         );
-        self.source.dp_list.merge_if_needed();
+        any_merge |= self.source.dp_list.merge_if_needed();
 
         Self::sort_vertically_by_pos(
             &mut self.source.dn_list,
@@ -176,7 +176,9 @@ impl Section {
             &mut buffer,
             &mut bin_store,
         );
-        self.source.dn_list.merge_if_needed();
+        any_merge |= self.source.dn_list.merge_if_needed();
+
+        any_merge
     }
 
     fn sort_vertically_by_min(
@@ -194,7 +196,7 @@ impl Section {
             let source = &mut segments[start..start + count];
             let target = &mut buffer[0..count];
 
-            bin_store.reserve_bins_space_with_key(source.iter().map(|s| s.range.min));
+            bin_store.reserve_bins_with_key(source.iter().map(|s| s.range.min));
             bin_store.prepare_bins();
             bin_store.copy_by_key(source, target, |s| s.range.min);
 
@@ -230,7 +232,7 @@ impl Section {
             let source = &mut segments[start..start + count];
             let target = &mut buffer[0..count];
 
-            bin_store.reserve_bins_space_with_key(source.iter().map(|s| s.pos));
+            bin_store.reserve_bins_with_key(source.iter().map(|s| s.pos));
             bin_store.prepare_bins();
             bin_store.copy_by_key(source, target, |s| s.pos);
 
@@ -341,20 +343,23 @@ impl IndexEdge {
 }
 
 trait SplitSegments {
-    fn split_as_vr(&mut self, marks: &[YMark]);
-    fn split_as_hz(&mut self, marks: &[XMark]);
-    fn split_as_dp(&mut self, marks: &[XMark]);
-    fn split_as_dn(&mut self, marks: &[XMark]);
+    fn split_as_vr(&mut self, marks: &mut [YMark]);
+    fn split_as_hz(&mut self, marks: &mut [XMark]);
+    fn split_as_dp(&mut self, marks: &mut [XMark]);
+    fn split_as_dn(&mut self, marks: &mut [XMark]);
 }
 
 impl SplitSegments for Vec<Segment> {
     #[inline]
-    fn split_as_vr(&mut self, marks: &[YMark]) {
-        let mut m0 = if let Some(&m) = marks.first() {
-            m
-        } else {
+    fn split_as_vr(&mut self, marks: &mut [YMark]) {
+        if marks.is_empty() {
             return;
-        };
+        }
+
+        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.y.cmp(&m1.y)));
+
+        let mut m0 = marks[0];
+
         self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail(m0.y) };
@@ -378,12 +383,14 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_hz(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(&m) = marks.first() {
-            m
-        } else {
+    fn split_as_hz(&mut self, marks: &mut [XMark]) {
+        if marks.is_empty() {
             return;
-        };
+        }
+
+        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+        let mut m0 = marks[0];
         self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail(m0.x) };
@@ -407,12 +414,14 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_dp(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(&m) = marks.first() {
-            m
-        } else {
+    fn split_as_dp(&mut self, marks: &mut [XMark]) {
+        if marks.is_empty() {
             return;
-        };
+        }
+        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+        let mut m0 = marks[0];
+
         self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail_dp(m0.x) };
@@ -436,12 +445,14 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_dn(&mut self, marks: &[XMark]) {
-        let mut m0 = if let Some(&m) = marks.first() {
-            m
-        } else {
+    fn split_as_dn(&mut self, marks: &mut [XMark]) {
+        if marks.is_empty() {
             return;
-        };
+        }
+        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+        let mut m0 = marks[0];
+
         self.reserve(marks.len());
 
         let mut tail = unsafe { self.get_unchecked_mut(m0.index as usize).cut_tail_dn(m0.x) };
@@ -565,9 +576,9 @@ mod tests {
     use core::mem::swap;
     use i_float::int::point::IntPoint;
     use i_float::int::rect::IntRect;
-    use i_key_sort::sort::key_sort::KeyBinSort;
     use i_shape::int::path::IntPath;
     use rand::Rng;
+    use crate::geom::range::LineRange;
 
     impl GeometrySource {
         fn test_count(&self) -> usize {
@@ -606,36 +617,16 @@ mod tests {
                 .source
                 .map_by_columns(&self.layout, &mut source_by_columns);
 
-            let buffer = self.intersect(&mut source_by_columns, &map_by_columns);
+            let mut buffer = self.intersect(&mut source_by_columns, &map_by_columns);
 
             if buffer.is_empty() {
                 swap(&mut self.source, &mut source_by_columns);
             } else {
-                self.split_by_marks(&mut source_by_columns, &buffer);
+                self.split_by_marks(&mut source_by_columns, &mut buffer);
                 map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
             }
 
             self.sort_and_merge(&map_by_columns);
-        }
-    }
-
-    impl SplitBuffer {
-        fn test_into_marks(mut self) -> Intersection {
-            self.hz_marks
-                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-            self.vr_marks
-                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.y.cmp(&m1.y)));
-            self.dp_marks
-                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-            self.dn_marks
-                .sort_with_bins(|m0, m1| m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
-
-            Intersection {
-                vr_marks: self.vr_marks,
-                hz_marks: self.hz_marks,
-                dp_marks: self.dp_marks,
-                dn_marks: self.dn_marks,
-            }
         }
     }
 
@@ -1154,17 +1145,17 @@ mod tests {
         }
     }
 
-    fn random_90_deg_contour(n: usize, radius: i32) -> Vec<IntPoint> {
+    fn random_90_deg_contour(n: usize, radius: usize) -> Vec<IntPoint> {
         let mut x = 0;
         let mut y = 0;
 
         let mut contour = IntPath::new();
         let mut rng = rand::rng();
-        let range = -radius..=radius;
 
         contour.push(IntPoint::new(x, y));
         for i in 0..n {
-            let ds = rng.random_range(range.clone());
+            let rnd = rng.random_range(1..2 * radius) as i32;
+            let ds = rnd - radius as i32;
             if i % 2 == 0 {
                 x += ds;
             } else {
@@ -1179,17 +1170,17 @@ mod tests {
         contour
     }
 
-    fn random_45_deg_contour(n: usize, radius: i32) -> Vec<IntPoint> {
+    fn random_45_deg_contour(n: usize, radius: usize) -> Vec<IntPoint> {
         let mut x = 0;
         let mut y = 0;
 
         let mut contour = IntPath::new();
         let mut rng = rand::rng();
-        let range = -radius..=radius;
 
         contour.push(IntPoint::new(x, y));
         for i in 0..n {
-            let ds = 2 * rng.random_range(range.clone());
+            let rnd = rng.random_range(1..2 * radius) as i32;
+            let ds = 2 * (rnd - radius as i32);
             match i % 3 {
                 0 => {
                     x += ds;
@@ -1272,7 +1263,7 @@ mod tests {
 
     fn get_random_45_deg_section(
         n: usize,
-        radius: i32,
+        radius: usize,
         avg_count_per_column: usize,
         max_parts_count: usize,
     ) -> Option<Section> {
@@ -1282,7 +1273,7 @@ mod tests {
 
     fn get_random_90_deg_section(
         n: usize,
-        radius: i32,
+        radius: usize,
         avg_count_per_column: usize,
         max_parts_count: usize,
     ) -> Option<Section> {
@@ -1436,18 +1427,20 @@ mod tests {
             IntPoint::new(x, y)
         }
     }
+
+    impl Segment {
+        fn y_range_dp(&self) -> LineRange {
+            let min_y = self.pos;
+            let max_y = PositiveDiagonal::new(self.range, self.pos).find_y(self.range.max);
+            LineRange::with_min_max(min_y, max_y)
+        }
+
+        fn y_range_dn(&self) -> LineRange {
+            let min_y = self.pos;
+            let max_y = NegativeDiagonal::new(self.range, self.pos).find_y(self.range.min);
+            LineRange::with_min_max(min_y, max_y)
+        }
+    }
 }
 
-impl Segment {
-    fn y_range_dp(&self) -> LineRange {
-        let min_y = self.pos;
-        let max_y = PositiveDiagonal::new(self.range, self.pos).find_y(self.range.max);
-        LineRange::with_min_max(min_y, max_y)
-    }
 
-    fn y_range_dn(&self) -> LineRange {
-        let min_y = self.pos;
-        let max_y = NegativeDiagonal::new(self.range, self.pos).find_y(self.range.min);
-        LineRange::with_min_max(min_y, max_y)
-    }
-}

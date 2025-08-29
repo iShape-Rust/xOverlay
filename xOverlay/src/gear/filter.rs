@@ -2,16 +2,15 @@ use alloc::vec::Vec;
 use i_shape::util::reserve::Reserve;
 use crate::core::fill::{InclusionFilterStrategy, SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
 use crate::core::overlay_rule::OverlayRule;
-use crate::gear::section::Section;
 use crate::graph::link::{OverlayLink, OverlayLinkFilter};
 
-struct SubjectFilter;
-struct ClipFilter;
-struct IntersectFilter;
-struct UnionFilter;
-struct DifferenceFilter;
-struct InverseDifferenceFilter;
-struct XorFilter;
+pub(super) struct SubjectFilter;
+pub(super) struct ClipFilter;
+pub(super) struct IntersectFilter;
+pub(super) struct UnionFilter;
+pub(super) struct DifferenceFilter;
+pub(super) struct InverseDifferenceFilter;
+pub(super) struct XorFilter;
 
 impl InclusionFilterStrategy for SubjectFilter {
     #[inline(always)]
@@ -135,6 +134,7 @@ impl BooleanFillFilter for SegmentFill {
         is_any_top != is_any_bottom
     }
 }
+
 
 impl OverlayLinkFilter for [OverlayLink] {
     #[inline]
@@ -265,43 +265,5 @@ fn filter_xor_into(links: &[OverlayLink], buffer: &mut Vec<bool>) {
     buffer.reserve_capacity(links.len());
     for link in links.iter() {
         buffer.push(!link.fill.is_xor());
-    }
-}
-
-impl Section {
-    pub(crate) fn count_links(
-        &self,
-        overlay_rule: OverlayRule,
-    ) -> usize {
-        // match overlay_rule {
-        //     OverlayRule::Subject => self.count_included_links::<SubjectFilter>(),
-        //     OverlayRule::Clip => self.count_included_links::<ClipFilter>(),
-        //     OverlayRule::Intersect => self.count_included_links::<IntersectFilter>(),
-        //     OverlayRule::Union => self.count_included_links::<UnionFilter>(),
-        //     OverlayRule::Difference => self.count_included_links::<DifferenceFilter>(),
-        //     OverlayRule::Xor => self.count_included_links::<XorFilter>(),
-        //     OverlayRule::InverseDifference => {
-        //         self.count_included_links::<InverseDifferenceFilter>()
-        //     }
-        // }
-        0
-    }
-
-    pub(crate) fn copy_links_into(
-        &self,
-        overlay_rule: OverlayRule,
-        links: &mut [OverlayLink],
-    ) {
-        // match overlay_rule {
-        //     OverlayRule::Subject => self.copy_links_into_with_filter::<SubjectFilter>(links),
-        //     OverlayRule::Clip => self.copy_links_into_with_filter::<ClipFilter>(links),
-        //     OverlayRule::Intersect => self.copy_links_into_with_filter::<IntersectFilter>(links),
-        //     OverlayRule::Union => self.copy_links_into_with_filter::<UnionFilter>(links),
-        //     OverlayRule::Difference => self.copy_links_into_with_filter::<DifferenceFilter>(links),
-        //     OverlayRule::Xor => self.copy_links_into_with_filter::<XorFilter>(links),
-        //     OverlayRule::InverseDifference => {
-        //         self.copy_links_into_with_filter::<InverseDifferenceFilter>(links)
-        //     }
-        // }
     }
 }

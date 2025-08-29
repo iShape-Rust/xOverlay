@@ -6,13 +6,13 @@ use crate::gear::source::GeometrySource;
 
 #[derive(Clone)]
 pub(crate) struct Section {
-    pub(crate) source: GeometrySource,
-    pub(crate) layout: XLayout,
+    pub(super) source: GeometrySource,
+    pub(super) layout: XLayout,
 }
 
 impl Section {
     #[inline(always)]
-    pub(crate) fn new(
+    pub(super) fn new(
         rect: IntRect,
         part: XPart,
         avg_count_per_column: usize,

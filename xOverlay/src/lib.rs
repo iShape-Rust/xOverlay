@@ -6,7 +6,6 @@ extern crate alloc;
 
 pub mod core;
 pub(crate) mod graph;
-pub mod ortho;
 mod geom;
 pub(crate) mod bind;
 mod gear;

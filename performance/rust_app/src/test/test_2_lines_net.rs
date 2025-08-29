@@ -1,9 +1,10 @@
 use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
+use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
+use x_overlay::core::solver::Solver;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
-use x_overlay::ortho::overlay::OrthoOverlay;
 
 pub(crate) struct LinesNetTest;
 
@@ -53,12 +54,9 @@ impl LinesNetTest {
 
         let start = Instant::now();
 
-        let mut overlay = OrthoOverlay::default();
-        overlay.solver.multithreading = multithreading;
-        
         for _i in 0..sq_it_count {
-            overlay.init_with_ortho_contours(&subj_paths, &clip_paths).expect("valid");
-            overlay.overlay(rule, FillRule::NonZero);
+            let mut overlay = Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), Solver::new(multithreading)).expect("valid");
+            overlay.overlay(FillRule::NonZero, rule);
         }
 
         let duration = start.elapsed();

@@ -1,14 +1,12 @@
 pub(crate) mod end;
 pub(crate) mod link;
 mod node;
-pub(crate) mod boolean;
 mod build;
 mod extract;
 mod nearest_vector;
 
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use i_key_sort::sort::layout::BinStore;
 use crate::core::options::IntOverlayOptions;
 use crate::graph::end::End;
 use crate::graph::link::OverlayLink;
@@ -26,32 +24,4 @@ pub struct OverlayGraph {
     pub(crate) links: Vec<OverlayLink>,
     pub(crate) ends: Vec<End>,
     pub(crate) buffer: Option<BooleanExtractionBuffer>,
-    pub(super) bin_store: BinStore<i32>,
-}
-
-impl OverlayGraph {
-    pub fn validate(&self) {
-        for node in self.nodes.iter() {
-            if let OverlayNode::Cross(indices) = node {
-                debug_assert!(indices.len() > 1, "indices: {}", indices.len());
-                debug_assert!(
-                    self.nodes.len() <= self.links.len(),
-                    "nodes is more then links"
-                );
-            }
-        }
-    }
-}
-
-impl Default for OverlayGraph {
-    fn default() -> Self {
-        Self {
-            options: Default::default(),
-            nodes: Vec::new(),
-            links: Vec::new(),
-            ends: Vec::new(),
-            buffer: None,
-            bin_store: BinStore::empty(0, 0),
-        }
-    }
 }

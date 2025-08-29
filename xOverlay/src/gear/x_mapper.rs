@@ -5,24 +5,24 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use i_shape::int::shape::IntContour;
 
-pub(crate) struct XPart {
-    pub(crate) count_hz: usize,
-    pub(crate) count_vr: usize,
-    pub(crate) count_dp: usize,
-    pub(crate) count_dn: usize,
+pub(super) struct XPart {
+    pub(super) count_hz: usize,
+    pub(super) count_vr: usize,
+    pub(super) count_dp: usize,
+    pub(super) count_dn: usize,
 }
 
-pub(crate) struct XMapper {
-    layout: XLayout,
-    pub(crate) hz_parts: Vec<usize>,
-    pub(crate) vr_parts: Vec<usize>,
-    pub(crate) dp_parts: Vec<usize>,
-    pub(crate) dn_parts: Vec<usize>,
+pub(super) struct XMapper {
+    pub(super) layout: XLayout,
+    pub(super) hz_parts: Vec<usize>,
+    pub(super) vr_parts: Vec<usize>,
+    pub(super) dp_parts: Vec<usize>,
+    pub(super) dn_parts: Vec<usize>,
 }
 
 impl XMapper {
     #[inline]
-    pub(crate) fn new(layout: XLayout) -> Self {
+    pub(super) fn new(layout: XLayout) -> Self {
         let n = layout.count();
         Self {
             layout,
@@ -33,7 +33,7 @@ impl XMapper {
         }
     }
 
-    pub(crate) fn add_contours(&mut self, contours: &[IntContour]) {
+    pub(super) fn add_contours(&mut self, contours: &[IntContour]) {
         for contour in contours {
             if contour.len() >= 4 {
                 self.add_contour(contour);

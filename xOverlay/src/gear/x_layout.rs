@@ -16,6 +16,11 @@ impl XLayout {
     }
 
     #[inline(always)]
+    pub(crate) fn x_range(&self) -> LineRange {
+        LineRange::with_min_max(self.rect.min_x, self.rect.max_x)
+    }
+    
+    #[inline(always)]
     pub(crate) fn y_range(&self) -> LineRange {
         LineRange::with_min_max(self.rect.min_y, self.rect.max_y)
     }

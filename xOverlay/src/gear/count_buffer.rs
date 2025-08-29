@@ -3,7 +3,7 @@ use crate::core::fill::{FillStrategy, SegmentFill};
 use crate::core::winding::WindingCount;
 use crate::gear::fill_buffer::FillHz;
 use crate::geom::range::LineRange;
-use crate::graph::boolean::winding_count::ShapeCountBoolean;
+use crate::gear::winding_count::ShapeCountBoolean;
 
 struct Anchor {
     pos: i32,
@@ -16,16 +16,12 @@ pub(super) struct CountBuffer {
 
 impl CountBuffer {
 
-    pub(super) fn init(&mut self,max: i32) {
-        self.counts.clear();
-        self.counts.push(Anchor {
-            pos: max + 1,
-            count: ShapeCountBoolean::empty(),
-        });
-    }
-
     pub(super) fn new() -> Self {
         Self { counts: Vec::with_capacity(16) }
+    }
+
+    pub(super) fn reset(&mut self, max: i32) {
+        self.counts.push(Anchor { pos: max + 1, count: ShapeCountBoolean::empty() });
     }
 
     #[inline]

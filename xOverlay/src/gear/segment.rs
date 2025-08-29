@@ -1,5 +1,5 @@
 use crate::geom::range::LineRange;
-use crate::graph::boolean::winding_count::ShapeCountBoolean;
+use crate::gear::winding_count::ShapeCountBoolean;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) struct Segment {

@@ -6,17 +6,11 @@ use crate::gear::fill_buffer::{FillBuffer, FillDg, FillHz};
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
 use crate::gear::x_mapper::XMapper;
-use crate::graph::boolean::winding_count::ShapeCountBoolean;
+use crate::gear::winding_count::ShapeCountBoolean;
 use alloc::vec;
 use alloc::vec::Vec;
 use i_key_sort::sort::layout::BinStore;
-
-pub(super) struct FillResult {
-    pub(super) vr: Vec<SegmentFill>,
-    pub(super) hz: Vec<SegmentFill>,
-    pub(super) dp: Vec<SegmentFill>,
-    pub(super) dn: Vec<SegmentFill>,
-}
+use crate::gear::fill_source::FillSource;
 
 impl Section {
     pub(super) fn fill(
@@ -24,7 +18,7 @@ impl Section {
         fill_rule: FillRule,
         fill_buffer: FillBuffer,
         map_by_columns: XMapper,
-    ) -> FillResult {
+    ) -> FillSource {
         match fill_rule {
             FillRule::EvenOdd => {
                 self.fill_with_strategy::<EvenOddStrategy>(fill_buffer, map_by_columns)
@@ -45,7 +39,7 @@ impl Section {
         &self,
         mut fill_buffer: FillBuffer,
         map_by_columns: XMapper,
-    ) -> FillResult {
+    ) -> FillSource {
         let mut start_vr = 0;
         let mut start_hz = 0;
         let mut start_dp = 0;
@@ -53,7 +47,7 @@ impl Section {
 
         let scale = self.layout.count().ilog2();
 
-        let mut fill_result = FillResult {
+        let mut fill_result = FillSource {
             vr: vec![NONE; self.source.vr_list.len()],
             hz: vec![NONE; self.source.hz_list.len()],
             dp: vec![NONE; self.source.dp_list.len()],
@@ -105,6 +99,7 @@ impl Section {
             fill_buffer.add_dn_edges(max_x, &dn_buffer);
 
             fill_buffer.fill::<F>(
+                max_x,
                 start_vr,
                 vr_slice,
                 &mut fill_result,
@@ -122,24 +117,6 @@ impl Section {
         fill_result
     }
 
-    #[inline]
-    fn clean_by_min_x_hz(min_x: i32, buffer: &mut Vec<FillHz>) {
-        buffer.retain_mut(|e| {
-            if e.x_range.max < min_x {
-                false
-            } else {
-                e.x_range.min = min_x;
-                true
-            }
-        });
-    }
-
-    fn add_hz(offset: usize, new_segments: &[Segment], buffer: &mut Vec<FillHz>) {
-        for (i, s) in new_segments.iter().enumerate() {
-            let index = offset + i;
-            buffer.push(FillHz::with_segment(index, s));
-        }
-    }
 }
 
 trait CleanByXSwipe {

@@ -1,9 +1,10 @@
 use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
+use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
+use x_overlay::core::solver::Solver;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
-use x_overlay::ortho::overlay::OrthoOverlay;
 
 pub(crate) struct WindowsTest;
 /*
@@ -41,25 +42,28 @@ pub(crate) struct WindowsTest;
 
 // A grid of square frames, each with a smaller square cutout in the center.
 impl WindowsTest {
-    pub(crate) fn run(n: usize, rule: OverlayRule, scale: f64, multithreading: bool) { // 500
+    pub(crate) fn run(n: usize, rule: OverlayRule, scale: f64, multithreading: bool) {
+        // 500
         let offset = 30;
         let x = (n as i32) * offset / 2;
         let origin = IntPoint::new(-x, -x);
         let (subj_paths, clip_paths) = Self::many_windows(origin, 20, 10, offset, n);
 
         let it_count = ((scale / (n as f64)) as usize).max(1);
-        let sq_it_count= it_count * it_count;
+        let sq_it_count = it_count * it_count;
 
         let start = Instant::now();
 
-        let mut overlay = OrthoOverlay::default();
-        overlay.solver.multithreading = multithreading;
-        
         for _i in 0..sq_it_count {
-            overlay.init_with_ortho_contours(&subj_paths, &clip_paths).expect("valid");
-            overlay.overlay(rule, FillRule::NonZero);
+            let mut overlay = Overlay::with_contours_custom(
+                &subj_paths,
+                &clip_paths,
+                Default::default(),
+                Solver::new(multithreading),
+            )
+            .expect("valid");
+            overlay.overlay(FillRule::NonZero, rule);
         }
-
         let duration = start.elapsed();
         let time = duration.as_secs_f64() / sq_it_count as f64;
 
@@ -68,7 +72,13 @@ impl WindowsTest {
         println!("{}     - {:.6}", polygons_count, time);
     }
 
-    fn many_windows(start: IntPoint, a: i32, b: i32, offset: i32, n: usize) -> (Vec<IntPath>, Vec<IntPath>) {
+    fn many_windows(
+        start: IntPoint,
+        a: i32,
+        b: i32,
+        offset: i32,
+        n: usize,
+    ) -> (Vec<IntPath>, Vec<IntPath>) {
         let mut boundaries = Vec::with_capacity(n * n);
         let mut holes = Vec::with_capacity(n * n);
         let mut y = start.y;

@@ -3,9 +3,8 @@ use crate::core::options::IntOverlayOptions;
 use crate::core::shape_type::ShapeType;
 use crate::core::solver::Solver;
 use crate::core::winding::WindingCount;
-use crate::graph::boolean::winding_count::ShapeCountBoolean;
-use crate::ortho::error::OverlayError;
-use crate::core::overlay::Overlay;
+use crate::gear::winding_count::ShapeCountBoolean;
+use crate::core::overlay::{Overlay, OverlayError};
 use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
 use i_float::int::point::IntPoint;
 use i_float::int::rect::IntRect;
@@ -17,11 +16,8 @@ use crate::gear::segment::Segment;
 use crate::geom::range::LineRange;
 
 impl Overlay {
-    pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Result<Self, OverlayError> {
-        Self::with_contours_custom(subj, clip, Default::default(), Default::default())
-    }
 
-    pub fn with_contours_custom(
+    pub(crate) fn init_contours_custom(
         subj: &[IntContour],
         clip: &[IntContour],
         options: IntOverlayOptions,
@@ -330,7 +326,7 @@ mod tests {
     use crate::core::shape_type::ShapeType;
     use crate::core::shape_type::ShapeType::Subject;
     use crate::core::winding::WindingCount;
-    use crate::graph::boolean::winding_count::ShapeCountBoolean;
+    use crate::gear::winding_count::ShapeCountBoolean;
     use i_float::int::point::IntPoint;
     use std::collections::HashSet;
     use crate::core::solver::Solver;

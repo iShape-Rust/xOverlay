@@ -5,6 +5,7 @@ pub enum CPUCount {
     Single,
 }
 
+#[derive(Debug, Clone)]
 pub struct Solver {
     pub cpu: CPUCount,
 }
@@ -39,5 +40,18 @@ impl Solver {
         Self {
             cpu: CPUCount::Single,
         }
+    }
+
+    pub fn new(multithreading: bool) -> Self {
+        if multithreading {
+            #[cfg(feature = "allow_multithreading")]
+            {
+                return Self {
+                    cpu: CPUCount::Auto,
+                };
+            }
+        }
+
+        Self::single()
     }
 }
