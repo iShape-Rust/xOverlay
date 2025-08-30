@@ -95,9 +95,9 @@ impl Section {
             dn_buffer.add(start_dn, dn_slice);
 
             // fill buffer
-            fill_buffer.add_hz_edges(x1, &hz_buffer);
-            fill_buffer.add_dp_edges(x1, &dp_buffer);
-            fill_buffer.add_dn_edges(x1, &dn_buffer);
+            fill_buffer.add_hz_edges(x1 + 1, &hz_buffer);
+            fill_buffer.add_dp_edges(x1 + 1, &dp_buffer);
+            fill_buffer.add_dn_edges(x1 + 1, &dn_buffer);
 
             fill_buffer.fill::<F>(
                 max_x,
