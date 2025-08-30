@@ -150,26 +150,28 @@ impl CountBuffer {
 
     #[inline]
     pub(super) fn get_fill<F: FillStrategy<ShapeCountBoolean>>(&self, dir: ShapeCountBoolean, x: i32) -> SegmentFill {
-        let count = if x == self.max {
+        if x == self.max {
             let x0 = x - 1;
             let index = match self.counts.binary_search_by(|a| a.pos.cmp(&x0)) {
                 Ok(index) => index + 1,
                 Err(index) => index,
             };
+            let top = self.counts[index].count;
+            let bot = top.sub(dir);
+            let fill = F::fill(top, bot);
 
-            self.counts[index].count.invert()
+            fill
         } else {
             let index = match self.counts.binary_search_by(|a| a.pos.cmp(&x)) {
                 Ok(index) => index + 1,
                 Err(index) => index,
             };
 
-            self.counts[index].count
-        };
+            let count = self.counts[index].count;
 
-
-        let (_, fill) = F::add_and_fill(dir, count);
-        fill
+            let (_, fill) = F::add_and_fill(dir, count);
+            fill
+        }
     }
 }
 

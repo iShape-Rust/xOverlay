@@ -1,6 +1,6 @@
-use crate::gear::x_mapper::XPart;
 use alloc::vec::Vec;
 use i_float::int::rect::IntRect;
+use crate::gear::s_mapper::SPart;
 use crate::gear::x_layout::XLayout;
 use crate::gear::source::GeometrySource;
 
@@ -14,7 +14,7 @@ impl Section {
     #[inline(always)]
     pub(super) fn new(
         rect: IntRect,
-        part: XPart,
+        part: SPart,
         avg_count_per_column: usize,
         max_parts_count: usize,
     ) -> Self {

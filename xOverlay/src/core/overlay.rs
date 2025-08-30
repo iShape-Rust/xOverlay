@@ -3,7 +3,6 @@ use crate::core::options::IntOverlayOptions;
 use crate::core::overlay_rule::OverlayRule;
 use crate::core::solver::Solver;
 use crate::gear::section::Section;
-use crate::gear::x_layout::XLayout;
 use alloc::vec::Vec;
 use i_shape::flat::buffer::FlatContoursBuffer;
 use i_shape::int::count::IntShapes;
@@ -19,7 +18,6 @@ pub enum OverlayError {
 pub struct Overlay {
     pub options: IntOverlayOptions,
     pub solver: Solver,
-    pub(crate) layout: XLayout,
     pub(crate) sections: Vec<Section>,
 }
 
@@ -70,13 +68,12 @@ mod tests {
 
     #[test]
     fn test_0() {
-        let subj = [[
+        let subj = [vec![
             IntPoint::new(0, 0),
             IntPoint::new(10, 0),
             IntPoint::new(10, 10),
             IntPoint::new(0, 10),
-        ]
-        .to_vec()];
+        ]];
 
         let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
         let result = overlay.overlay(FillRule::EvenOdd, OverlayRule::Subject);
@@ -316,5 +313,83 @@ mod tests {
         let shape = &result[0];
         assert_eq!(shape.len(), 1);
         assert_eq!(shape[0].area(), -4);
+    }
+
+    #[test]
+    fn test_9() {
+        let subj = [
+            vec![
+                IntPoint::new(3, 0),
+                IntPoint::new(6, 0),
+                IntPoint::new(6, 1),
+                IntPoint::new(3, 1),
+            ],
+            vec![
+                IntPoint::new(6, 6),
+                IntPoint::new(7, 6),
+                IntPoint::new(7, 7),
+                IntPoint::new(6, 7),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result[1].len(), 1);
+        assert_eq!(result.area(), -4);
+    }
+
+    #[test]
+    fn test_10() {
+        let subj = [
+            vec![
+                IntPoint::new(3, 0),
+                IntPoint::new(6, 0),
+                IntPoint::new(6, 1),
+                IntPoint::new(3, 1),
+            ],
+            vec![
+                IntPoint::new(6, 6),
+                IntPoint::new(7, 6),
+                IntPoint::new(7, 7),
+                IntPoint::new(6, 7),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result[1].len(), 1);
+        assert_eq!(result.area(), -4);
+    }
+
+    #[test]
+    fn test_11() {
+        let subj = [
+            vec![
+                IntPoint::new(6, 0),
+                IntPoint::new(7, 0),
+                IntPoint::new(7, 6),
+                IntPoint::new(6, 6),
+            ],
+            vec![
+                IntPoint::new(6, 3),
+                IntPoint::new(7, 3),
+                IntPoint::new(7, 5),
+                IntPoint::new(6, 5),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result[1].len(), 1);
+        assert_eq!(result.area(), -4);
     }
 }

@@ -210,28 +210,3 @@ impl MinY for SplitDn {
         self.y_range.min
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::gear::x_layout::XLayout;
-    use crate::gear::x_mapper::XMapper;
-    use i_float::int::point::IntPoint;
-
-    #[test]
-    fn test_0() {
-        let subj = [[
-            IntPoint::new(0, 0),
-            IntPoint::new(10, 0),
-            IntPoint::new(10, 10),
-            IntPoint::new(0, 10),
-        ]
-        .to_vec()];
-
-        let mut mapper = XMapper::new(XLayout::with_subj_and_clip(&subj, &[], 2).unwrap());
-
-        mapper.add_contours(&subj);
-
-        assert_eq!(mapper.hz_parts[0], 2);
-        assert_eq!(mapper.vr_parts[0], 2);
-    }
-}

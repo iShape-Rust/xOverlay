@@ -16,6 +16,7 @@ pub const ALL: SegmentFill = SUBJ_BOTH | CLIP_BOTH;
 
 pub(crate) trait FillStrategy<C> {
     fn add_and_fill(this: C, bot: C) -> (C, SegmentFill);
+    fn fill(top: C, bot: C) -> SegmentFill;
 }
 
 pub(crate) trait InclusionFilterStrategy {

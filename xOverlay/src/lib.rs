@@ -9,6 +9,7 @@ pub(crate) mod graph;
 mod geom;
 pub(crate) mod bind;
 mod gear;
+pub(crate) mod util;
 
 pub use i_float;
 pub use i_shape;

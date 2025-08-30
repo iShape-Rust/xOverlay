@@ -6,7 +6,7 @@ use crate::gear::section::Section;
 use crate::gear::sub_graph::SubGraph;
 use crate::graph::OverlayGraph;
 use alloc::vec::Vec;
-
+use core::mem::swap;
 
 impl Overlay {
     pub(crate) fn process_overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
@@ -54,6 +54,8 @@ impl Section {
         if any_split {
             self.split_by_marks(&mut source_by_columns, &mut split_buffer);
             map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
+        } else {
+            swap(&mut self.source, &mut source_by_columns)
         }
 
         let any_merge = self.sort_and_merge(&map_by_columns);

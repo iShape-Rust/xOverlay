@@ -70,7 +70,8 @@ impl Section {
         let mut dn_buffer = Vec::with_capacity(dn_capacity);
 
         for (column_index, part) in map_by_columns.iter_by_parts().enumerate() {
-            let (min_x, max_x) = self.layout.borders(column_index);
+            let (x0, x1) = self.layout.borders(column_index);
+            let max_x = self.layout.left_border(column_index + 1) - 1;
 
             // get slices to new column data
 
@@ -82,21 +83,21 @@ impl Section {
             // prepare column data
 
             // hz
-            hz_buffer.clean_by_min_x(min_x);
+            hz_buffer.clean_by_min_x(x0);
             hz_buffer.add(start_hz, hz_slice);
 
             // dp
-            dp_buffer.clean_by_min_x(min_x);
+            dp_buffer.clean_by_min_x(x0);
             dp_buffer.add(start_dp, dp_slice);
 
             // dn
-            dn_buffer.clean_by_min_x(min_x);
+            dn_buffer.clean_by_min_x(x0);
             dn_buffer.add(start_dn, dn_slice);
 
             // fill buffer
-            fill_buffer.add_hz_edges(max_x, &hz_buffer);
-            fill_buffer.add_dp_edges(max_x, &dp_buffer);
-            fill_buffer.add_dn_edges(max_x, &dn_buffer);
+            fill_buffer.add_hz_edges(x1, &hz_buffer);
+            fill_buffer.add_dp_edges(x1, &dp_buffer);
+            fill_buffer.add_dn_edges(x1, &dn_buffer);
 
             fill_buffer.fill::<F>(
                 max_x,
@@ -183,14 +184,19 @@ impl FillStrategy<ShapeCountBoolean> for EvenOddStrategy {
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
         let top = bot.add(this);
+        let fill = Self::fill(top, bot);
+
+        (top, fill)
+    }
+
+    #[inline(always)]
+    fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = 1 & top.subj as SegmentFill;
         let subj_bot = 1 & bot.subj as SegmentFill;
         let clip_top = 1 & top.clip as SegmentFill;
         let clip_bot = 1 & bot.clip as SegmentFill;
 
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
+        subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3)
     }
 }
 
@@ -201,14 +207,19 @@ impl FillStrategy<ShapeCountBoolean> for NonZeroStrategy {
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
         let top = bot.add(this);
+        let fill = Self::fill(top, bot);
+
+        (top, fill)
+    }
+
+    #[inline(always)]
+    fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj != 0) as SegmentFill;
         let subj_bot = (bot.subj != 0) as SegmentFill;
         let clip_top = (top.clip != 0) as SegmentFill;
         let clip_bot = (bot.clip != 0) as SegmentFill;
 
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
+        subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3)
     }
 }
 
@@ -219,14 +230,18 @@ impl FillStrategy<ShapeCountBoolean> for PositiveStrategy {
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
         let top = bot.add(this);
+        let fill = Self::fill(top, bot);
+        (top, fill)
+    }
+
+    #[inline(always)]
+    fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj > 0) as SegmentFill;
         let subj_bot = (bot.subj > 0) as SegmentFill;
         let clip_top = (top.clip > 0) as SegmentFill;
         let clip_bot = (bot.clip > 0) as SegmentFill;
 
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
+        subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3)
     }
 }
 
@@ -237,13 +252,17 @@ impl FillStrategy<ShapeCountBoolean> for NegativeStrategy {
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
         let top = bot.add(this);
+        let fill = Self::fill(top, bot);
+        (top, fill)
+    }
+
+    #[inline(always)]
+    fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj < 0) as SegmentFill;
         let subj_bot = (bot.subj < 0) as SegmentFill;
         let clip_top = (top.clip < 0) as SegmentFill;
         let clip_bot = (bot.clip < 0) as SegmentFill;
 
-        let fill = subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3);
-
-        (top, fill)
+        subj_top | (subj_bot << 1) | (clip_top << 2) | (clip_bot << 3)
     }
 }

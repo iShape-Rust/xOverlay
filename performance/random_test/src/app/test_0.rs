@@ -17,7 +17,6 @@ impl RandomTest0 {
             let ir = RandomTestI1::run(&subj);
             let xr = RandomTestX1::run(&subj);
 
-
             let ax = xr.area();
             let ai = ir.area();
             if ax != ai {
