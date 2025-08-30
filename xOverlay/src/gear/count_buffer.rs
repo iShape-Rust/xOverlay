@@ -11,16 +11,18 @@ struct Anchor {
 }
 
 pub(super) struct CountBuffer {
+    max: i32,
     counts: Vec<Anchor>,
 }
 
 impl CountBuffer {
 
     pub(super) fn new() -> Self {
-        Self { counts: Vec::with_capacity(16) }
+        Self { max: 0, counts: Vec::with_capacity(16) }
     }
 
     pub(super) fn reset(&mut self, max: i32) {
+        self.max = max;
         self.counts.push(Anchor { pos: max + 1, count: ShapeCountBoolean::empty() });
     }
 
@@ -148,12 +150,24 @@ impl CountBuffer {
 
     #[inline]
     pub(super) fn get_fill<F: FillStrategy<ShapeCountBoolean>>(&self, dir: ShapeCountBoolean, x: i32) -> SegmentFill {
-        let index = match self.counts.binary_search_by(|a| a.pos.cmp(&x)) {
-            Ok(index) => index + 1,
-            Err(index) => index,
+        let count = if x == self.max {
+            let x0 = x - 1;
+            let index = match self.counts.binary_search_by(|a| a.pos.cmp(&x0)) {
+                Ok(index) => index + 1,
+                Err(index) => index,
+            };
+
+            self.counts[index].count.invert()
+        } else {
+            let index = match self.counts.binary_search_by(|a| a.pos.cmp(&x)) {
+                Ok(index) => index + 1,
+                Err(index) => index,
+            };
+
+            self.counts[index].count
         };
 
-        let count = self.counts[index].count;
+
         let (_, fill) = F::add_and_fill(dir, count);
         fill
     }

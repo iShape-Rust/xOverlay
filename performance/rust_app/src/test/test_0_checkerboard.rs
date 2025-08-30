@@ -1,6 +1,5 @@
 use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
-use x_overlay::core::options::IntOverlayOptions;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
 use x_overlay::core::solver::Solver;

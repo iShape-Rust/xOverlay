@@ -265,4 +265,56 @@ mod tests {
         assert_eq!(shape.len(), 1);
         assert_eq!(shape[0].area(), -27);
     }
+
+    #[test]
+    fn test_7() {
+        let subj = [
+            vec![
+                IntPoint::new(5, 1),
+                IntPoint::new(7, 1),
+                IntPoint::new(7, 7),
+                IntPoint::new(5, 7),
+            ],
+            vec![
+                IntPoint::new(5, 3),
+                IntPoint::new(7, 3),
+                IntPoint::new(7, 5),
+                IntPoint::new(5, 5),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 1);
+        let shape = &result[0];
+        assert_eq!(shape.len(), 1);
+        assert_eq!(shape[0].area(), -12);
+    }
+
+    #[test]
+    fn test_8() {
+        let subj = [
+            vec![
+                IntPoint::new(6, 4),
+                IntPoint::new(7, 4),
+                IntPoint::new(7, 5),
+                IntPoint::new(6, 5),
+            ],
+            vec![
+                IntPoint::new(3, 4),
+                IntPoint::new(7, 4),
+                IntPoint::new(7, 5),
+                IntPoint::new(3, 5),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 1);
+        let shape = &result[0];
+        assert_eq!(shape.len(), 1);
+        assert_eq!(shape[0].area(), -4);
+    }
 }

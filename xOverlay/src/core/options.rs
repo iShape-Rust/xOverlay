@@ -31,8 +31,8 @@ impl Default for IntOverlayOptions {
             output_direction: ContourDirection::CounterClockwise,
             preserve_output_collinear: false,
             min_output_area: 0,
-            avg_count_per_column: 64 * 1024,
-            max_parts_count: 1024,
+            avg_count_per_column: 1 * 1024,
+            max_parts_count: 102400,
         }
     }
 }
