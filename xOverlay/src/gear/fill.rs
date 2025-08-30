@@ -131,7 +131,7 @@ trait FillAddSegment {
 impl CleanByXSwipe for Vec<FillHz> {
     fn clean_by_min_x(&mut self, min_x: i32) {
         self.retain_mut(|e| {
-            if e.x_range.max < min_x {
+            if e.x_range.max <= min_x {
                 false
             } else {
                 e.x_range.min = min_x;

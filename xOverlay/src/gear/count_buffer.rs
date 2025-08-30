@@ -23,6 +23,7 @@ impl CountBuffer {
 
     pub(super) fn reset(&mut self, max: i32) {
         self.max = max;
+        self.counts.clear();
         self.counts.push(Anchor { pos: max + 1, count: ShapeCountBoolean::empty() });
     }
 
