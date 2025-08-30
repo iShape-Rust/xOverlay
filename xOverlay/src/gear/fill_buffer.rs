@@ -54,6 +54,14 @@ impl FillBuffer {
                 *self.hz_edges.get_unchecked_mut(map_index) = left;
             }
         }
+
+        let mut start = 0;
+        for &count in self.mapper.hz_parts_count.iter() {
+            if count > 1 {
+                self.hz_edges[start..start + count].sort_unstable_by(|hz0, hz1|hz0.y.cmp(&hz1.y));
+            }
+            start += count;
+        }
     }
 
     pub(super) fn add_dp_edges(&mut self, max_x: i32, slice: &[FillDg]) {

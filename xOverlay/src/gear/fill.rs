@@ -135,6 +135,7 @@ impl CleanByXSwipe for Vec<FillHz> {
                 false
             } else {
                 e.x_range.min = min_x;
+                e.index = u32::MAX;
                 true
             }
         });

@@ -416,4 +416,29 @@ mod tests {
         assert_eq!(result[0].len(), 1);
         assert_eq!(result.area(), -14);
     }
+
+    #[test]
+    fn test_13() {
+        let subj = [
+            vec![
+                IntPoint::new(5, 1),
+                IntPoint::new(6, 1),
+                IntPoint::new(6, 5),
+                IntPoint::new(5, 5),
+            ],
+            vec![
+                IntPoint::new(0, 6),
+                IntPoint::new(5, 6),
+                IntPoint::new(5, 7),
+                IntPoint::new(0, 7),
+            ],
+        ];
+
+        let mut overlay = Overlay::with_contours(&subj, &[]).expect("create");
+        let result = overlay.overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].len(), 1);
+        assert_eq!(result.area(), -9);
+    }
 }
