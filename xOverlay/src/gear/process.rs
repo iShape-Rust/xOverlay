@@ -7,9 +7,15 @@ use crate::gear::sub_graph::SubGraph;
 use crate::graph::OverlayGraph;
 use alloc::vec::Vec;
 use core::mem::swap;
+use rayon::iter::IntoParallelRefMutIterator;
+use rayon::iter::ParallelIterator;
 
 impl Overlay {
-    pub(crate) fn process_overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
+    pub(crate) fn process_overlay(
+        &mut self,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) -> OverlayGraph {
         if self.solver.cpu_count() == 1 {
             self.serial_process(fill_rule, overlay_rule)
         } else {
@@ -29,7 +35,7 @@ impl Overlay {
     fn parallel_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
         let sub_graphs: Vec<_> = self
             .sections
-            .iter_mut()
+            .par_iter_mut()
             .map(|s| s.process(fill_rule, overlay_rule))
             .collect();
         OverlayGraph::new(sub_graphs, self.options)

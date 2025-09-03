@@ -10,10 +10,10 @@ pub struct RandomTest0;
 
 impl RandomTest0 {
 
-    pub fn run_0(n: usize) {
+    pub fn run_0(n: usize, count: usize, p: usize) {
 
         for _ in 0..n {
-            let (subj, area) = Self::random_ccw_rects(2, 3);
+            let (subj, area) = Self::random_ccw_rects(count, p);
             let ir = RandomTestI1::run(&subj);
             let xr = RandomTestX1::run(&subj);
 

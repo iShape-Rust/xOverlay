@@ -21,7 +21,7 @@ rayon = { optional = true, version = "^1.11" }
 i_key_sort = { path = "../../iKeySort" }
 
 [features]
-default = []
+default = ["allow_multithreading"]
 allow_multithreading = ["dep:rayon"]
 
 [dev-dependencies]

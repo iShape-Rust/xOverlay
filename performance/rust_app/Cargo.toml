@@ -11,4 +11,4 @@ codegen-units = 1
 [dependencies]
 
 #i_overlay = { path = "../../iOverlay", default-features = true }
-x_overlay = { path = "../../xOverlay", default-features = false }
+x_overlay = { path = "../../xOverlay", allow_multithreading = true }
