@@ -1,54 +1,38 @@
-use alloc::vec::Vec;
 use crate::core::options::IntOverlayOptions;
-use crate::gear::sub_graph::SubGraph;
+use crate::gear::sub_graph::FilledSegment;
+use crate::geom::id_point::IdPoint;
 use crate::graph::OverlayGraph;
+use crate::graph::end::End;
+use crate::graph::link::OverlayLink;
+use alloc::vec::Vec;
+use i_key_sort::sort::two_keys::TwoKeysSort;
 
 impl OverlayGraph {
+    pub(super) fn new(
+        parallel: bool,
+        groups: Vec<Vec<FilledSegment>>,
+        options: IntOverlayOptions,
+    ) -> Self {
+        let count = groups.iter().fold(0, |s, g| s + g.len());
+        let mut filled_segments = Vec::with_capacity(count);
 
-    pub(super) fn new(sub_graphs: Vec<SubGraph>, options: IntOverlayOptions) -> Self {
-        let mut total_links = 0;
-        let mut total_ends = 0;
-        for s in sub_graphs.iter() {
-            total_links += s.links.len();
-            total_ends += s.ends.len();
+        for mut group in groups {
+            filled_segments.append(&mut group);
         }
 
-        let mut links = Vec::with_capacity(total_links);
-        let mut ends = Vec::with_capacity(total_ends);
+        // filled_segments.sort_by_two_keys(parallel, |s| s.a.x, |s| s.a.y);
 
-        let mut offset = 0;
-        for mut sub_graph in sub_graphs.into_iter() {
-            links.append(&mut sub_graph.links);
+        let mut links = Vec::with_capacity(count);
+        let mut ends = Vec::with_capacity(count);
 
-            let ie = ends.len();
-
-            for end in sub_graph.ends.iter_mut() {
-                end.index += offset;
-            }
-
-            ends.append(&mut sub_graph.ends);
-
-            if let (Some(e0), Some(e1)) = (ie.checked_sub(1).and_then(|j| ends.get(j)), ends.get(ie)) {
-                if e0.point.x == e1.point.x {
-                    let x = e0.point.x;
-
-                    let mut left = ie - 1;
-                    while left > 0 && ends[left - 1].point.x == x {
-                        left -= 1;
-                    }
-
-                    let mut right = ie;
-                    while right + 1 < ends.len() && ends[right + 1].point.x == x {
-                        right += 1;
-                    }
-
-                    let range = left..(right + 1);
-                    ends[range].sort_unstable_by(|a, b| a.point.y.cmp(&b.point.y));
-                }
-            }
-
-            offset = links.len();
+        for (index, s) in filled_segments.iter().enumerate() {
+            let link = OverlayLink::new(IdPoint::new(0, s.a), IdPoint::new(0, s.b), s.fill);
+            let end = End { index, point: s.b };
+            links.push(link);
+            ends.push(end);
         }
+
+        ends.sort_by_two_keys(parallel, |e| e.point.x, |e| e.point.y);
 
         let mut graph = Self {
             options,
@@ -62,6 +46,4 @@ impl OverlayGraph {
 
         graph
     }
-
 }
-

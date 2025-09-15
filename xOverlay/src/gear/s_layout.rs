@@ -89,7 +89,7 @@ impl SLayout {
         }
 
         let optimal_sections_log_count = (optimal_sections_count as u32).ilog2_ceil();
-        let optimal_section_width = width >> optimal_sections_log_count;
+        let optimal_section_width = (width >> optimal_sections_log_count).max(4);
         let log_optimal_section_width = optimal_section_width.ilog2();
         let section_log_width = log_optimal_section_width.min(max_log_section_width);
 

@@ -10,10 +10,6 @@ pub(crate) struct XLayout {
 }
 
 impl XLayout {
-    #[inline(always)]
-    pub(crate) fn x_range(&self) -> LineRange {
-        LineRange::with_min_max(self.section_rect.min_x, self.section_rect.max_x)
-    }
 
     #[inline(always)]
     pub(crate) fn y_range(&self) -> LineRange {

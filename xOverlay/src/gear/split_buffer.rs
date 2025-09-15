@@ -5,7 +5,6 @@ use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use i_key_sort::bin_key::index::{BinKey, BinLayout};
 use crate::gear::segment::Segment;
 
 #[derive(Debug, Clone, Default)]
@@ -403,29 +402,5 @@ impl SplitDn {
     #[inline(always)]
     pub(super) fn find_x(&self, y: i32) -> i32 {
         NegativeDiagonal::new(self.x_range, self.y_range.min).find_x(y)
-    }
-}
-
-impl BinKey<usize> for XMark {
-    #[inline(always)]
-    fn bin_key(&self) -> usize {
-        self.index as usize
-    }
-
-    #[inline(always)]
-    fn bin_index(&self, layout: &BinLayout<usize>) -> usize {
-        layout.index(self.bin_key())
-    }
-}
-
-impl BinKey<usize> for YMark {
-    #[inline(always)]
-    fn bin_key(&self) -> usize {
-        self.index as usize
-    }
-
-    #[inline(always)]
-    fn bin_index(&self, layout: &BinLayout<usize>) -> usize {
-        layout.index(self.bin_key())
     }
 }

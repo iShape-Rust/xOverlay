@@ -9,7 +9,6 @@ use crate::gear::x_mapper::XMapper;
 use crate::gear::winding_count::ShapeCountBoolean;
 use alloc::vec;
 use alloc::vec::Vec;
-use i_key_sort::sort::layout::BinStore;
 use crate::gear::fill_source::FillSource;
 
 impl Section {
@@ -60,8 +59,6 @@ impl Section {
 
         let bin_max_capacity = dp_capacity.max(dn_capacity);
 
-        let y_range = self.layout.y_range();
-        let mut bin_store = BinStore::new_anyway(y_range.min, y_range.max, bin_max_capacity);
         let mut sort_buffer = Vec::with_capacity(bin_max_capacity);
         let mut count_buffer = CountBuffer::new();
 
@@ -105,7 +102,6 @@ impl Section {
                 vr_slice,
                 &mut fill_result,
                 &mut sort_buffer,
-                &mut bin_store,
                 &mut count_buffer,
             );
 

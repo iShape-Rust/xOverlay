@@ -1,7 +1,6 @@
 use alloc::vec::Vec;
 use crate::geom::v_segment::VSegment;
 use i_float::int::point::IntPoint;
-use i_key_sort::bin_key::index::{BinKey, BinLayout};
 use i_shape::int::path::IntPath;
 
 #[derive(Debug, Clone, Copy)]
@@ -106,17 +105,5 @@ impl IdSegments for IntPath {
         } else {
             inner(self.iter().rev().copied(), buffer, id_data, x_min, x_max);
         }
-    }
-}
-
-impl BinKey<i32> for IdSegment {
-    #[inline(always)]
-    fn bin_key(&self) -> i32 {
-        self.v_segment.a.x
-    }
-
-    #[inline(always)]
-    fn bin_index(&self, layout: &BinLayout<i32>) -> usize {
-        layout.index(self.v_segment.a.x)
     }
 }

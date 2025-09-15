@@ -7,7 +7,7 @@ use crate::geom::diagonal::{Diagonal, NegativeDiagonal};
 use crate::geom::range::LineRange;
 use crate::gear::winding_count::ShapeCountBoolean;
 use alloc::vec::Vec;
-use i_key_sort::sort::layout::BinStore;
+use i_key_sort::sort::one_key::OneKeySort;
 use crate::core::winding::WindingCount;
 use crate::gear::fill_source::FillSource;
 
@@ -95,18 +95,16 @@ impl FillBuffer {
         vr_segments: &[Segment],
         source: &mut FillSource,
         buffer: &mut Vec<FillDg>,
-        bin_store: &mut BinStore<i32>,
         count_buffer: &mut CountBuffer,
     ) {
         count_buffer.reset(max);
 
-        // sort dp and dn
         if self.dn_edges.len() > 1 {
-            self.dn_edges.sort_diagonals_by_min_y(buffer, bin_store);
+            self.dn_edges.sort_by_one_key_and_buffer(false, buffer, |s|s.min_y);
         }
 
-        if self.dn_edges.len() > 1 {
-            self.dn_edges.sort_diagonals_by_min_y(buffer, bin_store);
+        if self.dp_edges.len() > 1 {
+            self.dp_edges.sort_by_one_key_and_buffer(false, buffer, |s|s.min_y);
         }
 
         let mut i = 0;
@@ -221,26 +219,5 @@ impl FillDg {
             x_range,
             min_y,
         }
-    }
-}
-
-trait SortDiagonalsByMinY {
-    fn sort_diagonals_by_min_y(&mut self, buffer: &mut Vec<FillDg>, bin_store: &mut BinStore<i32>);
-}
-
-impl SortDiagonalsByMinY for [FillDg] {
-    fn sort_diagonals_by_min_y(&mut self, buffer: &mut Vec<FillDg>, bin_store: &mut BinStore<i32>) {
-        buffer.resize(self.len(), Default::default());
-        let target = buffer.as_mut_slice();
-
-        bin_store.reserve_bins_with_key(self.iter().map(|s| s.min_y));
-        bin_store.prepare_bins();
-        bin_store.copy_by_key(self, target, |s| s.min_y);
-
-        bin_store.sort_by_bins(target, |s0, s1| s0.min_y.cmp(&s1.min_y));
-        bin_store.clear();
-
-        // copy sorted elements back to slice
-        self.copy_from_slice(target);
     }
 }

@@ -42,6 +42,12 @@ impl Solver {
         }
     }
 
+    pub fn fixed(count: usize) -> Self {
+        Self {
+            cpu: CPUCount::Fixed(count),
+        }
+    }
+
     pub fn new(multithreading: bool) -> Self {
         if multithreading {
             #[cfg(feature = "allow_multithreading")]

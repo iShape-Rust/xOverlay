@@ -6,9 +6,9 @@ use crate::gear::split_buffer::{SplitBuffer, SplitDn, SplitDp, SplitHz, XMark, Y
 use crate::gear::x_mapper::XMapper;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::range::LineRange;
-use alloc::vec;
 use alloc::vec::Vec;
-use i_key_sort::sort::layout::BinStore;
+use i_key_sort::sort::one_key_cmp::OneKeyAndCmpSort;
+use i_key_sort::sort::two_keys_cmp::TwoKeysAndCmpSort;
 
 impl Section {
     pub(super) fn intersect(
@@ -102,19 +102,21 @@ impl Section {
         &mut self,
         source_by_columns: &mut GeometrySource,
         split_buffer: &mut SplitBuffer,
+        x_buffer: &mut Vec<XMark>,
+        y_buffer: &mut Vec<YMark>,
     ) {
         source_by_columns
             .vr_list
-            .split_as_vr(&mut split_buffer.vr_marks);
+            .split_as_vr(&mut split_buffer.vr_marks, y_buffer);
         source_by_columns
             .hz_list
-            .split_as_hz(&mut split_buffer.hz_marks);
+            .split_as_hz(&mut split_buffer.hz_marks, x_buffer);
         source_by_columns
             .dp_list
-            .split_as_dp(&mut split_buffer.dp_marks);
+            .split_as_dp(&mut split_buffer.dp_marks, x_buffer);
         source_by_columns
             .dn_list
-            .split_as_dn(&mut split_buffer.dn_marks);
+            .split_as_dn(&mut split_buffer.dn_marks, x_buffer);
 
         self.source
             .vr_list
@@ -130,26 +132,15 @@ impl Section {
             .resize(source_by_columns.dn_list.len(), Default::default());
     }
 
-    pub(super) fn sort_and_merge(&mut self, map_by_columns: &XMapper) -> bool {
-        let &max_vr_count = map_by_columns.vr_parts.iter().max().unwrap_or(&0);
-        let &max_hz_count = map_by_columns.hz_parts.iter().max().unwrap_or(&0);
-        let &max_dp_count = map_by_columns.dp_parts.iter().max().unwrap_or(&0);
-        let &max_dn_count = map_by_columns.dn_parts.iter().max().unwrap_or(&0);
-
-        let max_count = max_vr_count
-            .max(max_hz_count)
-            .max(max_dp_count)
-            .max(max_dn_count);
-
-        let y_range = self.layout.y_range();
-        let mut bin_store = BinStore::new_anyway(y_range.min, y_range.max, max_count);
-        let mut buffer = vec![Segment::default(); max_count];
-
+    pub(super) fn sort_and_merge(
+        &mut self,
+        map_by_columns: &XMapper,
+        reusable_buffer: &mut Vec<Segment>,
+    ) -> bool {
         Self::sort_vertically_by_min(
             &mut self.source.vr_list,
             &map_by_columns.vr_parts,
-            &mut buffer,
-            &mut bin_store,
+            reusable_buffer,
         );
 
         let mut any_merge = self.source.vr_list.merge_if_needed();
@@ -157,24 +148,21 @@ impl Section {
         Self::sort_vertically_by_pos(
             &mut self.source.hz_list,
             &map_by_columns.hz_parts,
-            &mut buffer,
-            &mut bin_store,
+            reusable_buffer,
         );
         any_merge |= self.source.hz_list.merge_if_needed();
 
         Self::sort_vertically_by_pos(
             &mut self.source.dp_list,
             &map_by_columns.dp_parts,
-            &mut buffer,
-            &mut bin_store,
+            reusable_buffer,
         );
         any_merge |= self.source.dp_list.merge_if_needed();
 
         Self::sort_vertically_by_pos(
             &mut self.source.dn_list,
             &map_by_columns.dn_parts,
-            &mut buffer,
-            &mut bin_store,
+            reusable_buffer,
         );
         any_merge |= self.source.dn_list.merge_if_needed();
 
@@ -185,7 +173,6 @@ impl Section {
         segments: &mut [Segment],
         counts: &[usize],
         buffer: &mut Vec<Segment>,
-        bin_store: &mut BinStore<i32>,
     ) {
         let mut start = 0;
         for &count in counts.iter() {
@@ -194,34 +181,22 @@ impl Section {
                 continue;
             }
             let source = &mut segments[start..start + count];
-            let target = &mut buffer[0..count];
-
-            bin_store.reserve_bins_with_key(source.iter().map(|s| s.range.min));
-            bin_store.prepare_bins();
-            bin_store.copy_by_key(source, target, |s| s.range.min);
-
-            bin_store.sort_by_bins(target, |s0, s1| {
-                s0.range
-                    .min
-                    .cmp(&s1.range.min)
-                    .then(s0.pos.cmp(&s1.pos))
-                    .then(s0.range.max.cmp(&s1.range.max))
-            });
-            bin_store.clear();
-
-            // copy sorted elements back to slice
-            source.copy_from_slice(target);
+            source.sort_by_two_keys_then_by_and_buffer(
+                false,
+                buffer,
+                |s| s.range.min,
+                |s| s.pos,
+                |s0, s1| s0.range.max.cmp(&s1.range.max),
+            );
 
             start += count;
         }
     }
 
-
     fn sort_vertically_by_pos(
         segments: &mut [Segment],
         counts: &[usize],
         buffer: &mut Vec<Segment>,
-        bin_store: &mut BinStore<i32>,
     ) {
         let mut start = 0;
         for &count in counts.iter() {
@@ -230,23 +205,14 @@ impl Section {
                 continue;
             }
             let source = &mut segments[start..start + count];
-            let target = &mut buffer[0..count];
 
-            bin_store.reserve_bins_with_key(source.iter().map(|s| s.pos));
-            bin_store.prepare_bins();
-            bin_store.copy_by_key(source, target, |s| s.pos);
-
-            bin_store.sort_by_bins(target, |s0, s1| {
-                s0.pos
-                    .cmp(&s1.pos)
-                    .then(s0.range.min.cmp(&s1.range.min))
-                    .then(s0.range.max.cmp(&s1.range.max))
-            });
-
-            bin_store.clear();
-
-            // copy sorted elements back to slice
-            source.copy_from_slice(target);
+            source.sort_by_two_keys_then_by_and_buffer(
+                false,
+                buffer,
+                |s| s.pos,
+                |s| s.range.min,
+                |s0, s1| s0.range.max.cmp(&s1.range.max),
+            );
 
             start += count;
         }
@@ -343,20 +309,25 @@ impl IndexEdge {
 }
 
 trait SplitSegments {
-    fn split_as_vr(&mut self, marks: &mut [YMark]);
-    fn split_as_hz(&mut self, marks: &mut [XMark]);
-    fn split_as_dp(&mut self, marks: &mut [XMark]);
-    fn split_as_dn(&mut self, marks: &mut [XMark]);
+    fn split_as_vr(&mut self, marks: &mut [YMark], buffer: &mut Vec<YMark>);
+    fn split_as_hz(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>);
+    fn split_as_dp(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>);
+    fn split_as_dn(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>);
 }
 
 impl SplitSegments for Vec<Segment> {
     #[inline]
-    fn split_as_vr(&mut self, marks: &mut [YMark]) {
+    fn split_as_vr(&mut self, marks: &mut [YMark], buffer: &mut Vec<YMark>) {
         if marks.is_empty() {
             return;
         }
 
-        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.y.cmp(&m1.y)));
+        marks.sort_by_one_key_then_by_and_buffer(
+            false,
+            buffer,
+            |m| m.index,
+            |m0, m1| m0.y.cmp(&m1.y),
+        );
 
         let mut m0 = marks[0];
 
@@ -383,12 +354,17 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_hz(&mut self, marks: &mut [XMark]) {
+    fn split_as_hz(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>) {
         if marks.is_empty() {
             return;
         }
 
-        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+        marks.sort_by_one_key_then_by_and_buffer(
+            false,
+            buffer,
+            |m| m.index,
+            |m0, m1| m0.x.cmp(&m1.x),
+        );
 
         let mut m0 = marks[0];
         self.reserve(marks.len());
@@ -414,11 +390,17 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_dp(&mut self, marks: &mut [XMark]) {
+    fn split_as_dp(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>) {
         if marks.is_empty() {
             return;
         }
-        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+        marks.sort_by_one_key_then_by_and_buffer(
+            false,
+            buffer,
+            |m| m.index,
+            |m0, m1| m0.x.cmp(&m1.x),
+        );
 
         let mut m0 = marks[0];
 
@@ -445,11 +427,17 @@ impl SplitSegments for Vec<Segment> {
     }
 
     #[inline]
-    fn split_as_dn(&mut self, marks: &mut [XMark]) {
+    fn split_as_dn(&mut self, marks: &mut [XMark], buffer: &mut Vec<XMark>) {
         if marks.is_empty() {
             return;
         }
-        marks.sort_unstable_by(|m0, m1|m0.index.cmp(&m1.index).then(m0.x.cmp(&m1.x)));
+
+        marks.sort_by_one_key_then_by_and_buffer(
+            false,
+            buffer,
+            |m| m.index,
+            |m0, m1| m0.x.cmp(&m1.x),
+        );
 
         let mut m0 = marks[0];
 
@@ -571,6 +559,7 @@ mod tests {
     use crate::gear::split_buffer::{SplitBuffer, XMark, YMark};
     use crate::gear::x_layout::XLayout;
     use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
+    use crate::geom::range::LineRange;
     use alloc::vec;
     use alloc::vec::Vec;
     use core::mem::swap;
@@ -578,7 +567,6 @@ mod tests {
     use i_float::int::rect::IntRect;
     use i_shape::int::path::IntPath;
     use rand::Rng;
-    use crate::geom::range::LineRange;
 
     impl GeometrySource {
         fn test_count(&self) -> usize {
@@ -622,11 +610,11 @@ mod tests {
             if buffer.is_empty() {
                 swap(&mut self.source, &mut source_by_columns);
             } else {
-                self.split_by_marks(&mut source_by_columns, &mut buffer);
+                self.split_by_marks(&mut source_by_columns, &mut buffer, &mut Vec::new(), &mut Vec::new());
                 map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
             }
 
-            self.sort_and_merge(&map_by_columns);
+            self.sort_and_merge(&map_by_columns, &mut Vec::new());
         }
     }
 
@@ -1442,5 +1430,3 @@ mod tests {
         }
     }
 }
-
-
