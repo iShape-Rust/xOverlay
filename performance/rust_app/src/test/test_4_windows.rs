@@ -1,3 +1,4 @@
+use std::hint::black_box;
 use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
@@ -55,14 +56,14 @@ impl WindowsTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = Overlay::with_contours_custom(
+            let mut overlay = black_box(Overlay::with_contours_custom(
                 &subj_paths,
                 &clip_paths,
                 Default::default(),
                 Solver::new(multithreading),
             )
-            .expect("valid");
-            overlay.overlay(FillRule::NonZero, rule);
+            .expect("valid"));
+            black_box(overlay.overlay(FillRule::NonZero, rule));
         }
         let duration = start.elapsed();
         let time = duration.as_secs_f64() / sq_it_count as f64;

@@ -37,6 +37,16 @@ impl XLayout {
     }
 
     #[inline(always)]
+    pub(super) fn max_x(&self) -> i32 {
+        self.section_rect.max_x
+    }
+
+    #[inline(always)]
+    pub(super) fn min_x(&self) -> i32 {
+        self.section_rect.min_x
+    }
+
+    #[inline(always)]
     pub(crate) fn borders(&self, index: usize) -> (i32, i32) {
         let left = self.left_border(index);
         let width = 1i32 << self.column_log_width;

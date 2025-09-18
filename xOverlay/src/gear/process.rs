@@ -1,14 +1,15 @@
+use crate::core::fill::SegmentFill;
 use crate::core::fill_rule::FillRule;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
 use crate::gear::fill_buffer::FillBuffer;
 use crate::gear::section::Section;
-use crate::gear::sub_graph::FilledSegment;
-use crate::graph::OverlayGraph;
+use crate::geom::x_segment::XSegment;
 use alloc::vec::Vec;
 use core::mem::swap;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
+use crate::graph::data::OverlayGraph;
 
 impl Overlay {
     pub(crate) fn process_overlay(
@@ -24,25 +25,48 @@ impl Overlay {
     }
 
     fn serial_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
-        let mut groups = Vec::with_capacity(self.sections.len());
-        for s in self.sections.iter_mut() {
-            groups.push(s.process(fill_rule, overlay_rule));
-        }
-        OverlayGraph::new(false, groups, self.options)
+        let packs: Vec<_> = self
+            .sections
+            .iter_mut()
+            .map(|s| s.process(fill_rule, overlay_rule)).collect();
+
+        OverlayGraph::new(1, SegmentsPack::with_packs(packs), self.options)
     }
 
     fn parallel_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
-        let groups: Vec<_> = self
+        let packs: Vec<_> = self
             .sections
             .par_iter_mut()
-            .map(|s| s.process(fill_rule, overlay_rule))
-            .collect();
-        OverlayGraph::new(true, groups, self.options)
+            .map(|s| s.process(fill_rule, overlay_rule)).collect();
+
+        OverlayGraph::new(self.solver.cpu_count(), SegmentsPack::with_packs(packs), self.options)
+    }
+}
+
+pub(super) struct SegmentsPack {
+    pub(super) segments: Vec<XSegment>,
+    pub(super) fills: Vec<SegmentFill>,
+}
+
+impl SegmentsPack {
+    #[inline]
+    fn with_packs(packs: Vec<SegmentsPack>) -> Self {
+        let capacity = packs.iter().fold(0, |s, p| s + p.fills.len());
+        let mut segments = Vec::with_capacity(capacity);
+        let mut fills = Vec::with_capacity(capacity);
+        for mut pack in packs {
+            segments.append(&mut pack.segments);
+            fills.append(&mut pack.fills);
+        }
+        Self {
+            segments,
+            fills,
+        }
     }
 }
 
 impl Section {
-    fn process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> Vec<FilledSegment> {
+    fn process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SegmentsPack {
         // split by columns
 
         let mut source_by_columns = self.source.new_same_size();
@@ -57,7 +81,12 @@ impl Section {
         let any_split = !split_buffer.is_empty();
 
         if any_split {
-            self.split_by_marks(&mut source_by_columns, &mut split_buffer, &mut Vec::new(), &mut Vec::new());
+            self.split_by_marks(
+                &mut source_by_columns,
+                &mut split_buffer,
+                &mut Vec::new(),
+                &mut Vec::new(),
+            );
             map_by_columns = source_by_columns.map_by_columns(&self.layout, &mut self.source);
         } else {
             swap(&mut self.source, &mut source_by_columns)
@@ -71,18 +100,18 @@ impl Section {
 
         let fill_source = self.fill(fill_rule, FillBuffer::new(split_buffer), map_by_columns);
 
-        self.filled_segments(overlay_rule, fill_source)
+        self.prepare_segments(overlay_rule, fill_source)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-    use i_float::int::point::IntPoint;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay::Overlay;
     use crate::core::overlay_rule::OverlayRule;
     use crate::core::solver::Solver;
+    use alloc::vec;
+    use i_float::int::point::IntPoint;
 
     #[test]
     fn test_0() {
@@ -114,10 +143,10 @@ mod tests {
         ];
 
         let solver = Solver::fixed(2);
-        let mut overlay = Overlay::with_contours_custom(&subj, &[], Default::default(), solver).expect("create");
+        let mut overlay =
+            Overlay::with_contours_custom(&subj, &[], Default::default(), solver).expect("create");
         let result = overlay.overlay(FillRule::EvenOdd, OverlayRule::Subject);
 
         assert_eq!(result.len(), 4);
     }
-
 }

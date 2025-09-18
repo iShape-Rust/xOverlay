@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 use crate::core::fill::SegmentFill;
 
+#[derive(Clone)]
 pub(super) struct FillSource {
     pub(super) vr: Vec<SegmentFill>,
     pub(super) hz: Vec<SegmentFill>,
