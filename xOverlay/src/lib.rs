@@ -10,6 +10,7 @@ mod geom;
 pub(crate) mod bind;
 mod gear;
 pub(crate) mod util;
+mod tile;
 
 pub use i_float;
 pub use i_shape;

@@ -5,6 +5,7 @@ pub(crate) struct LineRange {
 }
 
 impl LineRange {
+
     #[inline(always)]
     pub(crate) fn with_min_max(min: i32, max: i32) -> Self {
         Self {
