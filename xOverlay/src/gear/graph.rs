@@ -8,7 +8,7 @@ use core::mem::MaybeUninit;
 use core::ops::Range;
 use i_float::int::point::IntPoint;
 use i_float::int::rect::IntRect;
-use i_key_sort::sort::two_keys_group::TwoKeysGroup;
+use i_key_sort::sort::two_keys::TwoKeysSort;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 
@@ -176,7 +176,7 @@ impl OverlayGraph {
             let mut buffer = Vec::new();
             for range in cell_ranges {
                 let slice = unsafe { ends.get_unchecked_mut(range) };
-                slice.group_by_two_keys_and_buffer(false, &mut buffer, |e| e.point.x, |e| e.point.y);
+                slice.sort_by_two_keys_and_buffer(false, &mut buffer, |e| e.point.x, |e| e.point.y);
             }
         } else {
             let optimal_count_per_cpu = ends.len() / cpu;
@@ -227,7 +227,7 @@ impl EndSortSection<'_> {
         let mut buf = Vec::new();
         for range in self.ranges.iter() {
             let slice = unsafe { self.slice.get_unchecked_mut(range.clone()) };
-            slice.group_by_two_keys_and_buffer(
+            slice.sort_by_two_keys_and_buffer(
                 false,
                 &mut buf,
                 |e| e.point.y,

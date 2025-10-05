@@ -1,7 +1,7 @@
 use crate::tile::source::GeometrySource;
-use i_float::int::rect::IntRect;
+use crate::geom::range::LineRange;
 
-pub(crate) struct Column {
-    pub(crate) rect: IntRect,
+pub(crate) struct TileColumn {
+    pub(crate) range: LineRange,
     pub(crate) source: GeometrySource,
 }

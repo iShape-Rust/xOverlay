@@ -60,4 +60,8 @@ impl Solver {
 
         Self::single()
     }
+
+    pub(crate) fn is_parallel(&self) -> bool {
+        self.cpu_count() > 1
+    }
 }

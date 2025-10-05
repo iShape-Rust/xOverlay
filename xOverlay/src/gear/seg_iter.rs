@@ -85,12 +85,12 @@ impl<'a, F: PointFilter> Iterator for SegmentIterator<'a, F> {
 
 pub(crate) trait SegmentIterable {
     #[must_use]
-    fn segment_iter<F: PointFilter>(&self) -> Option<SegmentIterator<F>>;
+    fn segment_iter<F: PointFilter>(&self) -> Option<SegmentIterator<'_, F>>;
 }
 
 impl SegmentIterable for [IntPoint] {
     #[inline]
-    fn segment_iter<F: PointFilter>(&self) -> Option<SegmentIterator<F>> {
+    fn segment_iter<F: PointFilter>(&self) -> Option<SegmentIterator<'_, F>> {
         SegmentIterator::new(self)
     }
 }
