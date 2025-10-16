@@ -115,7 +115,7 @@ impl FillBuffer {
             // add all vr in range s.min < y0
             while j < vr_segments.len() && vr_segments[j].range.min < y0 {
                 let vr = &vr_segments[j];
-                let fill = count_buffer.get_fill::<F>(vr.dir, vr.pos);
+                let fill = count_buffer.get_fill::<F>(vr.count, vr.pos);
                 let vr_index = start_vr + j;
                 unsafe {
                     *source.vr.get_unchecked_mut(vr_index) = fill;
@@ -138,7 +138,7 @@ impl FillBuffer {
 
         while j < vr_segments.len() {
             let vr = &vr_segments[j];
-            let (_, fill) = F::add_and_fill(vr.dir, ShapeCountBoolean::empty());
+            let (_, fill) = F::add_and_fill(vr.count, ShapeCountBoolean::empty());
             let vr_index = start_vr + j;
             unsafe {
                 *source.vr.get_unchecked_mut(vr_index) = fill;
@@ -153,7 +153,7 @@ impl FillHz {
     pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
         Self {
             index: index as u32,
-            dir: segment.dir,
+            dir: segment.count,
             y: segment.pos,
             x_range: segment.range,
         }
@@ -182,7 +182,7 @@ impl FillDg {
     pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
         Self {
             index: index as u32,
-            dir: segment.dir,
+            dir: segment.count,
             x_range: segment.range,
             min_y: segment.pos,
         }

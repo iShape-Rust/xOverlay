@@ -75,10 +75,10 @@ impl Merge for Vec<Segment> {
             }
 
             if prev.is_same_geometry(s) {
-                prev.dir = prev.dir.add(s.dir);
+                prev.count = prev.count.add(s.count);
             } else {
                 let ss = s.clone();
-                if prev.dir.is_not_empty() {
+                if prev.count.is_not_empty() {
                     self[w] = prev;
                     w += 1;
                 }
@@ -86,7 +86,7 @@ impl Merge for Vec<Segment> {
             }
         }
 
-        if prev.dir.is_not_empty() {
+        if prev.count.is_not_empty() {
             self[w] = prev;
             w += 1;
         }

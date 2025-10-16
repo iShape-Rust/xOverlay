@@ -1,6 +1,5 @@
 mod layout;
-mod tiler;
+mod tilemap;
 mod column;
 mod source;
-mod min_max_x;
 mod mapper;

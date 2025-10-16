@@ -134,7 +134,7 @@ impl Overlay {
                 .push(Segment {
                     pos: x0,
                     range,
-                    dir,
+                    count: dir,
                 });
         }
     }
@@ -164,7 +164,7 @@ impl Overlay {
                     .push(Segment {
                         pos: y0,
                         range: LineRange::with_min_max(x0, xi),
-                        dir,
+                        count: dir,
                     });
             }
             x0 = xi
@@ -179,7 +179,7 @@ impl Overlay {
                 .push(Segment {
                     pos: y0,
                     range: LineRange::with_min_max(x0, range.max),
-                    dir,
+                    count: dir,
                 });
         }
     }
@@ -215,7 +215,7 @@ impl Overlay {
                         .push(Segment {
                             pos: yi,
                             range: LineRange::with_min_max(x0, xi),
-                            dir,
+                            count: dir,
                         });
                 }
                 yi = y0.wrapping_add(dx);
@@ -231,7 +231,7 @@ impl Overlay {
                     .push(Segment {
                         pos: yi,
                         range: LineRange::with_min_max(x0, b.x),
-                        dir,
+                        count: dir,
                     });
             }
         } else {
@@ -251,7 +251,7 @@ impl Overlay {
                         .push(Segment {
                             pos: yi,
                             range: LineRange::with_min_max(x0, xi),
-                            dir,
+                            count: dir,
                         });
                 }
                 yi = y0.wrapping_sub(dx);
@@ -267,7 +267,7 @@ impl Overlay {
                     .push(Segment {
                         pos: yi,
                         range: LineRange::with_min_max(x0, b.x),
-                        dir,
+                        count: dir,
                     });
             }
         }
@@ -358,7 +358,7 @@ mod tests {
             } else {
                 (LineRange::with_min_max(z1, z0), invert)
             };
-            Self { pos, range, dir }
+            Self { pos, range, count: dir }
         }
     }
 

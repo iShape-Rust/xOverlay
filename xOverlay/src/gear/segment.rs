@@ -5,5 +5,5 @@ use crate::gear::winding_count::ShapeCountBoolean;
 pub(crate) struct Segment {
     pub(crate) pos: i32, // for vr -> x, hz -> y, dp, dn -> min y
     pub(crate) range: LineRange,
-    pub(crate) dir: ShapeCountBoolean,
+    pub(crate) count: ShapeCountBoolean,
 }

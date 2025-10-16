@@ -1,17 +1,20 @@
+use crate::core::overlay::OverlayError;
+use crate::core::shape_type::ShapeType;
+use crate::core::winding::WindingCount;
+use crate::gear::init::XYMinMaxRange;
+use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
+use crate::gear::segment::Segment;
+use crate::gear::winding_count::ShapeCountBoolean;
+use crate::geom::range::LineRange;
+use crate::tile::column::TileColumn;
+use crate::tile::layout::TileLayout;
+use crate::tile::source::GeometrySource;
+use crate::tile::tilemap::TileMap;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use i_float::int::point::IntPoint;
 use i_shape::int::shape::IntContour;
-use crate::geom::range::LineRange;
-use crate::tile::layout::TileLayout;
-
-pub(super) struct TilePart {
-    pub(super) range: LineRange,
-    pub(super) count_hz: usize,
-    pub(super) count_vr: usize,
-    pub(super) count_dp: usize,
-    pub(super) count_dn: usize,
-}
 
 pub(super) struct TileMapper {
     pub(super) layout: TileLayout,
@@ -48,9 +51,10 @@ impl TileMapper {
         for &pi in contour.iter() {
             if pi.x == p0.x {
                 // vertical
-                let index = self.layout.index(pi.x);
-                unsafe {
-                    *self.vr_parts.get_unchecked_mut(index) += 1;
+                if let Some(index) = self.layout.index_exclude_border(pi.x) {
+                    unsafe {
+                        *self.vr_parts.get_unchecked_mut(index) += 1;
+                    }
                 }
             } else {
                 if let Some((i0, i1)) = self.layout.indices_by_xx(p0.x, pi.x) {
@@ -85,34 +89,252 @@ impl TileMapper {
             p0 = pi;
         }
     }
+}
 
-    pub(crate) fn iter_by_parts(&self) -> impl Iterator<Item = TilePart> {
-        let (hz, vr, dp, dn) = (
-            &self.hz_parts[..],
-            &self.vr_parts[..],
-            &self.dp_parts[..],
-            &self.dn_parts[..],
-        );
-        debug_assert!(hz.len() == vr.len()
-            && hz.len() == dp.len()
-            && hz.len() == dn.len());
+impl TileMap {
 
-        let n = hz.len();
-        let mut x0 = self.layout.range.min;
-        let s = self.layout.step() as i32;
-        (0..n).map(move |i| {
+    #[inline]
+    pub(super) fn pre_init_columns(&mut self, mapper: &TileMapper) {
+        let mut x0 = mapper.layout.range.min;
+        let s = mapper.layout.step() as i32;
+
+        self.columns.reserve(mapper.vr_parts.len());
+
+        for (((&vr, &hz), &dp), &dn) in mapper
+            .vr_parts
+            .iter()
+            .zip(mapper.hz_parts.iter())
+            .zip(mapper.dp_parts.iter())
+            .zip(mapper.dn_parts.iter())
+        {
             let x1 = x0 + s;
             let range = LineRange::with_min_max(x0, x1);
             x0 = x1;
-            unsafe {
-                TilePart {
+
+            let source = GeometrySource {
+                vr_list: Vec::with_capacity(vr),
+                hz_list: Vec::with_capacity(hz),
+                dp_list: Vec::with_capacity(dp),
+                dn_list: Vec::with_capacity(dn),
+            };
+
+            self.columns.push(TileColumn { range, source });
+        }
+    }
+
+    pub(super) fn add_contours(
+        &mut self,
+        contours: &[IntContour],
+        shape_type: ShapeType,
+        layout: &TileLayout,
+    ) -> Result<(), OverlayError> {
+        let (direct, invert) = ShapeCountBoolean::with_shape_type(shape_type);
+
+        for contour in contours.iter() {
+            self.add_contour(layout, contour, direct, invert)?;
+        }
+
+        Ok(())
+    }
+
+    fn add_contour(
+        &mut self,
+        layout: &TileLayout,
+        contour: &[IntPoint],
+        direct: ShapeCountBoolean,
+        invert: ShapeCountBoolean,
+    ) -> Result<(), OverlayError> {
+        let iter = if let Some(result) = contour.segment_iter::<DropCollinear>() {
+            result
+        } else {
+            return Ok(());
+        };
+
+        for s in iter {
+            _ = self.add_segment(layout, s, direct, invert);
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn add_segment(
+        &mut self,
+        layout: &TileLayout,
+        segment: [IntPoint; 2],
+        direct: ShapeCountBoolean,
+        invert: ShapeCountBoolean,
+    ) {
+        if segment[0].x == segment[1].x {
+            self.add_vertical(layout, segment, direct, invert);
+        } else if segment[0].y == segment[1].y {
+            self.add_horizontal(layout, segment, direct, invert);
+        } else {
+            self.add_diagonal(layout, segment, direct, invert);
+        }
+    }
+
+    #[inline]
+    fn add_vertical(
+        &mut self,
+        layout: &TileLayout,
+        segment: [IntPoint; 2],
+        direct: ShapeCountBoolean,
+        invert: ShapeCountBoolean,
+    ) {
+        let x0 = segment[0].x;
+
+        if layout.is_border(x0) {
+            return;
+        }
+
+        // vertical
+        let (range, dir) = segment.y_range(direct, invert);
+
+        let index = layout.index(x0);
+        unsafe {
+            self.columns
+                .get_unchecked_mut(index)
+                .source
+                .vr_list
+                .push(Segment {
+                    pos: x0,
                     range,
-                    count_hz: *hz.get_unchecked(i),
-                    count_vr: *vr.get_unchecked(i),
-                    count_dp: *dp.get_unchecked(i),
-                    count_dn: *dn.get_unchecked(i),
-                }
+                    count: dir,
+                });
+        }
+    }
+
+    #[inline]
+    fn add_horizontal(
+        &mut self,
+        layout: &TileLayout,
+        segment: [IntPoint; 2],
+        direct: ShapeCountBoolean,
+        invert: ShapeCountBoolean,
+    ) {
+        let y0 = segment[0].y;
+
+        let (range, dir) = segment.x_range(direct, invert);
+        let (i0, i1) = layout.indices_by_range(range);
+
+        let mut x0 = range.min;
+
+        for index in i0..=i1 {
+            let xi = layout.left_border(index + 1);
+            unsafe {
+                self.columns
+                    .get_unchecked_mut(index)
+                    .source
+                    .hz_list
+                    .push(Segment {
+                        pos: y0,
+                        range: LineRange::with_min_max(x0, xi),
+                        count: dir,
+                    });
             }
-        })
+            x0 = xi
+        }
+
+        // add last
+        unsafe {
+            self.columns
+                .get_unchecked_mut(i1)
+                .source
+                .hz_list
+                .push(Segment {
+                    pos: y0,
+                    range: LineRange::with_min_max(x0, range.max),
+                    count: dir,
+                });
+        }
+    }
+
+    #[inline]
+    fn add_diagonal(
+        &mut self,
+        layout: &TileLayout,
+        segment: [IntPoint; 2],
+        direct: ShapeCountBoolean,
+        invert: ShapeCountBoolean,
+    ) {
+        let (a, b, dir) = segment.xy_range(direct, invert);
+        let (i0, i1) = layout.indices_by_range(LineRange::with_min_max(a.x, b.x));
+
+        let mut x0 = a.x;
+
+        if a.y < b.y {
+            // positive diagonal
+
+            let y0 = a.y;
+            let mut yi = y0;
+
+            for index in i0..i1 {
+                let xi = layout.left_border(index + 1);
+                let dx = xi.wrapping_sub(a.x);
+                unsafe {
+                    self.columns
+                        .get_unchecked_mut(index)
+                        .source
+                        .dp_list
+                        .push(Segment {
+                            pos: yi,
+                            range: LineRange::with_min_max(x0, xi),
+                            count: dir,
+                        });
+                }
+                yi = y0.wrapping_add(dx);
+                x0 = xi
+            }
+
+            // add last
+            unsafe {
+                self.columns
+                    .get_unchecked_mut(i1)
+                    .source
+                    .dp_list
+                    .push(Segment {
+                        pos: yi,
+                        range: LineRange::with_min_max(x0, b.x),
+                        count: dir,
+                    });
+            }
+        } else {
+            // negative diagonal
+
+            let y0 = b.y;
+            let mut yi = y0;
+
+            for index in i0..i1 {
+                let xi = layout.left_border(index + 1);
+                let dx = xi.wrapping_sub(a.x);
+                unsafe {
+                    self.columns
+                        .get_unchecked_mut(index)
+                        .source
+                        .dn_list
+                        .push(Segment {
+                            pos: yi,
+                            range: LineRange::with_min_max(x0, xi),
+                            count: dir,
+                        });
+                }
+                yi = y0.wrapping_sub(dx);
+                x0 = xi
+            }
+
+            // add last
+            unsafe {
+                self.columns
+                    .get_unchecked_mut(i1)
+                    .source
+                    .dn_list
+                    .push(Segment {
+                        pos: yi,
+                        range: LineRange::with_min_max(x0, b.x),
+                        count: dir,
+                    });
+            }
+        }
     }
 }

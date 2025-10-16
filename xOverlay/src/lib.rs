@@ -11,6 +11,8 @@ pub(crate) mod bind;
 mod gear;
 pub(crate) mod util;
 mod tile;
+mod deg_90;
+mod partition;
 
 pub use i_float;
 pub use i_shape;

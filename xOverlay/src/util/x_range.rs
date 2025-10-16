@@ -34,7 +34,7 @@ impl XRangeAndCount for [IntContour] {
             for contour in self.iter() {
                 for p in contour {
                     min_x = min_x.min(p.x);
-                    max_x = max_x.min(p.x);
+                    max_x = max_x.max(p.x);
                 }
                 count += contour.len();
             }

@@ -469,7 +469,7 @@ impl Segment {
         let tail = Self {
             pos: self.pos,
             range: LineRange::with_min_max(mid, self.range.max),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.max = mid;
@@ -482,7 +482,7 @@ impl Segment {
         let head = Self {
             pos: self.pos,
             range: LineRange::with_min_max(self.range.min, mid),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.min = mid;
@@ -496,7 +496,7 @@ impl Segment {
         let tail = Self {
             pos: mid_y,
             range: LineRange::with_min_max(mid, self.range.max),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.max = mid;
@@ -510,7 +510,7 @@ impl Segment {
         let head = Self {
             pos: self.pos,
             range: LineRange::with_min_max(self.range.min, mid),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.min = mid;
@@ -525,7 +525,7 @@ impl Segment {
         let tail = Self {
             pos: self.pos,
             range: LineRange::with_min_max(mid, self.range.max),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.max = mid;
@@ -540,7 +540,7 @@ impl Segment {
         let head = Self {
             pos: mid_y,
             range: LineRange::with_min_max(self.range.min, mid),
-            dir: self.dir,
+            count: self.count,
         };
 
         self.range.min = mid;

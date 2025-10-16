@@ -20,6 +20,15 @@ impl TileLayout {
     }
 
     #[inline(always)]
+    pub(super) fn index_exclude_border(&self, pos: i32) -> Option<usize> {
+        if self.is_border(pos) {
+            None
+        } else {
+            Some(self.index(pos))
+        }
+    }
+
+    #[inline(always)]
     pub(super) fn step(&self) -> usize {
         1 << self.power
     }
@@ -46,12 +55,28 @@ impl TileLayout {
     }
 
     #[inline(always)]
-    fn is_border(&self, x: i32) -> bool {
+    pub(super) fn is_border(&self, x: i32) -> bool {
         let dx = (x - self.range.min) as usize;
         dx & self.low_bits_mask == 0
     }
 
-    /*
+    #[inline(always)]
+    pub(super) fn indices_by_range(&self, range: LineRange) -> (usize, usize) {
+        let i0 = self.index(range.min);
+        let mut i1 = self.index(range.max);
+        if self.is_border(range.max) {
+            i1 -= 1;
+        }
+        (i0, i1)
+    }
+
+    #[inline(always)]
+    pub(super) fn left_border(&self, index: usize) -> i32 {
+        self.range.min + (index << self.power) as i32
+    }
+
+
+/*
         #[inline(always)]
         pub(crate) fn indices_by_range(&self, range: LineRange) -> (usize, usize) {
             let i0 = self.index(range.min);
