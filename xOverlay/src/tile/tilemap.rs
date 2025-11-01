@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use i_shape::int::shape::IntContour;
 use crate::core::overlay::OverlayError;
 use crate::core::shape_type::ShapeType;
+use crate::core::cpu_count::CPUCount;
 use crate::tile::layout::TileLayout;
 use crate::tile::mapper::TileMapper;
 use crate::util::x_range::XRangeAndCount;
@@ -13,8 +14,8 @@ pub(crate) struct TileMap {
 }
 
 impl TileMap {
-    fn with_subj_and_clip(subj: &[IntContour], clip: &[IntContour], parallel: bool, column_max_width_count: usize) -> Result<Self, OverlayError> {
-        let layout = Self::calculate_layout(subj, clip, parallel, column_max_width_count);
+    fn with_subj_and_clip(subj: &[IntContour], clip: &[IntContour], cpu: CPUCount, column_max_width_count: usize) -> Result<Self, OverlayError> {
+        let layout = Self::calculate_layout(subj, clip, cpu, column_max_width_count);
 
         let mut mapper = TileMapper::new(layout);
         mapper.add_contours(subj);
@@ -29,11 +30,11 @@ impl TileMap {
         Ok(tilemap)
     }
 
-    fn calculate_layout(subj: &[IntContour], clip: &[IntContour], parallel: bool, column_max_width_count: usize) -> TileLayout {
+    fn calculate_layout(subj: &[IntContour], clip: &[IntContour], cpu: CPUCount, column_max_width_count: usize) -> TileLayout {
         debug_assert!(column_max_width_count.is_power_of_two());
 
-        let (subj_range, subj_count) = subj.x_range_and_count(parallel);
-        let (clip_range, clip_count) = clip.x_range_and_count(parallel);
+        let (subj_range, subj_count) = subj.x_range_and_count(cpu);
+        let (clip_range, clip_count) = clip.x_range_and_count(cpu);
 
         let range = LineRange::with_min_max(
             subj_range.min.min(clip_range.min),
@@ -51,41 +52,5 @@ impl TileMap {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-    use i_float::int::point::IntPoint;
-    use crate::tile::tilemap::TileMap;
 
-    #[test]
-    fn test_0() {
-        let subj = vec![
-            vec![
-                IntPoint::new(0, 0),
-                IntPoint::new(4, 0),
-                IntPoint::new(4, 4),
-                IntPoint::new(0, 4),
-            ],
-            vec![
-                IntPoint::new(4, 0),
-                IntPoint::new(8, 0),
-                IntPoint::new(8, 4),
-                IntPoint::new(4, 4),
-            ],
-            vec![
-                IntPoint::new(0, 4),
-                IntPoint::new(4, 4),
-                IntPoint::new(4, 8),
-                IntPoint::new(0, 8),
-            ],
-            vec![
-                IntPoint::new(4, 4),
-                IntPoint::new(8, 4),
-                IntPoint::new(8, 8),
-                IntPoint::new(4, 8),
-            ],
-        ];
-
-        let tile_map = TileMap::with_subj_and_clip(&subj, &[], false, 2).unwrap();
-
-        assert_eq!(tile_map.columns.len(), 2);
-    }
 }

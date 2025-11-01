@@ -17,7 +17,7 @@ impl Overlay {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> OverlayGraph {
-        if self.solver.cpu_count() == 1 {
+        if self.cpu_count.count() == 1 {
             self.serial_process(fill_rule, overlay_rule)
         } else {
             self.parallel_process(fill_rule, overlay_rule)
@@ -39,7 +39,7 @@ impl Overlay {
             .par_iter_mut()
             .map(|s| s.process(fill_rule, overlay_rule)).collect();
 
-        OverlayGraph::new(self.solver.cpu_count(), SegmentsPack::with_packs(packs), self.options)
+        OverlayGraph::new(self.cpu_count.count(), SegmentsPack::with_packs(packs), self.options)
     }
 }
 
@@ -109,9 +109,9 @@ mod tests {
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay::Overlay;
     use crate::core::overlay_rule::OverlayRule;
-    use crate::core::solver::Solver;
     use alloc::vec;
     use i_float::int::point::IntPoint;
+    use crate::core::cpu_count::CPUCount;
 
     #[test]
     fn test_0() {
@@ -142,9 +142,9 @@ mod tests {
             ],
         ];
 
-        let solver = Solver::fixed(2);
+        let cpu_count = CPUCount::Fixed(2);
         let mut overlay =
-            Overlay::with_contours_custom(&subj, &[], Default::default(), solver).expect("create");
+            Overlay::with_contours_custom(&subj, &[], Default::default(), cpu_count).expect("create");
         let result = overlay.overlay(FillRule::EvenOdd, OverlayRule::Subject);
 
         assert_eq!(result.len(), 4);

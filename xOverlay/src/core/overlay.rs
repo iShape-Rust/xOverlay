@@ -1,7 +1,7 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::options::IntOverlayOptions;
 use crate::core::overlay_rule::OverlayRule;
-use crate::core::solver::Solver;
+use crate::core::cpu_count::CPUCount;
 use crate::gear::section::Section;
 use alloc::vec::Vec;
 use i_shape::flat::buffer::FlatContoursBuffer;
@@ -17,14 +17,14 @@ pub enum OverlayError {
 /// This struct is essential for describing and uploading the geometry or shapes required to construct an `OverlayGraph`. It prepares the necessary data for boolean operations.
 pub struct Overlay {
     pub options: IntOverlayOptions,
-    pub solver: Solver,
+    pub cpu_count: CPUCount,
     pub(crate) sections: Vec<Section>,
 }
 
 impl Overlay {
     #[inline]
     pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Result<Self, OverlayError> {
-        Self::with_contours_custom(subj, clip, Default::default(), Default::default())
+        Self::with_contours_custom(subj, clip, Default::default(), CPUCount::Auto)
     }
 
     #[inline]
@@ -32,9 +32,9 @@ impl Overlay {
         subj: &[IntContour],
         clip: &[IntContour],
         options: IntOverlayOptions,
-        solver: Solver,
+        cpu_count: CPUCount,
     ) -> Result<Self, OverlayError> {
-        Self::init_contours_custom(subj, clip, options, solver)
+        Self::init_contours_custom(subj, clip, options, cpu_count)
     }
 
     #[inline]

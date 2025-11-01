@@ -5,5 +5,5 @@ pub mod options;
 pub mod overlay_rule;
 pub mod shape_type;
 pub mod winding;
-pub mod solver;
+pub mod cpu_count;
 pub mod overlay;

@@ -1,19 +1,9 @@
-use alloc::vec;
 use alloc::vec::Vec;
-use i_float::int::point::IntPoint;
-use i_float::triangle::Triangle;
 use i_shape::flat::buffer::FlatContoursBuffer;
-use i_shape::int::path::ContourExtension;
-use i_shape::int::shape::{IntContour, IntShapes};
-use i_shape::int::simple::Simplify;
-use i_shape::util::reserve::Reserve;
-use crate::bind::segment::{ContourIndex, IdSegment};
-use crate::bind::solver::{JoinHoles, LeftBottomSegment};
-use crate::core::direction::ContourDirection;
 use crate::core::overlay_rule::OverlayRule;
-use crate::geom::v_segment::VSegment;
+use i_shape::int::shape::IntShapes;
+
 use crate::graph::data::OverlayGraph;
-use crate::graph::nearest_vector::NearestVector;
 
 impl OverlayGraph {
     /// Extracts shapes from the overlay graph based on the specified overlay rule. This method is used to retrieve the final geometric shapes after boolean operations have been applied. It's suitable for most use cases where the minimum area of shapes is not a concern.
@@ -46,17 +36,18 @@ impl OverlayGraph {
     /// - `overlay_rule`: The boolean operation rule to apply (e.g., union, intersection, xor).
     /// - `output`: A flat buffer to which the resulting valid contours will be written.
     #[inline]
-    pub fn extract_contours_into(&mut self, overlay_rule: OverlayRule, output: &mut FlatContoursBuffer) {
+    pub fn extract_contours_into(
+        &mut self,
+        overlay_rule: OverlayRule,
+        output: &mut FlatContoursBuffer,
+    ) {
         // let mut buffer = self.buffer.take().unwrap_or_default();
         // self.links.filter_by_overlay_into(overlay_rule, &mut buffer.visited);
         // self.extract_contours(overlay_rule, &mut buffer, output);
         // self.buffer = Some(buffer);
     }
 
-    fn extract(
-        &self,
-        overlay_rule: OverlayRule,
-    ) -> IntShapes {
+    fn extract(&self, overlay_rule: OverlayRule) -> IntShapes {
         // let clockwise = self.options.output_direction == ContourDirection::Clockwise;
         //
         // let mut shapes = Vec::new();
@@ -135,37 +126,33 @@ impl OverlayGraph {
     //     start_data: &StartPathData,
     //     clockwise: bool,
     // ) {
-        // let mut link_id = start_data.link_id;
-        // let mut node_id = start_data.node_id;
-        // let last_node_id = start_data.last_node_id;
-        //
-        // buffer.visited.visit(link_id);
-        // buffer.points.clear();
-        // buffer.points.push(start_data.begin);
-        //
-        // // Find a closed tour
-        // while node_id != last_node_id {
-        //     link_id = GraphUtil::next_link(
-        //         &self.links,
-        //         &self.nodes,
-        //         link_id,
-        //         node_id,
-        //         clockwise,
-        //         &buffer.visited,
-        //     );
-        //
-        //     let link = unsafe { self.links.get_unchecked(link_id) };
-        //     node_id = buffer.points.push_node_and_get_other(link, node_id);
-        //
-        //     buffer.visited.visit(link_id);
-        // }
+    // let mut link_id = start_data.link_id;
+    // let mut node_id = start_data.node_id;
+    // let last_node_id = start_data.last_node_id;
+    //
+    // buffer.visited.visit(link_id);
+    // buffer.points.clear();
+    // buffer.points.push(start_data.begin);
+    //
+    // // Find a closed tour
+    // while node_id != last_node_id {
+    //     link_id = GraphUtil::next_link(
+    //         &self.links,
+    //         &self.nodes,
+    //         link_id,
+    //         node_id,
+    //         clockwise,
+    //         &buffer.visited,
+    //     );
+    //
+    //     let link = unsafe { self.links.get_unchecked(link_id) };
+    //     node_id = buffer.points.push_node_and_get_other(link, node_id);
+    //
+    //     buffer.visited.visit(link_id);
+    // }
     // }
 
-    fn extract_contours(
-        &self,
-        overlay_rule: OverlayRule,
-        output: &mut FlatContoursBuffer
-    ) {
+    fn extract_contours(&self, overlay_rule: OverlayRule, output: &mut FlatContoursBuffer) {
         // let clockwise = self.options.output_direction == ContourDirection::Clockwise;
         // let len = buffer.visited.len();
         // buffer.points.reserve_capacity(len);

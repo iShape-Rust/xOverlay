@@ -1,4 +1,5 @@
 use crate::core::direction::ContourDirection;
+use crate::deg_90::config::ColumnConfig90;
 
 /// Configuration options for polygon Boolean operations using [`Overlay`].
 ///
@@ -7,32 +8,21 @@ use crate::core::direction::ContourDirection;
 /// direction, eliminate small artifacts, or retain collinear points.
 #[derive(Debug, Clone, Copy)]
 pub struct IntOverlayOptions {
-    /// Preserve collinear points in the input before Boolean operations.
-    pub preserve_input_collinear: bool,
-
     /// Desired direction for output contours (default outer: CCW / hole: CW).
     pub output_direction: ContourDirection,
 
     /// Preserve collinear points in the output after Boolean operations.
     pub preserve_output_collinear: bool,
 
-    /// Minimum area threshold to include a contour in the result.
-    pub min_output_area: u64,
-
-    pub avg_count_per_column: usize,
-
-    pub max_parts_count: usize,
+    pub columns_config: ColumnConfig90,
 }
 
 impl Default for IntOverlayOptions {
     fn default() -> Self {
         Self {
-            preserve_input_collinear: false,
             output_direction: ContourDirection::CounterClockwise,
             preserve_output_collinear: false,
-            min_output_area: 0,
-            avg_count_per_column: 1 * 1024,
-            max_parts_count: 102400,
+            columns_config: Default::default(),
         }
     }
 }
@@ -40,7 +30,6 @@ impl Default for IntOverlayOptions {
 impl IntOverlayOptions {
     pub fn keep_all_points() -> Self {
         let mut options = Self::default();
-        options.preserve_input_collinear = true;
         options.preserve_output_collinear = true;
         options
     }

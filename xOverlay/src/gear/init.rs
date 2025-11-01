@@ -1,7 +1,7 @@
 use crate::core::options::IntOverlayOptions;
 use crate::core::overlay::{Overlay, OverlayError};
 use crate::core::shape_type::ShapeType;
-use crate::core::solver::Solver;
+use crate::core::cpu_count::CPUCount;
 use crate::core::winding::WindingCount;
 use crate::gear::s_mapper::SMapper;
 use crate::gear::section::Section;
@@ -20,9 +20,9 @@ impl Overlay {
         subj: &[IntContour],
         clip: &[IntContour],
         options: IntOverlayOptions,
-        solver: Solver,
+        cpu_count: CPUCount,
     ) -> Result<Self, OverlayError> {
-        let layout = SLayout::with_subj_and_clip(subj, clip, solver.cpu_count());
+        let layout = SLayout::with_subj_and_clip(subj, clip, cpu_count.count());
 
         let mut mapper = SMapper::new(layout);
 
@@ -43,14 +43,14 @@ impl Overlay {
             sections.push(Section::new(
                 rect,
                 part,
-                options.avg_count_per_column,
-                options.max_parts_count,
+                100000,
+                200000,
             ))
         }
 
         let mut overlay = Self {
             options,
-            solver,
+            cpu_count,
             sections,
         };
 
@@ -341,7 +341,6 @@ mod tests {
     use crate::core::overlay::Overlay;
     use crate::core::shape_type::ShapeType;
     use crate::core::shape_type::ShapeType::Subject;
-    use crate::core::solver::Solver;
     use crate::core::winding::WindingCount;
     use crate::gear::segment::Segment;
     use crate::gear::winding_count::ShapeCountBoolean;
@@ -349,6 +348,7 @@ mod tests {
     use alloc::vec;
     use i_float::int::point::IntPoint;
     use std::collections::HashSet;
+    use crate::core::cpu_count::CPUCount;
 
     impl Segment {
         pub(crate) fn test_with_shape(z0: i32, z1: i32, pos: i32, shape: ShapeType) -> Self {
@@ -372,7 +372,7 @@ mod tests {
         ]];
 
         let overlay =
-            Overlay::with_contours_custom(&subj, &[], Default::default(), Solver::single())
+            Overlay::with_contours_custom(&subj, &[], Default::default(), CPUCount::Single)
                 .expect("valid path");
 
         assert_eq!(overlay.sections.len(), 1);
@@ -415,7 +415,7 @@ mod tests {
         ]];
 
         let overlay =
-            Overlay::with_contours_custom(&subj, &[], Default::default(), Solver::single())
+            Overlay::with_contours_custom(&subj, &[], Default::default(), CPUCount::Single)
                 .expect("valid path");
 
         assert_eq!(overlay.sections.len(), 1);
@@ -458,7 +458,7 @@ mod tests {
         ]];
 
         let overlay =
-            Overlay::with_contours_custom(&subj, &[], Default::default(), Solver::single())
+            Overlay::with_contours_custom(&subj, &[], Default::default(), CPUCount::Single)
                 .expect("valid path");
 
         assert_eq!(overlay.sections.len(), 1);

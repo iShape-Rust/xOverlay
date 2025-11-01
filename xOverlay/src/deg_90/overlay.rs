@@ -1,53 +1,44 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::options::IntOverlayOptions;
 use crate::core::overlay_rule::OverlayRule;
-use crate::core::solver::Solver;
-use crate::gear::section::Section;
+use crate::core::cpu_count::CPUCount;
 use alloc::vec::Vec;
-use i_shape::flat::buffer::FlatContoursBuffer;
-use i_shape::int::count::IntShapes;
-use i_shape::int::shape::IntContour;
-use crate::core::overlay::OverlayError;
+use i_shape::int::shape::{IntContour, IntShapes};
+use crate::deg_90::column_map::{Column, ColumnMap};
 
 /// This struct is essential for describing and uploading the geometry or shapes required to construct an `OverlayGraph`. It prepares the necessary data for boolean operations.
 pub struct Overlay90 {
-    pub options: IntOverlayOptions,
-    pub solver: Solver,
-    pub(crate) sections: Vec<Section>,
+    pub(super) options: IntOverlayOptions,
+    pub(super) cpus: CPUCount,
+    pub(super) columns: Vec<Column>,
 }
 
 impl Overlay90 {
-    // #[inline]
-    // pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Result<Self, OverlayError> {
-    //     Self::with_contours_custom(subj, clip, Default::default(), Default::default())
-    // }
-    //
-    // #[inline]
-    // pub fn with_contours_custom(
-    //     subj: &[IntContour],
-    //     clip: &[IntContour],
-    //     options: IntOverlayOptions,
-    //     solver: Solver,
-    // ) -> Result<Self, OverlayError> {
-    //     Self::init_contours_custom(subj, clip, options, solver)
-    // }
-    //
-    // #[inline]
-    // pub fn overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes {
-    //     self.process_overlay(fill_rule, overlay_rule)
-    //         .extract_shapes(overlay_rule)
-    // }
-    //
-    // #[inline]
-    // pub fn overlay_into(
-    //     &mut self,
-    //     fill_rule: FillRule,
-    //     overlay_rule: OverlayRule,
-    //     output: &mut FlatContoursBuffer,
-    // ) {
-    //     self.process_overlay(fill_rule, overlay_rule)
-    //         .extract_contours_into(overlay_rule, output);
-    // }
+    #[inline]
+    pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Self {
+        Self::with_contours_custom(subj, clip, CPUCount::Auto, Default::default())
+    }
+
+    #[inline]
+    pub fn with_contours_custom(
+        subj: &[IntContour],
+        clip: &[IntContour],
+        cpus: CPUCount,
+        options: IntOverlayOptions,
+    ) -> Self {
+        let map = ColumnMap::with_subj_and_clip(subj, clip, cpus, options.columns_config);
+        Self {
+            options,
+            cpus,
+            columns: map.columns,
+        }
+    }
+
+    #[inline]
+    pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes {
+        self.process_overlay(fill_rule, overlay_rule)
+            .extract_shapes(overlay_rule)
+    }
 }
 
 #[cfg(test)]

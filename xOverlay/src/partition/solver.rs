@@ -4,77 +4,52 @@ use crate::gear::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::partition::min_heap::PosMinHeap;
 use crate::partition::pos::Pos;
-use crate::partition::row::Row;
 use alloc::vec::Vec;
-use core::mem::swap;
 use i_key_sort::sort::two_keys::TwoKeysSort;
 
-pub(crate) struct PartitionSolver;
+pub(crate) trait Partition {
+    fn partition(&mut self) -> usize;
+}
 
-impl PartitionSolver {
-    fn split_overlaps(rows: &mut [Row], parallel: bool) {
-        if parallel {
-            #[cfg(feature = "allow_multithreading")]
-            {
-                use rayon::iter::ParallelIterator;
-                use rayon::prelude::IntoParallelRefMutIterator;
-
-                rows.par_iter_mut().for_each(|row| {
-                    let mut buffer = Vec::new();
-                    let mut line_solver = LineSolver {
-                        pos: 0,
-                        ends_heap: PosMinHeap::with_capacity(16),
-                    };
-                    row.split_overlaps(&mut buffer, &mut line_solver);
-                    swap(&mut row.segments, &mut buffer);
-                });
-                return;
-            }
-            #[cfg(not(feature = "allow_multithreading"))]
-            {
-                debug_assert!(
-                    false,
-                    "parallel partitioning requested without allow_multithreading feature"
-                );
-            }
+impl Partition for Vec<Segment> {
+    fn partition(&mut self) -> usize {
+        if self.is_empty() {
+            return 0;
         }
 
         let mut line_solver = LineSolver {
             pos: 0,
             ends_heap: PosMinHeap::with_capacity(16),
         };
+
         let mut buffer = Vec::new();
 
-        for row in rows {
-            row.split_overlaps(&mut buffer, &mut line_solver);
-            row.segments.clear();
-            row.segments.extend_from_slice(&buffer);
-        }
-    }
-}
-impl Row {
-    fn split_overlaps(&mut self, buffer: &mut Vec<Segment>, line_solver: &mut LineSolver) {
-        if self.segments.is_empty() {
-            return;
-        }
-        self.segments
-            .sort_by_two_keys_and_buffer(false, buffer, |s| s.pos, |s| s.range.min);
+        self.sort_by_two_keys_and_buffer(false, &mut buffer, |s| s.pos, |s| s.range.min);
 
         buffer.clear();
 
-        let n = self.segments.len();
+        let mut max_in_line = 0;
+
+        let n = self.len();
         let mut i = 0;
         while i < n {
             let start = i;
-            let pos = self.segments[i].pos;
+            let pos = self[i].pos;
             i += 1;
 
-            while i < n && self.segments[i].pos == pos {
+            while i < n && self[i].pos == pos {
                 i += 1;
             }
             line_solver.pos = pos;
-            line_solver.split(&self.segments[start..i], buffer);
+            let line_start = buffer.len();
+            line_solver.split(&self[start..i], &mut buffer);
+
+            max_in_line = max_in_line.max(buffer.len() - line_start);
         }
+
+        *self = buffer;
+
+        max_in_line
     }
 }
 
