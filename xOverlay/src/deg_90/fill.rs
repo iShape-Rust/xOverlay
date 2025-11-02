@@ -1,31 +1,22 @@
-use alloc::vec;
-use alloc::vec::Vec;
-use crate::fill::segment::{SegmentFill, NONE};
 use crate::core::fill_rule::FillRule;
+use crate::core::winding::WindingCount;
 use crate::deg_90::column_map::Column;
-use crate::fill::strategy::{EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy};
+use crate::fill::segment::{NONE, SegmentFill};
+use crate::fill::strategy::{
+    EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy,
+};
 use crate::fill::winding_count::ShapeCountBoolean;
-use crate::geom::range::LineRange;
+use crate::gear::segment::Segment;
+use alloc::vec::Vec;
+use core::mem::swap;
 
 impl Column {
-    pub(super) fn fill(
-        &self,
-        fill_rule: FillRule,
-        fill_buffer: FillBuffer,
-    ) -> Vec<SegmentFill> {
+    pub(super) fn fill(&self, fill_rule: FillRule, fill_buffer: FillBuffer) -> Vec<SegmentFill> {
         match fill_rule {
-            FillRule::EvenOdd => {
-                self.fill_with_strategy::<EvenOddStrategy>(fill_buffer)
-            }
-            FillRule::NonZero => {
-                self.fill_with_strategy::<NonZeroStrategy>(fill_buffer)
-            }
-            FillRule::Positive => {
-                self.fill_with_strategy::<PositiveStrategy>(fill_buffer)
-            }
-            FillRule::Negative => {
-                self.fill_with_strategy::<NegativeStrategy>(fill_buffer)
-            }
+            FillRule::EvenOdd => self.fill_with_strategy::<EvenOddStrategy>(fill_buffer),
+            FillRule::NonZero => self.fill_with_strategy::<NonZeroStrategy>(fill_buffer),
+            FillRule::Positive => self.fill_with_strategy::<PositiveStrategy>(fill_buffer),
+            FillRule::Negative => self.fill_with_strategy::<NegativeStrategy>(fill_buffer),
         }
     }
 
@@ -47,185 +38,416 @@ impl Column {
                 i += 1;
             }
             let line = &self.segments[start..i];
-
-
-            
         }
-
 
         result
     }
-
 }
 
-
-#[derive(Debug, Clone, Default)]
-pub(super) struct FillHz {
-    pub(super) index: u32,
-    pub(super) dir: ShapeCountBoolean,
-    pub(super) y: i32,
-    pub(super) x_range: LineRange,
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct Anchor {
+    x: i32,
+    count: ShapeCountBoolean,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct FillDg {
-    pub(super) index: u32,
-    pub(super) dir: ShapeCountBoolean,
-    pub(super) x_range: LineRange,
-    pub(super) min_y: i32,
+impl Anchor {
+    #[inline(always)]
+    fn add(&self, count: ShapeCountBoolean) -> Self {
+        Self {
+            x: self.x,
+            count: self.count + count,
+        }
+    }
 }
 
 struct FillBuffer {
-    // mapper: YMapper,
-    // hz_edges: Vec<FillHz>,
-    // dp_edges: Vec<FillDg>,
-    // dn_edges: Vec<FillDg>,
+    active: Vec<Anchor>,
+    buffer: Vec<Anchor>,
 }
-
-/*
-
 
 impl FillBuffer {
-    pub(super) fn new(split_buffer: crate::gear::split_buffer::SplitBuffer) -> Self {
+    fn with_capacity(capacity: usize) -> Self {
         Self {
-            hz_edges: Vec::with_capacity(split_buffer.hz_edges.len()),
-            dp_edges: Vec::with_capacity(split_buffer.dp_edges.len()),
-            dn_edges: Vec::with_capacity(split_buffer.dn_edges.len()),
-            mapper: split_buffer.mapper,
+            active: Vec::with_capacity(capacity),
+            buffer: Vec::with_capacity(capacity),
         }
     }
 
-    pub(super) fn add_hz_edges(&mut self, max_x: i32, slice: &[FillHz]) {
-        self.mapper.map_hz(slice);
-        self.hz_edges.resize(slice.len(), FillHz::default());
-        for hz in slice {
-            let map_index = self.mapper.next_hz_index(hz.y);
-            let left = hz.left_part(max_x);
-            unsafe {
-                *self.hz_edges.get_unchecked_mut(map_index) = left;
-            }
-        }
-
-        let mut start = 0;
-        for &count in self.mapper.hz_parts_count.iter() {
-            if count > 1 {
-                self.hz_edges[start..start + count].sort_unstable_by(|hz0, hz1|hz0.y.cmp(&hz1.y));
-            }
-            start += count;
-        }
-    }
-
-    pub(super) fn add_dp_edges(&mut self, max_x: i32, slice: &[FillDg]) {
-        self.mapper.map_dp(slice);
-        self.dp_edges.resize(slice.len(), FillDg::default());
-        for dp in slice {
-            let map_index = self.mapper.next_dp_index(dp.min_y);
-            let left = dp.left_part_dp(max_x);
-            unsafe {
-                *self.dp_edges.get_unchecked_mut(map_index) = left;
-            }
-        }
-    }
-
-    pub(super) fn add_dn_edges(&mut self, max_x: i32, slice: &[FillDg]) {
-        self.mapper.map_dn(slice);
-        self.dn_edges.resize(slice.len(), FillDg::default());
-        for dn in slice {
-            let map_index = self.mapper.next_dn_index(dn.min_y);
-            let left = dn.left_part_dn(max_x);
-            unsafe {
-                *self.dn_edges.get_unchecked_mut(map_index) = left;
-            }
-        }
-    }
-
-    pub(super) fn fill<F: FillStrategy<ShapeCountBoolean>>(
+    fn add_segments<F: FillStrategy<ShapeCountBoolean>>(
         &mut self,
-        max: i32,
-        start_vr: usize,
-        vr_segments: &[Segment],
-        source: &mut crate::gear::fill_source::FillSource,
-        buffer: &mut Vec<FillDg>,
-        count_buffer: &mut crate::gear::count_buffer::CountBuffer,
+        segments: &[Segment],
+        output: &mut Vec<SegmentFill>,
     ) {
-        count_buffer.reset(max);
+        // segments are always sorted by range.min and not overlap each other
+        // s(i).range.max <= s(i+1).range.min
+        // segment.count.is_not_empty() === true
+        // the segments not more < 100..200 elements
+        // the buffers in average much less than 1000 and close to segments.len
 
-        if self.dn_edges.len() > 1 {
-            self.dn_edges.sort_by_one_key_and_buffer(false, buffer, |s|s.min_y);
-        }
+        let mut iter = self.active.iter();
+        let mut anchor = if let Some(first) = iter.next() {
+            *first
+        } else {
+            self.active.init::<F>(segments, output);
+            return;
+        };
 
-        if self.dp_edges.len() > 1 {
-            self.dp_edges.sort_by_one_key_and_buffer(false, buffer, |s|s.min_y);
-        }
+        self.buffer.clear();
 
-        let mut i = 0;
-        let mut j = 0;
-        while i < self.hz_edges.len() {
-            let y0 = self.hz_edges[i].y;
-
-            // add all vr in range s.min < y0
-            while j < vr_segments.len() && vr_segments[j].range.min < y0 {
-                let vr = &vr_segments[j];
-                let fill = count_buffer.get_fill::<F>(vr.count, vr.pos);
-                let vr_index = start_vr + j;
-                unsafe {
-                    *source.vr.get_unchecked_mut(vr_index) = fill;
+        for (i, s) in segments.iter().enumerate() {
+            while anchor.x <= s.range.min {
+                self.buffer.add_or_merge(anchor);
+                if let Some(next) = iter.next() {
+                    anchor = *next;
+                } else {
+                    self.buffer.join(&segments[i..], output);
+                    self.buffer.remove_last_if_empty();
+                    swap(&mut self.active, &mut self.buffer);
+                    return;
                 }
-                j += 1;
             }
 
-            // add all hz with same y
-            while i < self.hz_edges.len() && self.hz_edges[i].y == y0 {
-                let hz = &self.hz_edges[i];
-                let fill = count_buffer.add_hz::<F, FillHz>(hz);
-                let hz_index = hz.index as usize;
-                if hz_index < source.hz.len() {
-                    source.hz[hz_index] = fill;
+            self.buffer.add_or_merge(Anchor {
+                x: s.range.min,
+                count: anchor.count,
+            });
+
+            while anchor.x <= s.range.max {
+                self.buffer.add_or_merge(anchor.add(s.count));
+                if let Some(next) = iter.next() {
+                    anchor = *next;
+                } else {
+                    let fill = if anchor.x == s.range.max {
+                        let (top, fill) = F::add_and_fill(s.count, anchor.count);
+                        self.buffer.last_mut().unwrap().count = top;
+                        fill
+                    } else {
+                        let (top, fill) = F::add_and_fill(s.count, ShapeCountBoolean::empty());
+                        self.buffer.add_or_merge(Anchor {
+                            x: s.range.max,
+                            count: top,
+                        });
+                        fill
+                    };
+
+                    output.push(fill);
+                    let i1 = i + 1;
+                    if i1 < segments.len() {
+                        self.buffer.join(&segments[i..], output);
+                    }
+
+                    self.buffer.remove_last_if_empty();
+                    swap(&mut self.active, &mut self.buffer);
+                    return;
                 }
-
-                i += 1;
             }
+
+            // s.range.max < anchor.x
+            let (top, fill) = F::add_and_fill(s.count, anchor.count);
+            self.buffer.add_or_merge(Anchor {
+                x: s.range.max,
+                count: top,
+            });
+            output.push(fill);
         }
 
-        while j < vr_segments.len() {
-            let vr = &vr_segments[j];
-            let (_, fill) = F::add_and_fill(vr.count, ShapeCountBoolean::empty());
-            let vr_index = start_vr + j;
-            unsafe {
-                *source.vr.get_unchecked_mut(vr_index) = fill;
-            }
-            j += 1;
-        }
+        self.buffer.add_or_merge(anchor);
+        self.buffer.extend(iter);
+        self.buffer.remove_last_if_empty();
+        swap(&mut self.active, &mut self.buffer);
     }
 }
 
-impl FillHz {
+trait AnchorBuffer {
+    fn add_or_merge(&mut self, anchor: Anchor);
+    fn remove_last_if_empty(&mut self);
+    fn join(&mut self, segments: &[Segment], output: &mut Vec<SegmentFill>);
+    fn init<F: FillStrategy<ShapeCountBoolean>>(&mut self, segments: &[Segment], output: &mut Vec<SegmentFill>);
+}
+
+impl AnchorBuffer for Vec<Anchor> {
     #[inline(always)]
-    pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
-        Self {
-            index: index as u32,
-            dir: segment.count,
-            y: segment.pos,
-            x_range: segment.range,
+    fn add_or_merge(&mut self, anchor: Anchor) {
+        if let Some(last) = self.last_mut() {
+            if last.count == anchor.count {
+                last.x = anchor.x;
+                return;
+            }
         }
+        self.push(anchor);
     }
 
     #[inline(always)]
-    fn left_part(&self, max_x: i32) -> Self {
-        if self.x_range.max <= max_x {
-            return self.clone();
+    fn remove_last_if_empty(&mut self) {
+        if let Some(last) = self.last() {
+            if last.count.is_empty() {
+                self.pop();
+            }
+        }
+    }
+
+    #[inline]
+    fn join(&mut self, segments: &[Segment], output: &mut Vec<SegmentFill>) {
+        for s in segments {
+            self.push(Anchor {
+                x: s.range.min,
+                count: ShapeCountBoolean::empty(),
+            });
+            self.push(Anchor {
+                x: s.range.max,
+                count: s.count,
+            });
+            output.push(NONE);
+        }
+    }
+    #[inline]
+    fn init<F: FillStrategy<ShapeCountBoolean>>(&mut self, segments: &[Segment], output: &mut Vec<SegmentFill>) {
+        self.clear();
+        let capacity = 2 * segments.len() + 1;
+        self.reserve(capacity);
+        let mut x0 = i32::MAX;
+        for s in segments {
+            debug_assert!(s.count.is_not_empty());
+            let a1 = Anchor {
+                x: s.range.max,
+                count: s.count,
+            };
+
+            if s.range.min != x0 {
+                let a0 = Anchor {
+                    x: s.range.min,
+                    count: ShapeCountBoolean::empty(),
+                };
+                self.push(a0);
+                self.push(a1);
+            } else {
+                self.add_or_merge(a1);
+            }
+
+            output.push(F::fill(s.count, ShapeCountBoolean::empty()));
+
+            x0 = s.range.max;
         }
 
-        Self {
-            index: self.index,
-            dir: self.dir,
-            y: self.y,
-            x_range: LineRange {
-                min: self.x_range.min,
-                max: max_x,
+        debug_assert!(self.len() <= capacity);
+        self.remove_last_if_empty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::winding::WindingCount;
+    use crate::deg_90::fill::{Anchor, FillBuffer};
+    use crate::fill::segment::{SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
+    use crate::fill::strategy::NonZeroStrategy;
+    use crate::fill::winding_count::ShapeCountBoolean;
+    use crate::gear::segment::Segment;
+    use crate::geom::range::LineRange;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn test_0() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(2, 4),
+            count: ShapeCountBoolean::new(1, 0),
+        }];
+        buffer.add_segments::<NonZeroStrategy>(&line, &mut output);
+
+        assert_eq!(line.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+    }
+
+    #[test]
+    fn test_1() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line_0 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(2, 4),
+            count: ShapeCountBoolean::new(1, 0),
+        }];
+        let line_1 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(2, 4),
+            count: ShapeCountBoolean::new(-1, 0),
+        }];
+        buffer.add_segments::<NonZeroStrategy>(&line_0, &mut output);
+        buffer.add_segments::<NonZeroStrategy>(&line_1, &mut output);
+
+        assert!(buffer.active.is_empty());
+        assert_eq!(line_0.len() + line_1.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+        assert_eq!(output[1], SUBJ_BOTTOM);
+    }
+
+    #[test]
+    fn test_2() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line_0 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(1, 7),
+            count: ShapeCountBoolean::new(1, 0),
+        }];
+        let line_1 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(2, 6),
+            count: ShapeCountBoolean::new(1, 0),
+        }];
+        buffer.add_segments::<NonZeroStrategy>(&line_0, &mut output);
+        buffer.add_segments::<NonZeroStrategy>(&line_1, &mut output);
+
+        assert_eq!(
+            &buffer.active,
+            &[
+                Anchor {
+                    x: 1,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 2,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+                Anchor {
+                    x: 6,
+                    count: ShapeCountBoolean::new(2, 0)
+                },
+                Anchor {
+                    x: 7,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+            ]
+        );
+        assert_eq!(line_0.len() + line_1.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+        assert_eq!(output[1], SUBJ_BOTH);
+    }
+
+    #[test]
+    fn test_3() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line_0 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(1, 7),
+            count: ShapeCountBoolean::new(1, 0),
+        }];
+        let line_1 = [Segment {
+            pos: 0,
+            range: LineRange::with_min_max(2, 6),
+            count: ShapeCountBoolean::new(-1, 0),
+        }];
+        buffer.add_segments::<NonZeroStrategy>(&line_0, &mut output);
+        buffer.add_segments::<NonZeroStrategy>(&line_1, &mut output);
+
+        assert_eq!(
+            &buffer.active,
+            &[
+                Anchor {
+                    x: 1,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 2,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+                Anchor {
+                    x: 6,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 7,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+            ]
+        );
+        assert_eq!(line_0.len() + line_1.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+        assert_eq!(output[1], SUBJ_BOTTOM);
+    }
+
+    #[test]
+    fn test_4() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line = [
+            Segment {
+                pos: 0,
+                range: LineRange::with_min_max(1, 2),
+                count: ShapeCountBoolean::new(1, 0),
             },
-        }
+            Segment {
+                pos: 0,
+                range: LineRange::with_min_max(3, 4),
+                count: ShapeCountBoolean::new(1, 0),
+            },
+        ];
+
+        buffer.add_segments::<NonZeroStrategy>(&line, &mut output);
+
+        assert_eq!(
+            &buffer.active,
+            &[
+                Anchor {
+                    x: 1,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 2,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+                Anchor {
+                    x: 3,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 4,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+            ]
+        );
+        assert_eq!(line.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+        assert_eq!(output[1], SUBJ_TOP);
+    }
+
+    #[test]
+    fn test_5() {
+        let mut buffer = FillBuffer::with_capacity(0);
+        let mut output = Vec::new();
+        let line = [
+            Segment {
+                pos: 0,
+                range: LineRange::with_min_max(0, 4),
+                count: ShapeCountBoolean::new(1, 0),
+            },
+            Segment {
+                pos: 0,
+                range: LineRange::with_min_max(4, 8),
+                count: ShapeCountBoolean::new(1, 0),
+            },
+        ];
+
+        buffer.add_segments::<NonZeroStrategy>(&line, &mut output);
+
+        assert_eq!(
+            &buffer.active,
+            &[
+                Anchor {
+                    x: 0,
+                    count: ShapeCountBoolean::new(0, 0)
+                },
+                Anchor {
+                    x: 8,
+                    count: ShapeCountBoolean::new(1, 0)
+                },
+            ]
+        );
+        assert_eq!(line.len(), output.len());
+        assert_eq!(output[0], SUBJ_TOP);
+        assert_eq!(output[1], SUBJ_TOP);
     }
 }
-
- */

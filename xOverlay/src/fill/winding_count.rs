@@ -1,5 +1,6 @@
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
+use core::ops;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct ShapeCountBoolean {
@@ -15,6 +16,10 @@ impl ShapeCountBoolean {
 }
 
 impl WindingCount for ShapeCountBoolean {
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.subj == 0 && self.clip == 0
+    }
     #[inline(always)]
     fn is_not_empty(&self) -> bool {
         self.subj != 0 || self.clip != 0
@@ -56,6 +61,30 @@ impl WindingCount for ShapeCountBoolean {
     fn sub(self, count: Self) -> Self {
         let subj = self.subj - count.subj;
         let clip = self.clip - count.clip;
+
+        Self { subj, clip }
+    }
+}
+
+impl ops::Add for ShapeCountBoolean {
+    type Output = ShapeCountBoolean;
+
+    #[inline(always)]
+    fn add(self, other: ShapeCountBoolean) -> ShapeCountBoolean {
+        let subj = self.subj + other.subj;
+        let clip = self.clip + other.clip;
+
+        Self { subj, clip }
+    }
+}
+
+impl ops::Sub for ShapeCountBoolean {
+    type Output = ShapeCountBoolean;
+
+    #[inline(always)]
+    fn sub(self, other: ShapeCountBoolean) -> ShapeCountBoolean {
+        let subj = self.subj - other.subj;
+        let clip = self.clip - other.clip;
 
         Self { subj, clip }
     }

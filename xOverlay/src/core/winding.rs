@@ -4,6 +4,7 @@ pub(crate) trait WindingCount
 where
     Self: Clone + Copy + Send + Eq,
 {
+    fn is_empty(&self) -> bool;
     fn is_not_empty(&self) -> bool;
     fn empty() -> Self;
     fn new(subj: i16, clip: i16) -> Self;

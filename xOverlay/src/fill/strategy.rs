@@ -22,7 +22,7 @@ impl FillStrategy<ShapeCountBoolean> for EvenOddStrategy {
         this: ShapeCountBoolean,
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
+        let top = bot + this;
         let fill = Self::fill(top, bot);
 
         (top, fill)
@@ -45,7 +45,7 @@ impl FillStrategy<ShapeCountBoolean> for NonZeroStrategy {
         this: ShapeCountBoolean,
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
+        let top = bot + this;
         let fill = Self::fill(top, bot);
 
         (top, fill)
@@ -68,7 +68,7 @@ impl FillStrategy<ShapeCountBoolean> for PositiveStrategy {
         this: ShapeCountBoolean,
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
+        let top = bot + this;
         let fill = Self::fill(top, bot);
         (top, fill)
     }
@@ -90,7 +90,7 @@ impl FillStrategy<ShapeCountBoolean> for NegativeStrategy {
         this: ShapeCountBoolean,
         bot: ShapeCountBoolean,
     ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot.add(this);
+        let top = bot + this;
         let fill = Self::fill(top, bot);
         (top, fill)
     }
