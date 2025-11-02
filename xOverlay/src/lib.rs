@@ -13,6 +13,7 @@ pub(crate) mod util;
 mod tile;
 mod deg_90;
 mod partition;
+mod fill;
 
 pub use i_float;
 pub use i_shape;

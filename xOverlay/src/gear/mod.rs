@@ -18,7 +18,6 @@ mod fill_source;
 mod prepare_segments;
 mod filter;
 mod graph;
-pub(crate) mod winding_count;
 mod s_layout;
 mod s_mapper;
 mod y_sub_mapper;

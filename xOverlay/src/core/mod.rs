@@ -1,5 +1,4 @@
 pub mod direction;
-pub mod fill;
 pub mod fill_rule;
 pub mod options;
 pub mod overlay_rule;

@@ -6,7 +6,12 @@ pub(super) struct SubGraph {
 
 impl SubGraph {
     pub(super) fn with_column(column: Column) -> Self {
-        Self {}
+        
+        
+        
+        Self {
+            
+        }
     }
 }
 

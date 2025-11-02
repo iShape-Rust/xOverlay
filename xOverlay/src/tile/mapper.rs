@@ -4,7 +4,7 @@ use crate::core::winding::WindingCount;
 use crate::gear::init::XYMinMaxRange;
 use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
 use crate::gear::segment::Segment;
-use crate::gear::winding_count::ShapeCountBoolean;
+use crate::fill::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::tile::column::TileColumn;
 use crate::tile::layout::TileLayout;

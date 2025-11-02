@@ -2,7 +2,7 @@ use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
 use crate::deg_90::layout::ColumnLayout;
 use crate::gear::segment::Segment;
-use crate::gear::winding_count::ShapeCountBoolean;
+use crate::fill::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::util::x_range::XRangeAndCount;
 use alloc::vec;

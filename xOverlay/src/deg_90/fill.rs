@@ -1,15 +1,63 @@
-use crate::gear::count_buffer::CountBuffer;
-use crate::gear::segment::Segment;
-use crate::gear::split_buffer::SplitBuffer;
-use crate::gear::y_mapper::YMapper;
-use crate::geom::diagonal::{Diagonal, NegativeDiagonal};
-use crate::geom::range::LineRange;
-use crate::fill::winding_count::ShapeCountBoolean;
+use alloc::vec;
 use alloc::vec::Vec;
-use i_key_sort::sort::one_key::OneKeySort;
-use crate::core::winding::WindingCount;
-use crate::fill::strategy::FillStrategy;
-use crate::gear::fill_source::FillSource;
+use crate::fill::segment::{SegmentFill, NONE};
+use crate::core::fill_rule::FillRule;
+use crate::deg_90::column_map::Column;
+use crate::fill::strategy::{EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy};
+use crate::fill::winding_count::ShapeCountBoolean;
+use crate::geom::range::LineRange;
+
+impl Column {
+    pub(super) fn fill(
+        &self,
+        fill_rule: FillRule,
+        fill_buffer: FillBuffer,
+    ) -> Vec<SegmentFill> {
+        match fill_rule {
+            FillRule::EvenOdd => {
+                self.fill_with_strategy::<EvenOddStrategy>(fill_buffer)
+            }
+            FillRule::NonZero => {
+                self.fill_with_strategy::<NonZeroStrategy>(fill_buffer)
+            }
+            FillRule::Positive => {
+                self.fill_with_strategy::<PositiveStrategy>(fill_buffer)
+            }
+            FillRule::Negative => {
+                self.fill_with_strategy::<NegativeStrategy>(fill_buffer)
+            }
+        }
+    }
+
+    fn fill_with_strategy<F: FillStrategy<ShapeCountBoolean>>(
+        &self,
+        mut fill_buffer: FillBuffer,
+    ) -> Vec<SegmentFill> {
+        let n = self.segments.len();
+
+        let mut result: Vec<SegmentFill> = Vec::with_capacity(n);
+
+        let mut i = 0;
+        while i < n {
+            let start = i;
+            let pos = self.segments[i].pos;
+            i += 1;
+
+            while i < n && self.segments[i].pos == pos {
+                i += 1;
+            }
+            let line = &self.segments[start..i];
+
+
+            
+        }
+
+
+        result
+    }
+
+}
+
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FillHz {
@@ -27,15 +75,18 @@ pub(super) struct FillDg {
     pub(super) min_y: i32,
 }
 
-pub(super) struct FillBuffer {
-    mapper: YMapper,
-    hz_edges: Vec<FillHz>,
-    dp_edges: Vec<FillDg>,
-    dn_edges: Vec<FillDg>,
+struct FillBuffer {
+    // mapper: YMapper,
+    // hz_edges: Vec<FillHz>,
+    // dp_edges: Vec<FillDg>,
+    // dn_edges: Vec<FillDg>,
 }
 
+/*
+
+
 impl FillBuffer {
-    pub(super) fn new(split_buffer: SplitBuffer) -> Self {
+    pub(super) fn new(split_buffer: crate::gear::split_buffer::SplitBuffer) -> Self {
         Self {
             hz_edges: Vec::with_capacity(split_buffer.hz_edges.len()),
             dp_edges: Vec::with_capacity(split_buffer.dp_edges.len()),
@@ -93,9 +144,9 @@ impl FillBuffer {
         max: i32,
         start_vr: usize,
         vr_segments: &[Segment],
-        source: &mut FillSource,
+        source: &mut crate::gear::fill_source::FillSource,
         buffer: &mut Vec<FillDg>,
-        count_buffer: &mut CountBuffer,
+        count_buffer: &mut crate::gear::count_buffer::CountBuffer,
     ) {
         count_buffer.reset(max);
 
@@ -177,47 +228,4 @@ impl FillHz {
     }
 }
 
-impl FillDg {
-    #[inline(always)]
-    pub(super) fn with_segment(index: usize, segment: &Segment) -> Self {
-        Self {
-            index: index as u32,
-            dir: segment.count,
-            x_range: segment.range,
-            min_y: segment.pos,
-        }
-    }
-
-    #[inline(always)]
-    fn left_part_dp(&self, max_x: i32) -> Self {
-        if self.x_range.max <= max_x {
-            return self.clone();
-        }
-
-        let x_range = LineRange::with_min_max(self.x_range.min, max_x);
-
-        Self {
-            index: self.index,
-            dir: self.dir,
-            x_range,
-            min_y: self.min_y,
-        }
-    }
-
-    #[inline(always)]
-    fn left_part_dn(&self, max_x: i32) -> Self {
-        if self.x_range.max <= max_x {
-            return self.clone();
-        }
-        let max_x = max_x;
-        let x_range = LineRange::with_min_max(self.x_range.min, max_x);
-        let min_y = NegativeDiagonal::new(self.x_range, self.min_y).find_y(max_x);
-
-        Self {
-            index: self.index,
-            dir: self.dir,
-            x_range,
-            min_y,
-        }
-    }
-}
+ */

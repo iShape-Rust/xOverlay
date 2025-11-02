@@ -13,12 +13,3 @@ pub const BOTH_TOP: SegmentFill = SUBJ_TOP | CLIP_TOP;
 pub const BOTH_BOTTOM: SegmentFill = SUBJ_BOTTOM | CLIP_BOTTOM;
 
 pub const ALL: SegmentFill = SUBJ_BOTH | CLIP_BOTH;
-
-pub(crate) trait FillStrategy<C> {
-    fn add_and_fill(this: C, bot: C) -> (C, SegmentFill);
-    fn fill(top: C, bot: C) -> SegmentFill;
-}
-
-pub(crate) trait InclusionFilterStrategy {
-    fn is_included(fill: SegmentFill) -> bool;
-}

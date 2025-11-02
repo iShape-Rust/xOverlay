@@ -1,5 +1,5 @@
-use crate::core::fill::{InclusionFilterStrategy, SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
-
+use crate::fill::segment::{SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
+use crate::fill::strategy::InclusionFilterStrategy;
 
 pub(super) struct SubjectFilter;
 pub(super) struct ClipFilter;

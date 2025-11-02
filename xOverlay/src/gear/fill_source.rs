@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use crate::core::fill::SegmentFill;
+use crate::fill::segment::SegmentFill;
 
 #[derive(Clone)]
 pub(super) struct FillSource {

@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use core::ops::Range;
 use i_float::int::point::IntPoint;
-use crate::core::fill::SegmentFill;
+use crate::fill::segment::SegmentFill;
 use crate::core::options::IntOverlayOptions;
 
 pub struct OverlayGraph {
