@@ -29,7 +29,7 @@ impl Overlay90 {
         let sub_graphs: Vec<_> = self
             .columns
             .into_iter()
-            .map(|s| s.process(fill_rule, overlay_rule, self.options.columns_config))
+            .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
         OverlayGraph::with_sub_graphs(sub_graphs)
@@ -40,7 +40,7 @@ impl Overlay90 {
         let sub_graphs: Vec<_> = self
             .columns
             .into_iter()
-            .map(|s| s.process(fill_rule, overlay_rule, self.options.columns_config))
+            .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
         OverlayGraph::with_sub_graphs(sub_graphs)

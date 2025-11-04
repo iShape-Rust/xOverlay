@@ -1,6 +1,5 @@
 use crate::fill::segment::NONE;
 use crate::core::fill_rule::FillRule;
-use crate::core::winding::WindingCount;
 use crate::gear::count_buffer::CountBuffer;
 use crate::gear::fill_buffer::{FillBuffer, FillDg, FillHz};
 use crate::gear::section::Section;

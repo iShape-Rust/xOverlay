@@ -21,7 +21,10 @@ impl CPUCount {
             }
         }
 
-        1
+        #[cfg(not(feature = "allow_multithreading"))]
+        {
+            1
+        }
     }
 
     #[inline]

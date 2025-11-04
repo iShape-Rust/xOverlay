@@ -1,5 +1,4 @@
 use crate::fill::segment::SegmentFill;
-use crate::core::winding::WindingCount;
 use crate::fill::winding_count::ShapeCountBoolean;
 
 pub(crate) trait FillStrategy<C> {
