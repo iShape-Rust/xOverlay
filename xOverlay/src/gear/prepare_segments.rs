@@ -1,16 +1,12 @@
-use crate::fill::segment::SegmentFill;
+use crate::definition::segment::SegmentFill;
 use crate::core::overlay_rule::OverlayRule;
 use crate::gear::fill_source::FillSource;
-use crate::gear::filter::{
-    ClipFilter, DifferenceFilter, IntersectFilter, InverseDifferenceFilter, SubjectFilter,
-    UnionFilter, XorFilter,
-};
+use crate::definition::filter::{ClipFilter, DifferenceFilter, FilterStrategy, IntersectFilter, InverseDifferenceFilter, SubjectFilter, UnionFilter, XorFilter};
 use crate::gear::section::Section;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal, PositiveDiagonal};
 use crate::geom::x_segment::XSegment;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use crate::fill::strategy::InclusionFilterStrategy;
 use crate::gear::process::SegmentsPack;
 
 #[derive(Clone, Copy)]
@@ -44,7 +40,7 @@ impl Section {
         }
     }
 
-    fn segments<F: InclusionFilterStrategy>(
+    fn segments<F: FilterStrategy>(
         &self,
         fill_source: FillSource,
     ) -> SegmentsPack {

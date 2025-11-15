@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
-use crate::fill::segment::SegmentFill;
+use crate::definition::segment::SegmentFill;
 use crate::core::winding::WindingCount;
-use crate::fill::strategy::FillStrategy;
+use crate::definition::fill::FillStrategy;
 use crate::gear::fill_buffer::FillHz;
 use crate::geom::range::LineRange;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 
 struct Anchor {
     pos: i32,

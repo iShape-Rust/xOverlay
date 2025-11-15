@@ -1,4 +1,4 @@
-use crate::fill::segment::SegmentFill;
+use crate::definition::segment::SegmentFill;
 use crate::core::fill_rule::FillRule;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;

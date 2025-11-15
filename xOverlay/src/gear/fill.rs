@@ -1,14 +1,14 @@
-use crate::fill::segment::NONE;
+use crate::definition::segment::NONE;
 use crate::core::fill_rule::FillRule;
 use crate::gear::count_buffer::CountBuffer;
 use crate::gear::fill_buffer::{FillBuffer, FillDg, FillHz};
 use crate::gear::section::Section;
 use crate::gear::segment::Segment;
 use crate::gear::x_mapper::XMapper;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 use alloc::vec;
 use alloc::vec::Vec;
-use crate::fill::strategy::{EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy};
+use crate::definition::fill::{EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy};
 use crate::gear::fill_source::FillSource;
 
 impl Section {
@@ -70,14 +70,14 @@ impl Section {
             let (x0, x1) = self.layout.borders(column_index);
             let max_x = self.layout.left_border(column_index + 1) - 1;
 
-            // get slices to new column data
+            // get slices to new column_graph data
 
             let vr_slice = &self.source.vr_list[start_vr..start_vr + part.count_vr];
             let hz_slice = &self.source.hz_list[start_hz..start_hz + part.count_hz];
             let dp_slice = &self.source.dp_list[start_dp..start_dp + part.count_dp];
             let dn_slice = &self.source.dn_list[start_dn..start_dn + part.count_dn];
 
-            // prepare column data
+            // prepare column_graph data
 
             // hz
             hz_buffer.clean_by_min_x(x0);
@@ -91,7 +91,7 @@ impl Section {
             dn_buffer.clean_by_min_x(x0);
             dn_buffer.add(start_dn, dn_slice);
 
-            // fill buffer
+            // definition buffer
             fill_buffer.add_hz_edges(x1 + 1, &hz_buffer);
             fill_buffer.add_dp_edges(x1 + 1, &dp_buffer);
             fill_buffer.add_dn_edges(x1 + 1, &dn_buffer);

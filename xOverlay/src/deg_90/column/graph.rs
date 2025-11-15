@@ -1,0 +1,25 @@
+use alloc::vec::Vec;
+use i_float::int::point::IntPoint;
+use crate::deg_90::column::link::Link;
+
+pub(super) struct Node {
+    pub(super) point: IntPoint,
+    pub(super) links: [Link; 4],
+}
+
+pub(super) struct ColumnGraph {
+    pub(super) nodes: Vec<Node>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::deg_90::column::link::LinkIndex;
+
+    #[test]
+    fn test_opposite() {
+        assert_eq!(LinkIndex::Left.opposite(), LinkIndex::Right);
+        assert_eq!(LinkIndex::Right.opposite(), LinkIndex::Left);
+        assert_eq!(LinkIndex::Up.opposite(), LinkIndex::Down);
+        assert_eq!(LinkIndex::Down.opposite(), LinkIndex::Up);
+    }
+}

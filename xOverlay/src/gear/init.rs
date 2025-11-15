@@ -8,7 +8,7 @@ use crate::gear::section::Section;
 use crate::gear::s_layout::SLayout;
 use crate::gear::seg_iter::{DropCollinear, SegmentIterable};
 use crate::gear::segment::Segment;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
@@ -343,7 +343,7 @@ mod tests {
     use crate::core::shape_type::ShapeType::Subject;
     use crate::core::winding::WindingCount;
     use crate::gear::segment::Segment;
-    use crate::fill::winding_count::ShapeCountBoolean;
+    use crate::definition::winding_count::ShapeCountBoolean;
     use crate::geom::range::LineRange;
     use alloc::vec;
     use i_float::int::point::IntPoint;

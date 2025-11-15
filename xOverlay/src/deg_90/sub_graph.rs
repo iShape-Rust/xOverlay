@@ -1,7 +1,7 @@
 use crate::deg_90::column_map::Column;
 
 pub(super) struct SubGraph {
-
+    
 }
 
 impl SubGraph {

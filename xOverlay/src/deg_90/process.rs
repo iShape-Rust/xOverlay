@@ -72,3 +72,15 @@ impl Column {
         Some(map.columns)
     }
 }
+#[cfg(test)]
+mod tests {
+    use crate::deg_90::column_map::Column;
+    use crate::deg_90::config::ColumnConfig90;
+
+    impl Column {
+        pub(crate) fn test_partition(&mut self, config: ColumnConfig90) {
+            let result = self.partition(config);
+            debug_assert!(result.is_none());
+        }
+    }
+}

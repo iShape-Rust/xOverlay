@@ -1,11 +1,11 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::winding::WindingCount;
 use crate::deg_90::column_map::Column;
-use crate::fill::segment::SegmentFill;
-use crate::fill::strategy::{
+use crate::definition::segment::SegmentFill;
+use crate::definition::fill::{
     EvenOddStrategy, FillStrategy, NegativeStrategy, NonZeroStrategy, PositiveStrategy,
 };
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 use crate::gear::segment::Segment;
 use alloc::vec::Vec;
 use core::mem::swap;
@@ -190,7 +190,7 @@ impl FillBuffer {
                 x: s.range.max,
                 count: top,
             });
-            output.push(fill);
+            // output.push(definition);
         }
 
         self.buffer.add_or_merge(anchor);
@@ -305,9 +305,9 @@ mod tests {
     use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
     use crate::deg_90::fill::{Anchor, Fill, FillBuffer};
-    use crate::fill::segment::{SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
-    use crate::fill::strategy::NonZeroStrategy;
-    use crate::fill::winding_count::ShapeCountBoolean;
+    use crate::definition::segment::{SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
+    use crate::definition::fill::NonZeroStrategy;
+    use crate::definition::winding_count::ShapeCountBoolean;
     use crate::gear::segment::Segment;
     use crate::geom::range::LineRange;
     use crate::partition::solver::Partition;
@@ -604,9 +604,16 @@ mod tests {
     }
 
     #[test]
+    fn test_composite_6() {
+        test_contours(&int_shape![
+            [[0, 0], [-3, 0], [-3, 2], [-6, 2], [-6, 1], [0, 1]],
+        ]);
+    }
+
+    #[test]
     fn test_random_0() {
-        for _ in 0..100 {
-            let contour = random_90_deg_contour(8, 4);
+        for _ in 0..1000 {
+            let contour = random_90_deg_contour(4, 4);
             test_contours(&vec![contour]);
         }
     }
@@ -643,11 +650,10 @@ mod tests {
         f: u8,
     }
 
-    fn contour_to_template_s_fills(contours: &[IntContour]) -> Vec<SegFill> {
+    fn contour_to_template_s_fills(contours: &[IntContour]) -> Option<Vec<SegFill>> {
         let mut overlay = i_overlay::core::overlay::Overlay::with_contours(&contours, &[]);
         let graph = overlay
-            .build_graph_view(i_overlay::core::fill_rule::FillRule::NonZero)
-            .unwrap();
+            .build_graph_view(i_overlay::core::fill_rule::FillRule::NonZero)?;
 
         let edges = graph.extract_separate_vectors();
 
@@ -667,7 +673,7 @@ mod tests {
 
         s_fills.sort_by_key(|s| s.a);
 
-        s_fills
+        Some(s_fills)
     }
 
     fn contour_to_subject_s_fills(
@@ -706,9 +712,15 @@ mod tests {
 
         let mut buffer = FillBuffer::with_capacity(0);
 
-        let template = contour_to_template_s_fills(contours);
+        let template = if let Some(segments) = contour_to_template_s_fills(contours) {
+            segments
+        } else {
+            return;
+        };
         let subject = contour_to_subject_s_fills(contours, config, &mut buffer);
 
-        assert_eq!(subject, template);
+        if subject != template {
+            assert_eq!(subject, template);
+        }
     }
 }

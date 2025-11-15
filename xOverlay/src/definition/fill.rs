@@ -1,13 +1,9 @@
-use crate::fill::segment::SegmentFill;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::segment::SegmentFill;
+use crate::definition::winding_count::ShapeCountBoolean;
 
 pub(crate) trait FillStrategy<C> {
     fn add_and_fill(this: C, bot: C) -> (C, SegmentFill);
     fn fill(top: C, bot: C) -> SegmentFill;
-}
-
-pub(crate) trait InclusionFilterStrategy {
-    fn is_included(fill: SegmentFill) -> bool;
 }
 
 pub(crate) struct EvenOddStrategy;

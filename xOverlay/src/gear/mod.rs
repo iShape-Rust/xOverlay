@@ -16,7 +16,6 @@ mod fill_buffer;
 mod count_buffer;
 mod fill_source;
 mod prepare_segments;
-mod filter;
 mod graph;
 mod s_layout;
 mod s_mapper;

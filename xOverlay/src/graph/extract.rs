@@ -66,7 +66,7 @@ impl OverlayGraph {
         //
         //     let left_top_link = GraphUtil::find_left_top_link(&self.links, &self.nodes, link_index, &buffer.visited);
         //     let link = unsafe { self.links.get_unchecked(left_top_link) };
-        //     let is_hole = overlay_rule.is_fill_top(link.fill);
+        //     let is_hole = overlay_rule.is_fill_top(link.definition);
         //
         //     let direction = is_hole == clockwise;
         //     let start_data = StartPathData::new(direction, link, left_top_link);
@@ -167,7 +167,7 @@ impl OverlayGraph {
         //
         //     let left_top_link = GraphUtil::find_left_top_link(&self.links, &self.nodes, link_index, &buffer.visited);
         //     let link = unsafe { self.links.get_unchecked(left_top_link) };
-        //     let is_hole = overlay_rule.is_fill_top(link.fill);
+        //     let is_hole = overlay_rule.is_fill_top(link.definition);
         //
         //     let direction = is_hole == clockwise;
         //     let start_data = StartPathData::new(direction, link, left_top_link);

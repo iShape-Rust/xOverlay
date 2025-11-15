@@ -1,6 +1,6 @@
 use crate::core::winding::WindingCount;
 use crate::gear::segment::Segment;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::partition::min_heap::PosMinHeap;
 use crate::partition::pos::Pos;
@@ -159,7 +159,7 @@ impl LineSolver {
 mod tests {
     use crate::core::winding::WindingCount;
     use crate::gear::segment::Segment;
-    use crate::fill::winding_count::ShapeCountBoolean;
+    use crate::definition::winding_count::ShapeCountBoolean;
     use crate::geom::range::LineRange;
     use crate::partition::min_heap::PosMinHeap;
     use crate::partition::solver::LineSolver;
@@ -289,4 +289,7 @@ mod tests {
         assert_eq!(result[2].range, LineRange::with_min_max(10, 15));
         assert_eq!(result[2].count, ShapeCountBoolean::new(1, 0));
     }
+
+
+
 }

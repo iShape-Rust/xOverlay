@@ -4,17 +4,17 @@ pub struct ColumnConfig90 {
     // invariant: >= 1
     pub(super) min_columns_count: usize,
 
-    // minimal column width in power-of-two form
+    // minimal column_graph width in power-of-two form
     // production: 7..8 (width 128..256)
-    // this is a *hard* lower bound for X-size of a column
+    // this is a *hard* lower bound for X-size of a column_graph
     pub(super) min_column_width_power: usize,
 
-    // how many segments we *want* to have per column, on average, max limit
+    // how many segments we *want* to have per column_graph, on average, max limit
     // used to *propose* number of columns from total segments
     // production: ~ 100_000
     pub(super) max_allow_segments_per_column: usize,
 
-    // how many segments we *want* to have per column, on average, min limit
+    // how many segments we *want* to have per column_graph, on average, min limit
     // used to *propose* number of columns from total segments
     // production: ~ 10_000
     pub(super) min_allowed_segments_per_column: usize,

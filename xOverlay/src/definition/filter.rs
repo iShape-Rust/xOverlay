@@ -1,57 +1,60 @@
-use crate::fill::segment::{SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
-use crate::fill::strategy::InclusionFilterStrategy;
+use crate::definition::segment::{SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
 
-pub(super) struct SubjectFilter;
-pub(super) struct ClipFilter;
-pub(super) struct IntersectFilter;
-pub(super) struct UnionFilter;
-pub(super) struct DifferenceFilter;
-pub(super) struct InverseDifferenceFilter;
-pub(super) struct XorFilter;
+pub(crate) trait FilterStrategy {
+    fn is_included(fill: SegmentFill) -> bool;
+}
 
-impl InclusionFilterStrategy for SubjectFilter {
+pub(crate) struct SubjectFilter;
+pub(crate) struct ClipFilter;
+pub(crate) struct IntersectFilter;
+pub(crate) struct UnionFilter;
+pub(crate) struct DifferenceFilter;
+pub(crate) struct InverseDifferenceFilter;
+pub(crate) struct XorFilter;
+
+impl FilterStrategy for SubjectFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_subject()
     }
 }
 
-impl InclusionFilterStrategy for ClipFilter {
+impl FilterStrategy for ClipFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_clip()
     }
 }
 
-impl InclusionFilterStrategy for IntersectFilter {
+impl FilterStrategy for IntersectFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_intersect()
     }
 }
 
-impl InclusionFilterStrategy for UnionFilter {
+impl FilterStrategy for UnionFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_union()
     }
 }
 
-impl InclusionFilterStrategy for DifferenceFilter {
+impl FilterStrategy for DifferenceFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_difference()
     }
 }
 
-impl InclusionFilterStrategy for InverseDifferenceFilter {
+impl FilterStrategy for InverseDifferenceFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_inverse_difference()
     }
 }
 
-impl InclusionFilterStrategy for XorFilter {
+impl FilterStrategy for XorFilter {
     #[inline(always)]
     fn is_included(fill: SegmentFill) -> bool {
         fill.is_xor()

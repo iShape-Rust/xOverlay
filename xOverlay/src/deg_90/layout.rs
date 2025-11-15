@@ -67,7 +67,7 @@ impl ColumnLayout {
 
         // 4) geometry bound:
         //    we cannot have more columns than we can physically fit
-        //    if the minimal column width is 2^min_column_width_power,
+        //    if the minimal column_graph width is 2^min_column_width_power,
         //    then width / min_step is the max number of columns we can place
         let width = (range.max - range.min) as usize;
         let min_step = 1usize << config.min_column_width_power;
@@ -86,14 +86,14 @@ impl ColumnLayout {
             .max(config.min_columns_count)
             .max(1);
 
-        // This is the "ideal" column width for that hint.
+        // This is the "ideal" column_graph width for that hint.
         let column_width = width.div_ceil(count_hint);
 
         // We store width as a power-of-two shift.
         // Here we ROUND DOWN to nearest power of two, but never below the config floor.
         let power = (column_width.ilog2() as usize).max(config.min_column_width_power);
 
-        // Final column count:
+        // Final column_graph count:
         // step = 1 << power
         // count = ceil(width / step)
         let count = (width.saturating_sub(1) >> power) + 1;
@@ -126,14 +126,14 @@ impl ColumnLayout {
             return None;
         }
 
-        // This is the "ideal" column width for that hint.
+        // This is the "ideal" column_graph width for that hint.
         let column_width = width.div_ceil(count_hint);
 
         // We store width as a power-of-two shift.
         // Here we ROUND DOWN to nearest power of two, but never below the config floor.
         let power = (column_width.ilog2() as usize).max(config.min_column_width_power);
 
-        // Final column count:
+        // Final column_graph count:
         // step = 1 << power
         // count = ceil(width / step)
         let count = (width.saturating_sub(1) >> power) + 1;

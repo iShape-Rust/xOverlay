@@ -32,14 +32,14 @@ impl Section {
         for (column_index, part) in map_by_columns.iter_by_parts().enumerate() {
             let (min_x, max_x) = self.layout.borders(column_index);
 
-            // get slices to new column data
+            // get slices to new column_graph data
 
             let vr_slice = &source_by_columns.vr_list[start_vr..start_vr + part.count_vr];
             let hz_slice = &source_by_columns.hz_list[start_hz..start_hz + part.count_hz];
             let dp_slice = &source_by_columns.dp_list[start_dp..start_dp + part.count_dp];
             let dn_slice = &source_by_columns.dn_list[start_dn..start_dn + part.count_dn];
 
-            // prepare column data
+            // prepare column_graph data
 
             // hz
             hz_buffer.clean_by_min_x(min_x);
@@ -53,7 +53,7 @@ impl Section {
             dn_buffer.clean_by_min_x(min_x);
             dn_buffer.add(start_dn, dn_slice);
 
-            // fill buffer
+            // definition buffer
             split_buffer.add_hz_edges(max_x, &hz_buffer);
             split_buffer.add_dp_edges(max_x, &dp_buffer);
             split_buffer.add_dn_edges(max_x, &dn_buffer);

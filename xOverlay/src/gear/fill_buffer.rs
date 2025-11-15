@@ -4,11 +4,11 @@ use crate::gear::split_buffer::SplitBuffer;
 use crate::gear::y_mapper::YMapper;
 use crate::geom::diagonal::{Diagonal, NegativeDiagonal};
 use crate::geom::range::LineRange;
-use crate::fill::winding_count::ShapeCountBoolean;
+use crate::definition::winding_count::ShapeCountBoolean;
 use alloc::vec::Vec;
 use i_key_sort::sort::one_key::OneKeySort;
 use crate::core::winding::WindingCount;
-use crate::fill::strategy::FillStrategy;
+use crate::definition::fill::FillStrategy;
 use crate::gear::fill_source::FillSource;
 
 #[derive(Debug, Clone, Default)]

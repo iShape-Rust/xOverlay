@@ -101,7 +101,7 @@ impl PosMinHeap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fill::winding_count::ShapeCountBoolean;
+    use crate::definition::winding_count::ShapeCountBoolean;
     use alloc::vec;
 
     fn make_pos(x: i32) -> Pos {
