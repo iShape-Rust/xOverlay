@@ -484,15 +484,16 @@ impl AnchorBuffer for Vec<Anchor> {
             let c1 = closing_count;
             let fill_v = Fill::fill(c0, c1);
             let incl_v = Filter::is_included(fill_v);
+            let p = IntPoint::new(s.range.max, s.pos);
 
             let this = if a0.x == s.range.max {
                 let this = a0.node as usize;
 
-                nodes[this].point = IntPoint::new(a0.x, s.pos);
+                nodes[this].point = p;
                 this
             } else {
                 let this = nodes.len();
-                nodes.push(Node::new(IntPoint::new(s.range.max, s.pos)));
+                nodes.push(Node::new(p));
                 this
             };
 
@@ -502,7 +503,7 @@ impl AnchorBuffer for Vec<Anchor> {
 
             if incl_v {
                 let top = nodes.create_top_and_connect(this as u32, fill_v);
-                self.push(Anchor::new(a0.x, top, c0));
+                self.push(Anchor::new(p.x, top, c0));
             }
         }
     }
