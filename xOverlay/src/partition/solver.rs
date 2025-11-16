@@ -58,7 +58,7 @@ fn fast_check(segments: &[Segment]) -> Option<usize> {
 
     let mut x0 = i32::MIN;
     for (i, s) in segments.iter().enumerate() {
-        if x0 > s.range.min {
+        if x0 >= s.range.min {
             let i0 = i.saturating_sub(1);
             return Some(i0);
         }
@@ -290,6 +290,32 @@ mod tests {
         assert_eq!(result[2].count, ShapeCountBoolean::new(1, 0));
     }
 
+    #[test]
+    fn test_4() {
+        let s0 = Segment {
+            pos: 0,
+            range: LineRange::with_min_max(0, 10),
+            count: ShapeCountBoolean::new(1, 0),
+        };
+        let s1 = Segment {
+            pos: 0,
+            range: LineRange::with_min_max(10, 20),
+            count: ShapeCountBoolean::new(1, 0),
+        };
+        let s2 = Segment {
+            pos: 0,
+            range: LineRange::with_min_max(20, 30),
+            count: ShapeCountBoolean::new(1, 0),
+        };
 
+        let mut solver = LineSolver {
+            pos: 0,
+            ends_heap: PosMinHeap::with_capacity(16),
+        };
+        let result = solver.test_split(&mut [s0, s1, s2]);
 
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].range, LineRange::with_min_max(0, 30));
+        assert_eq!(result[0].count, ShapeCountBoolean::new(1, 0));
+    }
 }

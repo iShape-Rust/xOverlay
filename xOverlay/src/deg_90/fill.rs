@@ -317,7 +317,7 @@ mod tests {
     use i_overlay::vector::edge::Reverse;
     use i_shape::int::path::IntPath;
     use i_shape::int::shape::{IntContour, IntShape};
-    use i_shape::{int_path, int_shape};
+    use i_shape::int_shape;
     use rand::Rng;
 
     #[test]
