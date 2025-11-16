@@ -118,6 +118,72 @@ struct CountAnchor {
     count: ShapeCountBoolean,
 }
 
+impl CountAnchor {
+    #[inline(always)]
+    fn new(x: i32, count: ShapeCountBoolean,) -> Self {
+        Self { x, count }
+    }
+}
+
+struct SegmentBoundaries<'a> {
+    segments: &'a [Segment],
+    index: usize,
+    emit_min: bool,
+}
+
+impl<'a> SegmentBoundaries<'a> {
+    #[inline(always)]
+    fn new(segments: &'a [Segment]) -> Self {
+        Self {
+            segments,
+            index: 0,
+            emit_min: true,
+        }
+    }
+}
+
+impl<'a> Iterator for SegmentBoundaries<'a> {
+    type Item = CountAnchor;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < self.segments.len() {
+            let segment = &self.segments[self.index];
+
+            if self.emit_min {
+                if self.index > 0 {
+                    let prev_max = self.segments[self.index - 1].range.max;
+                    if segment.range.min == prev_max {
+                        self.emit_min = false;
+                        continue;
+                    }
+                }
+
+                self.emit_min = false;
+                return Some(CountAnchor {
+                    x: segment.range.min,
+                    count: ShapeCountBoolean::empty(),
+                });
+            }
+
+            self.emit_min = true;
+            let anchor = CountAnchor {
+                x: segment.range.max,
+                count: segment.count,
+            };
+            self.index += 1;
+            return Some(anchor);
+        }
+
+        if self.index == self.segments.len() {
+            self.index += 1;
+            Some(CountAnchor::new(i32::MIN, ShapeCountBoolean::empty()))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Anchor {
     x: i32,
@@ -302,34 +368,8 @@ impl AnchorBuffer for Vec<Anchor> {
                 .map_or(true, |last| last.x < segments[0].range.min)
         );
 
-        let mut cnt_buffer = Vec::new();
-
-        let mut prev_node_x = i32::MAX;
-        for s in segments {
-            if prev_node_x != s.range.min {
-                cnt_buffer.push(CountAnchor {
-                    x: s.range.min,
-                    count: ShapeCountBoolean::empty(),
-                });
-            }
-            cnt_buffer.push(CountAnchor {
-                x: s.range.max,
-                count: s.count,
-            });
-            prev_node_x = s.range.max;
-        }
-
-        // empty end
-        cnt_buffer.push(CountAnchor {
-            x: i32::MIN,
-            count: ShapeCountBoolean::empty(),
-        });
-
-        // first prev node is always empty
-        let mut prev_node = u32::MAX;
-
-        let mut cnt_iter = cnt_buffer.iter();
-        let mut a0 = if let Some(first) = cnt_iter.next() {
+        let mut boundaries = SegmentBoundaries::new(segments);
+        let mut a0 = if let Some(first) = boundaries.next() {
             first
         } else {
             return;
@@ -337,9 +377,10 @@ impl AnchorBuffer for Vec<Anchor> {
 
         let mut fill_0 = Fill::fill(a0.count, ShapeCountBoolean::empty());
         let mut incl_0 = Filter::is_included(fill_0);
+        let mut left_open_node = u32::MAX;
         let y = segments.first().map_or(i32::MAX, |s| s.pos);
 
-        for a1 in cnt_iter {
+        for a1 in boundaries {
             let c0 = a0.count;
             let c1 = a1.count;
 
@@ -350,28 +391,26 @@ impl AnchorBuffer for Vec<Anchor> {
             let incl_v = Filter::is_included(fill_v);
 
             if incl_0 || incl_1 {
-                let this = nodes.len();
+                let this = nodes.len() as u32;
                 nodes.push(Node::new(IntPoint::new(a0.x, y)));
 
                 if incl_0 {
-                    nodes[this].set_link(Link::new(prev_node, fill_0), LinkIndex::Left);
+                    nodes.left_right_connect(left_open_node, this, fill_0);
                 }
 
                 if incl_v {
-                    let top = nodes.create_top_and_connect(this as u32, fill_v);
+                    let top = nodes.create_top_and_connect(this, fill_v);
                     self.push(Anchor::new(a0.x, top, a0.count));
                 }
 
                 if incl_1 {
-                    let next_node = nodes.len() as u32;
-                    nodes[this].set_link(Link::new(next_node, fill_1), LinkIndex::Right);
-                    prev_node = this as u32;
+                    fill_0 = fill_1;
+                    left_open_node = this;
                 }
             }
 
-            fill_0 = fill_1;
-            incl_0 = incl_1;
             a0 = a1;
+            incl_0 = incl_1;
         }
 
         debug_assert!(self.last().map_or(true, |last| !last.count.is_empty()));
