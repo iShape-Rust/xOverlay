@@ -269,12 +269,18 @@ impl ScanBuffer {
                 j += 1;
             }
 
-            let closing_count = self
-                .active
-                .get(j)
-                .map_or(ShapeCountBoolean::empty(), |a| a.count);
-            self.buffer
-                .add_anchors::<Fill, Filter>(s, &self.active[j0..j], closing_count, nodes);
+            let end_count = if j < self.active.len() {
+                self.active[j].count
+            } else {
+                ShapeCountBoolean::empty()
+            };
+
+            self.buffer.add_anchors::<Fill, Filter>(
+                s,
+                &self.active[j0..j],
+                end_count,
+                nodes
+            );
 
             i += 1;
         }
@@ -333,7 +339,7 @@ trait AnchorBuffer {
         &mut self,
         segment: &Segment,
         anchors: &[Anchor],
-        closing_count: ShapeCountBoolean,
+        end_count: ShapeCountBoolean,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
@@ -420,7 +426,7 @@ impl AnchorBuffer for Vec<Anchor> {
         &mut self,
         s: &Segment,
         anchors: &[Anchor],
-        closing_count: ShapeCountBoolean,
+        end_count: ShapeCountBoolean,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
@@ -433,31 +439,29 @@ impl AnchorBuffer for Vec<Anchor> {
         debug_assert!(a0.x <= s.range.max);
 
         let mut i = 0;
-        let mut c0 = ShapeCountBoolean::empty();
+        let mut c0 = a0.count;
         let mut fill_0 = NONE;
         let mut incl_0 = false;
         let mut prev = usize::MAX;
 
         if s.range.min < a0.x {
-            let c1 = s.count + a0.count;
+            let cb = c0;
+            let c1 = cb + s.count;
 
-            let fill_1 = Fill::fill(c1, ShapeCountBoolean::empty());
+            let fill_1 = Fill::fill(c1, cb);
             let incl_1 = Filter::is_included(fill_1);
 
-            if incl_1 {
-                let fill_v = Fill::fill(c0, c1);
+            let fill_v = Fill::fill(c0, c1);
+            let incl_v = Filter::is_included(fill_v);
 
+            if incl_v {
                 let this = nodes.len();
                 let p = IntPoint::new(s.range.min, s.pos);
                 nodes.push(Node::new(p));
 
                 let top = nodes.create_top_and_connect(this as u32, fill_v);
-
                 prev = this;
-
-                self.push(Anchor::new(p.x, top, ShapeCountBoolean::empty()));
-            } else {
-                self.push(a0.clone());
+                self.push(Anchor::new(p.x, top, c0));
             }
             c0 = c1;
             fill_0 = fill_1;
@@ -470,7 +474,7 @@ impl AnchorBuffer for Vec<Anchor> {
 
         while a0.x < s.range.max {
             // bottom count
-            let cb = anchors.next_count(i, closing_count);
+            let cb = anchors.next_count(i, end_count);
             let c1 = cb + s.count;
 
             let fill_1 = Fill::fill(c1, cb);
@@ -520,7 +524,7 @@ impl AnchorBuffer for Vec<Anchor> {
         {
             // last node
 
-            let c1 = closing_count;
+            let c1 = end_count;
             let fill_v = Fill::fill(c0, c1);
             let incl_v = Filter::is_included(fill_v);
             let p = IntPoint::new(s.range.max, s.pos);
@@ -653,6 +657,26 @@ mod tests {
             [ 2, -2],
             [ 2,  2],
             [ 0,  2],
+        ]]);
+    }
+
+    #[test]
+    fn test_5() {
+        // cross
+        #[rustfmt::skip]
+        test_contours(&int_shape![[
+            [ -5,   5],
+            [-15,   5],
+            [-15,  -5],
+            [ -5,  -5],
+            [ -5, -15],
+            [  5, -15],
+            [  5,  -5],
+            [ 15,  -5],
+            [ 15,   5],
+            [  5,   5],
+            [  5,  15],
+            [ -5,  15],
         ]]);
     }
 
