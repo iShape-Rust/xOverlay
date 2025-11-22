@@ -114,74 +114,6 @@ impl Node {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct CountAnchor {
-    x: i32,
-    count: ShapeCountBoolean,
-}
-
-impl CountAnchor {
-    #[inline(always)]
-    fn new(x: i32, count: ShapeCountBoolean) -> Self {
-        Self { x, count }
-    }
-}
-
-struct SegmentBoundaries<'a> {
-    segments: &'a [Segment],
-    base: ShapeCountBoolean,
-    index: usize,
-    emit_min: bool,
-}
-
-impl<'a> SegmentBoundaries<'a> {
-    #[inline(always)]
-    fn new(base: ShapeCountBoolean, segments: &'a [Segment]) -> Self {
-        Self {
-            segments,
-            base,
-            index: 0,
-            emit_min: true,
-        }
-    }
-}
-
-impl<'a> Iterator for SegmentBoundaries<'a> {
-    type Item = CountAnchor;
-
-    #[inline(always)]
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.index < self.segments.len() {
-            let segment = &self.segments[self.index];
-
-            if self.emit_min {
-                if self.index > 0 {
-                    let prev_max = self.segments[self.index - 1].range.max;
-                    if segment.range.min == prev_max {
-                        self.emit_min = false;
-                        continue;
-                    }
-                }
-
-                self.emit_min = false;
-                return Some(CountAnchor::new(segment.range.min, self.base));
-            }
-
-            self.emit_min = true;
-            let anchor = CountAnchor::new(segment.range.max, segment.count + self.base);
-            self.index += 1;
-            return Some(anchor);
-        }
-
-        if self.index == self.segments.len() {
-            self.index += 1;
-            Some(CountAnchor::new(i32::MIN, self.base))
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Anchor {
     x: i32,
     node: Option<NonZeroU32>,
@@ -343,7 +275,7 @@ fn for_each_anchor(
         let c0 = a0.count;
         let cb = a0.count;
         let c1 = cb + s.count;
-        let cn = c0;
+        let cn = a0.count;
 
         f(
             &Anchor {
@@ -362,10 +294,9 @@ fn for_each_anchor(
         //         |
         //       f(a0)
 
-        let c0 = a0.count;
         let cb = ai.count;
         let c1 = cb + s.count;
-        let cn = c0 + s.count;
+        let cn = if a0.x == s.range.min { a0.count } else { a0.count + s.count };
 
         f(a0, cb, c1, cn);
         a0 = ai;
@@ -378,10 +309,9 @@ fn for_each_anchor(
         {
             // a0
 
-            let c0 = a0.count;
             let cb = end_count;
             let c1 = cb + s.count;
-            let cn = c0 + s.count;
+            let cn = if a0.x == s.range.min { a0.count } else { a0.count + s.count };
 
             f(a0, cb, c1, cn);
         }
@@ -394,13 +324,13 @@ fn for_each_anchor(
             let c1 = end_count;
             let cn = c0 + s.count;
 
-            let a0 = &Anchor {
+            let a = &Anchor {
                 x: s.range.max,
                 node: None,
                 count: c0,
             };
 
-            f(a0, cb, c1, cn);
+            f(a, cb, c1, cn);
         }
     } else {
         // --- max(a0)
@@ -414,6 +344,52 @@ fn for_each_anchor(
 
         f(a0, cb, c1, cn);
     }
+}
+
+fn for_each_boundaries(
+    base: ShapeCountBoolean,
+    segments: &[Segment],
+    mut f: impl FnMut(i32, ShapeCountBoolean, ShapeCountBoolean),
+) {
+    debug_assert!(!segments.is_empty());
+
+    let s0 = &segments[0];
+    let mut x = s0.range.min;
+
+    let mut c0 = base;
+    let mut c1;
+    {
+        // s0.min
+        c1 = s0.count + base;
+
+        f(x, c0, c1);
+        c0 = c1;
+    }
+
+    x = s0.range.max;
+
+    for s in segments.iter().skip(1) {
+        if x < s.range.min {
+            // close last segment
+            // s(prev).max
+
+            c1 = base;
+
+            f(x, c0, c1);
+        }
+        c0 = c1;
+
+        // start new segment
+        // s.min
+        c1 = s.count + base;
+
+        f(s.range.min, c0, c1);
+        x = s.range.max;
+        c0 = c1;
+    }
+
+    // close last segment
+    f(x, c0, base);
 }
 
 trait AnchorBuffer {
@@ -472,30 +448,19 @@ impl AnchorBuffer for Vec<Anchor> {
         Filter: FilterStrategy,
     {
         debug_assert!(!segments.is_empty());
-
-        let mut boundaries = SegmentBoundaries::new(base, segments);
-        let mut a0 = if let Some(first) = boundaries.next() {
-            first
-        } else {
-            return;
-        };
-
-        let mut left_cursor: Option<LeftCursor> = None;
         let y = segments.first().map_or(i32::MAX, |s| s.pos);
 
-        for a1 in boundaries {
-            let c0 = a0.count;
-            let c1 = a1.count;
+        let mut left_cursor: Option<LeftCursor> = None;
 
+        for_each_boundaries(base, segments, |x, c0, c1| {
             let up_fill = Fill::fill(c0, c1);
             let up_link = Filter::is_included(up_fill);
 
-            let p = IntPoint::new(a0.x, y);
             if up_link {
                 let this = nodes.len() as u32;
                 let up = this + 1;
 
-                let mut node = Node::new(p);
+                let mut node = Node::new(IntPoint::new(x, y));
                 node.set_link(Link::new(up, up_fill), LinkIndex::Up);
 
                 let mut top = Node::new(IntPoint::EMPTY);
@@ -521,13 +486,11 @@ impl AnchorBuffer for Vec<Anchor> {
                     });
                 };
 
-                self.push_and_merge(Anchor::new(a0.x, NonZeroU32::new(up), c0));
+                self.push_and_merge(Anchor::new(x, NonZeroU32::new(up), c0));
             } else {
-                self.push_and_merge(Anchor::new(a0.x, None, c0));
+                self.push_and_merge(Anchor::new(x, None, c0));
             }
-
-            a0 = a1;
-        }
+        });
 
         debug_assert!(self.last().map_or(true, |last| last.count != base));
     }
