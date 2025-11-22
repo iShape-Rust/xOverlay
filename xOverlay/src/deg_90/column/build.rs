@@ -8,7 +8,7 @@ use crate::definition::filter::{
     ClipFilter, DifferenceFilter, FilterStrategy, IntersectFilter, InverseDifferenceFilter,
     SubjectFilter, UnionFilter, XorFilter,
 };
-use crate::definition::segment::{NONE, SegmentFill};
+use crate::definition::segment::SegmentFill;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::graph::{ColumnGraph, Node};
 use crate::deg_90::column::link::{Link, LinkIndex};
@@ -16,6 +16,7 @@ use crate::deg_90::column_map::Column;
 use crate::gear::segment::Segment;
 use alloc::vec::Vec;
 use core::mem::swap;
+use core::num::NonZeroU32;
 use i_float::int::point::IntPoint;
 
 impl ColumnGraph {
@@ -183,15 +184,24 @@ impl<'a> Iterator for SegmentBoundaries<'a> {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Anchor {
     x: i32,
-    node: u32,
+    node: Option<NonZeroU32>,
     count: ShapeCountBoolean,
 }
 
 impl Anchor {
     #[inline(always)]
-    fn new(x: i32, node: u32, count: ShapeCountBoolean) -> Self {
-        Self { x, node, count }
+    fn new(x: i32, node: Option<NonZeroU32>, count: ShapeCountBoolean) -> Self {
+        Self {
+            x,
+            node,
+            count,
+        }
     }
+}
+
+struct LeftCursor {
+    node: u32,
+    fill: SegmentFill,
 }
 
 struct ScanBuffer {
@@ -226,20 +236,9 @@ impl ScanBuffer {
         let mut i = 0;
         let mut j = 0;
 
-        self.buffer.clear();
+        let mut left_node = None;
 
-        let mut cursor = Cursor {
-            node: 0,
-            point: IntPoint::EMPTY,
-            count: ShapeCountBoolean::empty(),
-            left_node: 0,
-            left_fill: 0,
-            left_link: false,
-            right_fill: 0,
-            right_link: false,
-            up_fill: 0,
-            up_link: false,
-        };
+        self.buffer.clear();
 
         while i < segments.len() && j < self.active.len() {
             if segments[i].range.max < self.active[j].x {
@@ -293,8 +292,13 @@ impl ScanBuffer {
                 ShapeCountBoolean::empty()
             };
 
-            self.buffer
-                .add_anchors::<Fill, Filter>(&mut cursor, s, &self.active[j0..j], end_count, nodes);
+            self.buffer.add_anchors::<Fill, Filter>(
+                s,
+                &self.active[j0..j],
+                end_count,
+                &mut left_node,
+                nodes,
+            );
 
             i += 1;
         }
@@ -326,114 +330,89 @@ fn for_each_anchor(
     s: &Segment,
     end_count: ShapeCountBoolean,
     anchors: &[Anchor],
-    mut f: impl FnMut(&Anchor, ShapeCountBoolean, ShapeCountBoolean),
+    mut f: impl FnMut(&Anchor, ShapeCountBoolean, ShapeCountBoolean, ShapeCountBoolean),
 ) {
     debug_assert!(!anchors.is_empty());
 
     let mut a0 = &anchors[0];
     if a0.x > s.range.min {
-        // not common point
+        // min --- a0
+        //  |
+        // f(min)
+
         let c0 = a0.count;
-        f(&Anchor {
-            x: s.range.min,
-            node: 0,
-            count: c0,
-        }, c0, c0 + s.count);
+        let cb = a0.count;
+        let c1 = cb + s.count;
+        let cn = c0;
+
+        f(
+            &Anchor {
+                x: s.range.min,
+                node: None,
+                count: c0,
+            },
+            cb,
+            c1,
+            cn,
+        );
     };
 
     for ai in anchors.iter().skip(1) {
-        f(a0, ai.count, ai.count + s.count);
+        // min --- a0 --- ai --- max
+        //         |
+        //       f(a0)
+
+        let c0 = a0.count;
+        let cb = ai.count;
+        let c1 = cb + s.count;
+        let cn = c0 + s.count;
+
+        f(a0, cb, c1, cn);
         a0 = ai;
     }
 
     if a0.x < s.range.max {
-        f(a0, a0.count, a0.count + s.count);
+        // --- a0 --- max
+        //     |       |
+        //    f(a0)  f(max)
+        {
+            // a0
 
-        f(&Anchor {
-            x: s.range.max,
-            node: 0,
-            count: end_count,
-        }, end_count, end_count);
+            let c0 = a0.count;
+            let cb = end_count;
+            let c1 = cb + s.count;
+            let cn = c0 + s.count;
+
+            f(a0, cb, c1, cn);
+        }
+
+        {
+            // max
+
+            let c0 = end_count;
+            let cb = end_count;
+            let c1 = end_count;
+            let cn = c0 + s.count;
+
+            let a0 = &Anchor {
+                x: s.range.max,
+                node: None,
+                count: c0,
+            };
+
+            f(a0, cb, c1, cn);
+        }
     } else {
-        f(a0, end_count, end_count);
-    }
-}
+        // --- max(a0)
+        //        |
+        //       f(a0)
 
-trait LinkNodes {
-    fn left_right_connect(&mut self, left: u32, right: u32, fill: SegmentFill);
-    fn create_top_and_connect(&mut self, this: u32, fill: SegmentFill) -> u32;
-}
+        let c0 = a0.count;
+        let cb = end_count;
+        let c1 = end_count;
+        let cn = c0 + s.count;
 
-impl LinkNodes for Vec<Node> {
-    #[inline(always)]
-    fn left_right_connect(&mut self, left: u32, right: u32, fill: SegmentFill) {
-        self[right as usize].set_link(Link::new(left, fill), LinkIndex::Left);
-        self[left as usize].set_link(Link::new(right, fill), LinkIndex::Right);
-    }
-
-    #[inline(always)]
-    fn create_top_and_connect(&mut self, this: u32, fill: SegmentFill) -> u32 {
-        let top = self.len() as u32;
-        let top_node = Node::with_link(Link::new(this, fill), LinkIndex::Down);
-        self.push(top_node);
-        self[this as usize].set_link(Link::new(top, fill), LinkIndex::Up);
-        top
-    }
-}
-
-struct Cursor {
-    node: u32,
-    point: IntPoint,
-    left_node: u32,
-    left_fill: SegmentFill,
-    left_link: bool,
-    right_fill: SegmentFill,
-    right_link: bool,
-    up_fill: SegmentFill,
-    up_link: bool,
-    count: ShapeCountBoolean,
-}
-
-impl Cursor {
-    fn save_if_required(&mut self, nodes: &mut Vec<Node>) -> Option<Anchor> {
-        if self.node == 0 {
-           return None;
-        }
-
-        nodes[self.node as usize].point = self.point;
-
-        if self.left_link {
-            nodes.left_right_connect(self.left_node, self.node, self.left_fill);
-        }
-
-        if self.up_link {
-            let up_node = nodes.create_top_and_connect(self.node, self.up_fill);
-            Some(Anchor::new(self.point.x, up_node, self.count))
-        } else {
-            None
-        }
-    }
-
-    fn move_right(
-        &mut self,
-        node: u32,
-        point: IntPoint,
-        count: ShapeCountBoolean,
-        right_fill: SegmentFill,
-        right_link: bool,
-        up_fill: SegmentFill,
-        up_link: bool
-    ) {
-        self.left_node = self.node;
-        self.left_link = self.right_link;
-        self.left_fill = self.right_fill;
-        self.node = node;
-        self.point = point;
-        self.count = count;
-        self.right_link = right_link;
-        self.right_fill = right_fill;
-        self.up_fill = up_fill;
-        self.up_link = up_link;
+        f(a0, cb, c1, cn);
     }
 }
 
@@ -452,10 +431,10 @@ trait AnchorBuffer {
         Filter: FilterStrategy;
     fn add_anchors<Fill, Filter>(
         &mut self,
-        cursor: &mut Cursor,
         segment: &Segment,
         anchors: &[Anchor],
         end_count: ShapeCountBoolean,
+        left_node: &mut Option<LeftCursor>,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
@@ -501,40 +480,53 @@ impl AnchorBuffer for Vec<Anchor> {
             return;
         };
 
-        let mut fill_0 = NONE;
-        let mut incl_0 = false;
-        let mut left_open_node = u32::MAX;
+        let mut left_cursor: Option<LeftCursor> = None;
         let y = segments.first().map_or(i32::MAX, |s| s.pos);
 
         for a1 in boundaries {
             let c0 = a0.count;
             let c1 = a1.count;
 
-            let fill_1 = Fill::fill(c1, base);
-            let incl_1 = Filter::is_included(fill_1);
+            let up_fill = Fill::fill(c0, c1);
+            let up_link = Filter::is_included(up_fill);
 
-            let fill_v = Fill::fill(c0, c1);
-            let incl_v = Filter::is_included(fill_v);
-
-            let mut top = 0; // index == 0 will be always the most bottom and can not be on top
-            if incl_v {
+            let p = IntPoint::new(a0.x, y);
+            if up_link {
                 let this = nodes.len() as u32;
-                nodes.push(Node::new(IntPoint::new(a0.x, y)));
+                let up = this + 1;
 
-                if incl_0 {
-                    nodes.left_right_connect(left_open_node, this, fill_0);
+                let mut node = Node::new(p);
+                node.set_link(Link::new(up, up_fill), LinkIndex::Up);
+
+                let mut top = Node::new(IntPoint::EMPTY);
+                top.set_link(Link::new(this, up_fill), LinkIndex::Down);
+
+                nodes.push(node);
+                nodes.push(top);
+
+                if let Some(cursor) = &left_cursor {
+                    let left = cursor.node;
+                    nodes[left as usize].set_link(Link::new(this, cursor.fill), LinkIndex::Right);
+                    nodes[this as usize].set_link(Link::new(left, cursor.fill), LinkIndex::Left);
+                    left_cursor = None;
                 }
 
-                top = nodes.create_top_and_connect(this, fill_v);
+                let right_fill = Fill::fill(c1, base);
+                let right_link = Filter::is_included(right_fill);
 
-                left_open_node = this;
+                if right_link {
+                    left_cursor = Some(LeftCursor {
+                        node: this,
+                        fill: right_fill,
+                    });
+                };
+
+                self.push_and_merge(Anchor::new(a0.x, NonZeroU32::new(up), c0));
+            } else {
+                self.push_and_merge(Anchor::new(a0.x, None, c0));
             }
 
-            self.push_and_merge(Anchor::new(a0.x, top, c0));
-
             a0 = a1;
-            incl_0 = incl_1;
-            fill_0 = fill_1;
         }
 
         debug_assert!(self.last().map_or(true, |last| last.count != base));
@@ -542,45 +534,90 @@ impl AnchorBuffer for Vec<Anchor> {
 
     fn add_anchors<Fill, Filter>(
         &mut self,
-        cursor: &mut Cursor,
         s: &Segment,
         anchors: &[Anchor],
         end_count: ShapeCountBoolean,
+        left_cursor: &mut Option<LeftCursor>,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
     {
-        let mut c0= anchors[0].count;
-        // cursor.point = IntPoint::new(s.range.min, s.pos);
+        let mut c0 = anchors[0].count; // probably we can use just anchor.count
 
-        for_each_anchor(s, end_count, anchors, |anchor, cb, c1| {
+        for_each_anchor(s, end_count, anchors, |anchor, cb, c1, cn| {
+            let down_link = !anchor.node.is_none();
+
             let up_fill = Fill::fill(c0, c1);
             let up_link = Filter::is_included(up_fill);
 
-            let right_fill = Fill::fill(c1, cb);
-            let right_link = Filter::is_included(right_fill);
+            if down_link || up_link {
+                let p = IntPoint::new(anchor.x, s.pos);
 
-            let p = IntPoint::new(anchor.x, s.pos);
+                let (this, up) = if let Some(node) = anchor.node {
+                    // down node is existed
+                    // up node is still possible
 
-            if let Some(new_anchor) = cursor.save_if_required(nodes) {
-                self.push_and_merge(new_anchor);
+                    let this = node.get();
+                    let n = nodes.len();
+                    let node = &mut nodes[this as usize];
+                    node.point = p;
+
+                    let mut up_node = 0;
+                    if up_link {
+                        let up = n as u32;
+                        node.set_link(Link::new(up, up_fill), LinkIndex::Up);
+
+                        let mut top = Node::new(IntPoint::EMPTY);
+                        top.set_link(Link::new(this, up_fill), LinkIndex::Down);
+                        nodes.push(top);
+                        up_node = up;
+                    };
+
+                    (this, NonZeroU32::new(up_node))
+                } else {
+                    // down node is not exist
+                    // this and up node must be created
+
+                    let this = nodes.len() as u32;
+                    let up = this + 1;
+
+                    let mut node = Node::new(p);
+                    node.set_link(Link::new(up, up_fill), LinkIndex::Up);
+
+                    let mut top = Node::new(IntPoint::EMPTY);
+                    top.set_link(Link::new(this, up_fill), LinkIndex::Down);
+
+                    nodes.push(node);
+                    nodes.push(top);
+
+                    (this, NonZeroU32::new(up))
+                };
+
+                if let Some(cursor) = left_cursor {
+                    let left = cursor.node;
+                    nodes[left as usize].set_link(Link::new(this, cursor.fill), LinkIndex::Right);
+                    nodes[this as usize].set_link(Link::new(left, cursor.fill), LinkIndex::Left);
+                    *left_cursor = None;
+                }
+
+                let right_fill = Fill::fill(c1, cb);
+                let right_link = Filter::is_included(right_fill);
+
+                if right_link {
+                    *left_cursor = Some(LeftCursor {
+                        node: this,
+                        fill: right_fill,
+                    });
+                };
+
+                self.push_and_merge(Anchor::new(anchor.x, up, cn));
             } else {
-                self.push_and_merge(Anchor::new(anchor.x, 0, c0));
+                self.push_and_merge(Anchor::new(anchor.x, None, cn));
             }
-
-            if anchor.node != 0 {
-                cursor.move_right(anchor.node, p, c0, right_fill, right_link, up_fill, up_link);
-            } else if up_link {
-                let node = nodes.len() as u32;
-                nodes.push(Node::new(IntPoint::EMPTY));
-                cursor.move_right(node, p, c0, right_fill, right_link, up_fill, up_link);
-            };
 
             c0 = c1;
         });
-
-        cursor.save_if_required(nodes);
     }
 
     #[inline(always)]
@@ -589,7 +626,6 @@ impl AnchorBuffer for Vec<Anchor> {
             && last.count == anchor.count
         {
             debug_assert!(last.x <= anchor.x);
-            debug_assert!(last.node == 0);
             *last = anchor;
         } else {
             self.push(anchor);
