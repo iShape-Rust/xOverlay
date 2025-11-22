@@ -123,11 +123,7 @@ struct Anchor {
 impl Anchor {
     #[inline(always)]
     fn new(x: i32, node: Option<NonZeroU32>, count: ShapeCountBoolean) -> Self {
-        Self {
-            x,
-            node,
-            count,
-        }
+        Self { x, node, count }
     }
 }
 
@@ -262,7 +258,7 @@ fn for_each_anchor(
     s: &Segment,
     end_count: ShapeCountBoolean,
     anchors: &[Anchor],
-    mut f: impl FnMut(&Anchor, ShapeCountBoolean, ShapeCountBoolean, ShapeCountBoolean),
+    mut f: impl FnMut(i32, Option<NonZeroU32>, ShapeCountBoolean, ShapeCountBoolean, ShapeCountBoolean),
 ) {
     debug_assert!(!anchors.is_empty());
 
@@ -275,18 +271,8 @@ fn for_each_anchor(
         let c0 = a0.count;
         let cb = a0.count;
         let c1 = cb + s.count;
-        let cn = a0.count;
 
-        f(
-            &Anchor {
-                x: s.range.min,
-                node: None,
-                count: c0,
-            },
-            cb,
-            c1,
-            cn,
-        );
+        f(s.range.min, None, c0, c1, cb);
     };
 
     for ai in anchors.iter().skip(1) {
@@ -294,11 +280,15 @@ fn for_each_anchor(
         //         |
         //       f(a0)
 
+        let c0 = if a0.x == s.range.min {
+            a0.count
+        } else {
+            a0.count + s.count
+        };
         let cb = ai.count;
         let c1 = cb + s.count;
-        let cn = if a0.x == s.range.min { a0.count } else { a0.count + s.count };
 
-        f(a0, cb, c1, cn);
+        f(a0.x, a0.node, c0, c1, cb);
         a0 = ai;
     }
 
@@ -308,41 +298,36 @@ fn for_each_anchor(
         //    f(a0)  f(max)
         {
             // a0
-
+            let c0 = if a0.x == s.range.min {
+                a0.count
+            } else {
+                a0.count + s.count
+            };
             let cb = end_count;
             let c1 = cb + s.count;
-            let cn = if a0.x == s.range.min { a0.count } else { a0.count + s.count };
 
-            f(a0, cb, c1, cn);
+            f(a0.x, a0.node, c0, c1, cb);
         }
 
         {
             // max
 
-            let c0 = end_count;
+            let c0 = end_count + s.count;
             let cb = end_count;
             let c1 = end_count;
-            let cn = c0 + s.count;
 
-            let a = &Anchor {
-                x: s.range.max,
-                node: None,
-                count: c0,
-            };
-
-            f(a, cb, c1, cn);
+            f(s.range.max, None, c0, c1, cb);
         }
     } else {
         // --- max(a0)
         //        |
         //       f(a0)
 
-        let c0 = a0.count;
+        let c0 = a0.count + s.count;
         let cb = end_count;
         let c1 = end_count;
-        let cn = c0 + s.count;
 
-        f(a0, cb, c1, cn);
+        f(a0.x, a0.node, c0, c1, cb);
     }
 }
 
@@ -506,18 +491,16 @@ impl AnchorBuffer for Vec<Anchor> {
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
     {
-        let mut c0 = anchors[0].count; // probably we can use just anchor.count
-
-        for_each_anchor(s, end_count, anchors, |anchor, cb, c1, cn| {
-            let down_link = !anchor.node.is_none();
+        for_each_anchor(s, end_count, anchors, |x, index, c0, c1, cb| {
+            let down_link = !index.is_none();
 
             let up_fill = Fill::fill(c0, c1);
             let up_link = Filter::is_included(up_fill);
 
             if down_link || up_link {
-                let p = IntPoint::new(anchor.x, s.pos);
+                let p = IntPoint::new(x, s.pos);
 
-                let (this, up) = if let Some(node) = anchor.node {
+                let (this, up) = if let Some(node) = index {
                     // down node is existed
                     // up node is still possible
 
@@ -574,12 +557,10 @@ impl AnchorBuffer for Vec<Anchor> {
                     });
                 };
 
-                self.push_and_merge(Anchor::new(anchor.x, up, cn));
+                self.push_and_merge(Anchor::new(x, up, c0));
             } else {
-                self.push_and_merge(Anchor::new(anchor.x, None, cn));
+                self.push_and_merge(Anchor::new(x, None, c0));
             }
-
-            c0 = c1;
         });
     }
 
@@ -856,6 +837,56 @@ mod tests {
                 [ 2,  0],
                 [ 2, -2],
                 [ 0, -2],
+            ],
+        ]);
+    }
+
+    #[test]
+    fn test_14() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [
+                [0, 0],
+                [2, 0],
+                [2, 2],
+                [0, 2],
+            ],
+            [
+                [0, 0],
+                [2, 0],
+                [2, 2],
+                [0, 2],
+            ],
+            [
+                [2, 0],
+                [4, 0],
+                [4, 2],
+                [2, 2],
+            ],
+        ]);
+    }
+
+    #[test]
+    fn test_15() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [
+                [0, 0],
+                [2, 0],
+                [2, 4],
+                [0, 4],
+            ],
+            [
+                [0, 0],
+                [2, 0],
+                [2, 4],
+                [0, 4],
+            ],
+            [
+                [2, 0],
+                [4, 0],
+                [4, 2],
+                [2, 2],
             ],
         ]);
     }
