@@ -201,10 +201,17 @@ impl ScanBuffer {
             let s = &segments[i];
 
             let j0 = j;
+            let a0 = &self.active[j0];
             j += 1;
             while j < self.active.len() && self.active[j].x <= s.range.max {
                 j += 1;
             }
+
+            let start_count = if let Some(last) = self.buffer.last() && last.x == s.range.min {
+                last.count
+            } else {
+                self.active[j0].count
+            };
 
             let end_count = if j < self.active.len() {
                 let ac = self.active[j].count;
@@ -223,6 +230,7 @@ impl ScanBuffer {
             self.buffer.add_anchors::<Fill, Filter>(
                 s,
                 &self.active[j0..j],
+                start_count,
                 end_count,
                 &mut left_node,
                 nodes,
@@ -256,6 +264,7 @@ impl ScanBuffer {
 
 fn for_each_anchor(
     s: &Segment,
+    start_count: ShapeCountBoolean,
     end_count: ShapeCountBoolean,
     anchors: &[Anchor],
     mut f: impl FnMut(i32, Option<NonZeroU32>, ShapeCountBoolean, ShapeCountBoolean, ShapeCountBoolean),
@@ -268,7 +277,7 @@ fn for_each_anchor(
         //  |
         // f(min)
 
-        let c0 = a0.count;
+        let c0 = start_count;
         let cb = a0.count;
         let c1 = cb + s.count;
 
@@ -281,7 +290,7 @@ fn for_each_anchor(
         //       f(a0)
 
         let c0 = if a0.x == s.range.min {
-            a0.count
+            start_count
         } else {
             a0.count + s.count
         };
@@ -299,7 +308,7 @@ fn for_each_anchor(
         {
             // a0
             let c0 = if a0.x == s.range.min {
-                a0.count
+                start_count
             } else {
                 a0.count + s.count
             };
@@ -394,6 +403,7 @@ trait AnchorBuffer {
         &mut self,
         segment: &Segment,
         anchors: &[Anchor],
+        start_count: ShapeCountBoolean,
         end_count: ShapeCountBoolean,
         left_node: &mut Option<LeftCursor>,
         nodes: &mut Vec<Node>,
@@ -484,6 +494,7 @@ impl AnchorBuffer for Vec<Anchor> {
         &mut self,
         s: &Segment,
         anchors: &[Anchor],
+        start_count: ShapeCountBoolean,
         end_count: ShapeCountBoolean,
         left_cursor: &mut Option<LeftCursor>,
         nodes: &mut Vec<Node>,
@@ -491,7 +502,7 @@ impl AnchorBuffer for Vec<Anchor> {
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
     {
-        for_each_anchor(s, end_count, anchors, |x, index, c0, c1, cb| {
+        for_each_anchor(s, start_count, end_count, anchors, |x, index, c0, c1, cb| {
             let down_link = !index.is_none();
 
             let up_fill = Fill::fill(c0, c1);
