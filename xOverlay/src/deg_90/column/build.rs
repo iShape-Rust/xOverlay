@@ -127,9 +127,14 @@ impl Anchor {
     }
 }
 
-struct LeftCursor {
+struct NodeCursor {
     node: u32,
     fill: SegmentFill,
+}
+
+struct StackCount {
+    top: ShapeCountBoolean,
+    bottom: ShapeCountBoolean
 }
 
 struct ScanBuffer {
@@ -165,6 +170,7 @@ impl ScanBuffer {
         let mut j = 0;
 
         let mut left_node = None;
+        let mut left_count = ShapeCountBoolean::empty();
 
         self.buffer.clear();
 
@@ -177,9 +183,17 @@ impl ScanBuffer {
                 while i < segments.len() && segments[i].range.max < self.active[j].x {
                     i += 1;
                 }
+
+                let start_count = if let Some(last) = self.buffer.last()
+                    && last.x == segments[0].range.min {
+                    last.count
+                } else {
+                    self.active[i].count
+                };
+
                 let base = self.active[j].count;
-                self.buffer
-                    .add_segments::<Fill, Filter>(base, &segments[i0..i], nodes);
+
+                self.buffer.add_segments::<Fill, Filter>(base, &mut left_count,&segments[i0..i], nodes);
 
                 continue;
             } else if self.active[j].x < segments[i].range.min {
@@ -201,7 +215,7 @@ impl ScanBuffer {
             let s = &segments[i];
 
             let j0 = j;
-            let a0 = &self.active[j0];
+            // let a0 = &self.active[j0];
             j += 1;
             while j < self.active.len() && self.active[j].x <= s.range.max {
                 j += 1;
@@ -215,16 +229,22 @@ impl ScanBuffer {
 
             let end_count = if j < self.active.len() {
                 let ac = self.active[j].count;
-                if let Some(next) = segments.get(i + 1)
-                    && next.pos == s.pos
-                    && next.range.min == s.range.max
-                {
-                    ac + next.count
+                if let Some(next) = segments.get(i + 1) && next.range.min == s.range.max {
+                    StackCount {
+                        top: ac + next.count,
+                        bottom: ac,
+                    }
                 } else {
-                    ac
+                    StackCount {
+                        top: ac,
+                        bottom: ac,
+                    }
                 }
             } else {
-                ShapeCountBoolean::empty()
+                StackCount {
+                    top: ShapeCountBoolean::empty(),
+                    bottom: ShapeCountBoolean::empty(),
+                }
             };
 
             self.buffer.add_anchors::<Fill, Filter>(
@@ -242,6 +262,7 @@ impl ScanBuffer {
         if i < segments.len() {
             self.buffer.add_segments::<Fill, Filter>(
                 ShapeCountBoolean::empty(),
+                &mut left_count,
                 &segments[i..],
                 nodes,
             );
@@ -262,12 +283,25 @@ impl ScanBuffer {
     }
 }
 
+struct AnchorCount {
+    c0: ShapeCountBoolean,
+    cb: ShapeCountBoolean,
+    c1: ShapeCountBoolean,
+}
+
+impl AnchorCount {
+    #[inline(always)]
+    fn new(c0: ShapeCountBoolean, cb: ShapeCountBoolean, c1: ShapeCountBoolean) -> Self {
+        Self { c0, cb, c1 }
+    }
+}
+
 fn for_each_anchor(
     s: &Segment,
     start_count: ShapeCountBoolean,
-    end_count: ShapeCountBoolean,
+    end_count: StackCount,
     anchors: &[Anchor],
-    mut f: impl FnMut(i32, Option<NonZeroU32>, ShapeCountBoolean, ShapeCountBoolean, ShapeCountBoolean),
+    mut f: impl FnMut(i32, Option<NonZeroU32>, AnchorCount),
 ) {
     debug_assert!(!anchors.is_empty());
 
@@ -279,9 +313,9 @@ fn for_each_anchor(
 
         let c0 = start_count;
         let cb = a0.count;
-        let c1 = cb + s.count;
+        let c1 = a0.count + s.count;
 
-        f(s.range.min, None, c0, c1, cb);
+        f(s.range.min, None, AnchorCount::new(c0, cb, c1));
     };
 
     for ai in anchors.iter().skip(1) {
@@ -297,7 +331,7 @@ fn for_each_anchor(
         let cb = ai.count;
         let c1 = cb + s.count;
 
-        f(a0.x, a0.node, c0, c1, cb);
+        f(a0.x, a0.node, AnchorCount::new(c0, cb, c1));
         a0 = ai;
     }
 
@@ -312,20 +346,20 @@ fn for_each_anchor(
             } else {
                 a0.count + s.count
             };
-            let cb = end_count;
+            let cb = end_count.bottom;
             let c1 = cb + s.count;
 
-            f(a0.x, a0.node, c0, c1, cb);
+            f(a0.x, a0.node, AnchorCount::new(c0, cb, c1));
         }
 
         {
             // max
 
-            let c0 = end_count + s.count;
-            let cb = end_count;
-            let c1 = end_count;
+            let c0 = end_count.bottom + s.count;
+            let cb = end_count.bottom;
+            let c1 = end_count.top;
 
-            f(s.range.max, None, c0, c1, cb);
+            f(s.range.max, None, AnchorCount::new(c0, cb, c1));
         }
     } else {
         // --- max(a0)
@@ -333,31 +367,29 @@ fn for_each_anchor(
         //       f(a0)
 
         let c0 = a0.count + s.count;
-        let cb = end_count;
-        let c1 = end_count;
+        let cb = end_count.bottom;
+        let c1 = end_count.top;
 
-        f(a0.x, a0.node, c0, c1, cb);
+        f(a0.x, a0.node, AnchorCount::new(c0, cb, c1));
     }
 }
 
 fn for_each_boundaries(
     base: ShapeCountBoolean,
     segments: &[Segment],
-    mut f: impl FnMut(i32, ShapeCountBoolean, ShapeCountBoolean),
+    mut f: impl FnMut(i32, ShapeCountBoolean),
 ) {
     debug_assert!(!segments.is_empty());
 
     let s0 = &segments[0];
     let mut x = s0.range.min;
 
-    let mut c0 = base;
     let mut c1;
     {
         // s0.min
         c1 = s0.count + base;
 
-        f(x, c0, c1);
-        c0 = c1;
+        f(x, c1);
     }
 
     x = s0.range.max;
@@ -369,21 +401,19 @@ fn for_each_boundaries(
 
             c1 = base;
 
-            f(x, c0, c1);
+            f(x, c1);
         }
-        c0 = c1;
 
         // start new segment
         // s.min
         c1 = s.count + base;
 
-        f(s.range.min, c0, c1);
+        f(s.range.min, c1);
         x = s.range.max;
-        c0 = c1;
     }
 
     // close last segment
-    f(x, c0, base);
+    f(x, base);
 }
 
 trait AnchorBuffer {
@@ -394,6 +424,7 @@ trait AnchorBuffer {
     fn add_segments<Fill, Filter>(
         &mut self,
         base: ShapeCountBoolean,
+        left_count: &mut ShapeCountBoolean,
         segments: &[Segment],
         nodes: &mut Vec<Node>,
     ) where
@@ -404,8 +435,8 @@ trait AnchorBuffer {
         segment: &Segment,
         anchors: &[Anchor],
         start_count: ShapeCountBoolean,
-        end_count: ShapeCountBoolean,
-        left_node: &mut Option<LeftCursor>,
+        end_count: StackCount,
+        left_node: &mut Option<NodeCursor>,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
@@ -427,7 +458,10 @@ impl AnchorBuffer for Vec<Anchor> {
         let capacity = 2 * segments.len() + 1;
         self.reserve(capacity);
 
-        self.add_segments::<Fill, Filter>(ShapeCountBoolean::empty(), segments, nodes);
+        let base = ShapeCountBoolean::empty();
+        let mut left_count = ShapeCountBoolean::empty();
+
+        self.add_segments::<Fill, Filter>(base, &mut left_count, segments, nodes);
 
         debug_assert!(self.len() <= capacity);
         debug_assert!(self.first().map_or(true, |first| first.count.is_empty()));
@@ -436,6 +470,7 @@ impl AnchorBuffer for Vec<Anchor> {
     fn add_segments<Fill, Filter>(
         &mut self,
         base: ShapeCountBoolean,
+        left_count: &mut ShapeCountBoolean,
         segments: &[Segment],
         nodes: &mut Vec<Node>,
     ) where
@@ -445,9 +480,12 @@ impl AnchorBuffer for Vec<Anchor> {
         debug_assert!(!segments.is_empty());
         let y = segments.first().map_or(i32::MAX, |s| s.pos);
 
-        let mut left_cursor: Option<LeftCursor> = None;
+        let mut left_cursor: Option<NodeCursor> = None;
 
-        for_each_boundaries(base, segments, |x, c0, c1| {
+        for_each_boundaries(base, segments, |x, c1| {
+            let c0 = *left_count;
+            *left_count = c1;
+
             let up_fill = Fill::fill(c0, c1);
             let up_link = Filter::is_included(up_fill);
 
@@ -475,7 +513,7 @@ impl AnchorBuffer for Vec<Anchor> {
                 let right_link = Filter::is_included(right_fill);
 
                 if right_link {
-                    left_cursor = Some(LeftCursor {
+                    left_cursor = Some(NodeCursor {
                         node: this,
                         fill: right_fill,
                     });
@@ -495,17 +533,17 @@ impl AnchorBuffer for Vec<Anchor> {
         s: &Segment,
         anchors: &[Anchor],
         start_count: ShapeCountBoolean,
-        end_count: ShapeCountBoolean,
-        left_cursor: &mut Option<LeftCursor>,
+        end_count: StackCount,
+        left_cursor: &mut Option<NodeCursor>,
         nodes: &mut Vec<Node>,
     ) where
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
     {
-        for_each_anchor(s, start_count, end_count, anchors, |x, index, c0, c1, cb| {
+        for_each_anchor(s, start_count, end_count, anchors, |x, index, count| {
             let down_link = !index.is_none();
 
-            let up_fill = Fill::fill(c0, c1);
+            let up_fill = Fill::fill(count.c0, count.c1);
             let up_link = Filter::is_included(up_fill);
 
             if down_link || up_link {
@@ -558,19 +596,19 @@ impl AnchorBuffer for Vec<Anchor> {
                     *left_cursor = None;
                 }
 
-                let right_fill = Fill::fill(c1, cb);
+                let right_fill = Fill::fill(count.c1, count.cb);
                 let right_link = Filter::is_included(right_fill);
 
                 if right_link {
-                    *left_cursor = Some(LeftCursor {
+                    *left_cursor = Some(NodeCursor {
                         node: this,
                         fill: right_fill,
                     });
                 };
 
-                self.push_and_merge(Anchor::new(x, up, c0));
+                self.push_and_merge(Anchor::new(x, up, count.c0));
             } else {
-                self.push_and_merge(Anchor::new(x, None, c0));
+                self.push_and_merge(Anchor::new(x, None, count.c0));
             }
         });
     }
@@ -597,6 +635,7 @@ impl AnchorBuffer for Vec<Anchor> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
@@ -901,23 +940,59 @@ mod tests {
             ],
         ]);
     }
+
+    #[test]
+    fn test_16() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [
+                [ 0,  0],
+                [ 2,  0],
+                [ 2, -1],
+                [-1, -1],
+                [-1,  0],
+                [ 1,  0],
+                [ 1,  1],
+                [ 0,  1],
+            ]
+        ]);
+    }
+
+    #[test]
+    fn test_17() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [
+                [0, 1],
+                [3, 1],
+                [3, 0],
+                [0, 0],
+            ],
+            [
+                [1, 1],
+                [2, 1],
+                [2, 2],
+                [1, 2],
+            ],
+        ]);
+    }
+
+    #[test]
+    fn test_random_0() {
+        for _ in 0..1000 {
+            let contour = random_90_deg_contour(4, 4);
+            test_contours(&vec![contour]);
+        }
+    }
     //
-    // #[test]
-    // fn test_random_0() {
-    //     for _ in 0..10_000 {
-    //         let contour = random_90_deg_contour(4, 4);
-    //         test_contours(&vec![contour]);
-    //     }
-    // }
-    //
-    // #[test]
-    // fn test_random_1() {
-    //     for _ in 0..10_000 {
-    //         let contour = random_90_deg_contour(5, 4);
-    //         test_contours(&vec![contour]);
-    //     }
-    // }
-    //
+    #[test]
+    fn test_random_1() {
+        for _ in 0..1000 {
+            let contour = random_90_deg_contour(5, 4);
+            test_contours(&vec![contour]);
+        }
+    }
+
     // #[test]
     // fn test_random_2() {
     //     for _ in 0..10_000 {
