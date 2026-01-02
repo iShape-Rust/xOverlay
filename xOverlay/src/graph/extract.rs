@@ -6,8 +6,8 @@ use i_shape::int::shape::IntShapes;
 use crate::graph::data::OverlayGraph;
 
 impl OverlayGraph {
-    /// Extracts shapes from the overlay graph based on the specified overlay rule. This method is used to retrieve the final geometric shapes after boolean operations have been applied. It's suitable for most use cases where the minimum area of shapes is not a concern.
-    /// - `overlay_rule`: The boolean operation rule to apply when extracting shapes from the graph, such as union or intersection.
+    /// Extracts shapes from the overlay construct based on the specified overlay rule. This method is used to retrieve the final geometric shapes after boolean operations have been applied. It's suitable for most use cases where the minimum area of shapes is not a concern.
+    /// - `overlay_rule`: The boolean operation rule to apply when extracting shapes from the construct, such as union or intersection.
     /// - Returns: A vector of `IntShape`, representing the geometric result of the applied overlay rule.
     /// # Shape Representation
     /// The output is a `IntShapes`, where:
@@ -25,7 +25,7 @@ impl OverlayGraph {
         Vec::new()
     }
 
-    /// Extracts the flat contours from the overlay graph based on the specified overlay rule.
+    /// Extracts the flat contours from the overlay construct based on the specified overlay rule.
     ///
     /// This method performs a Boolean operation (e.g., union or intersection) and stores the result
     /// directly into a flat buffer of contours, without nesting them into shapes (i.e., no hole-joining or grouping).

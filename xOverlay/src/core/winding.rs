@@ -8,6 +8,7 @@ where
     fn is_not_empty(&self) -> bool;
     fn empty() -> Self;
     fn new(subj: i16, clip: i16) -> Self;
+    fn subj(subj: i16) -> Self;
     fn with_shape_type(shape_type: ShapeType) -> (Self, Self);
     fn add(self, count: Self) -> Self;
     fn sub(self, count: Self) -> Self;

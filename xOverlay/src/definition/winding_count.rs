@@ -36,6 +36,11 @@ impl WindingCount for ShapeCountBoolean {
     }
 
     #[inline(always)]
+    fn subj(subj: i16) -> Self {
+        Self { subj, clip: 0 }
+    }
+
+    #[inline(always)]
     fn with_shape_type(shape_type: ShapeType) -> (Self, Self) {
         match shape_type {
             ShapeType::Subject => (
