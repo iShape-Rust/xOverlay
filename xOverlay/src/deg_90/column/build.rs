@@ -619,13 +619,13 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_random_2() {
-    //     for _ in 0..10_000 {
-    //         let contour = random_90_deg_contour(6, 4);
-    //         test_contours(&vec![contour]);
-    //     }
-    // }
+    #[test]
+    fn test_random_2() {
+        for _ in 0..10_000 {
+            let contour = random_90_deg_contour(6, 4);
+            test_contours(&vec![contour]);
+        }
+    }
 
     fn test_contours(contours: &IntShape) {
         let config = ColumnConfig90 {
