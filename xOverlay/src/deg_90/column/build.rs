@@ -223,6 +223,7 @@ impl ScanBuffer {
 
         self.buffer.remove_empty_anchor();
         swap(&mut self.active, &mut self.buffer);
+        self.buffer.clear();
     }
 
     #[inline]
