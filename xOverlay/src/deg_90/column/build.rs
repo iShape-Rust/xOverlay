@@ -261,6 +261,7 @@ impl AnchorBuffer for Vec<Anchor> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
@@ -604,6 +605,40 @@ mod tests {
     }
 
     #[test]
+    fn test_18() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [
+                [0, 0], [3, 0], [3, -3], [2, -3], [2, 0], [-1, 0], [-1, 3], [-2, 3], [-2, 2], [0, 2], [0, 1], [-3, 1], [-3, 4], [0, 4]
+            ],
+        ]);
+    }
+
+    #[test]
+    fn test_19() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [[5, 2], [10, 2], [10, 3], [5, 3]],
+            [[4, 0], [5, 0], [5, 4], [4, 4]],
+            [[5, 7], [10, 7], [10, 8], [5, 8]],
+            [[5, 7], [7, 7], [7, 9], [5, 9]],
+            [[6, 6], [8, 6], [8, 10], [6, 10]],
+            [[0, 3], [1, 3], [1, 7], [0, 7]],
+            [[4, 4], [11, 4], [11, 6], [4, 6]],
+            [[7, 1], [11, 1], [11, 5], [7, 5]],
+        ]);
+    }
+
+    #[test]
+    fn test_20() {
+        #[rustfmt::skip]
+        test_contours(&int_shape![
+            [[0, 0], [0, 1], [1, 1], [1, 0]],
+            [[1, 0], [2, 0], [2, 1], [1, 1]]
+        ]);
+    }
+
+    #[test]
     fn test_random_0() {
         for _ in 0..1000 {
             let contour = random_90_deg_contour(4, 4);
@@ -624,6 +659,118 @@ mod tests {
         for _ in 0..10_000 {
             let contour = random_90_deg_contour(6, 4);
             test_contours(&vec![contour]);
+        }
+    }
+
+    #[test]
+    fn test_random_3() {
+        for _ in 0..20_000 {
+            let contour = random_90_deg_contour(8, 4);
+            test_contours(&vec![contour]);
+        }
+    }
+
+    #[test]
+    fn test_random_4() {
+        for _ in 0..20_000 {
+            let contour = random_90_deg_contour(10, 4);
+            test_contours(&vec![contour]);
+        }
+    }
+
+    #[test]
+    fn test_random_5() {
+        for _ in 0..20_000 {
+            let contour = random_90_deg_contour(12, 4);
+            test_contours(&vec![contour]);
+        }
+    }
+
+    #[test]
+    fn test_random_6() {
+        for _ in 0..20_000 {
+            let contour = random_90_deg_contour(16, 4);
+            test_contours(&vec![contour]);
+        }
+    }
+
+    #[test]
+    fn test_random_positive_rects_0() {
+        for _ in 0..20_000 {
+            let rects = random_positive_rects(4, 4, 2);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_positive_rects_1() {
+        for _ in 0..20_000 {
+            let rects = random_positive_rects(8, 4, 2);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_positive_rects_2() {
+        for _ in 0..20_000 {
+            let rects = random_positive_rects(8, 8, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_positive_rects_3() {
+        for _ in 0..10_000 {
+            let rects = random_positive_rects(16, 10, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_positive_rects_4() {
+        for _ in 0..4_000 {
+            let rects = random_positive_rects(32, 20, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_rects_0() {
+        for _ in 0..20_000 {
+            let rects = random_rects(2, 4, 2);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_rects_1() {
+        for _ in 0..20_000 {
+            let rects = random_rects(4, 8, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_rects_2() {
+        for _ in 0..10_000 {
+            let rects = random_rects(8, 10, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_rects_3() {
+        for _ in 0..4_000 {
+            let rects = random_rects(16, 20, 4);
+            test_contours(&rects);
+        }
+    }
+
+    #[test]
+    fn test_random_rects_4() {
+        for _ in 0..4_000 {
+            let rects = random_rects(32, 20, 4);
+            test_contours(&rects);
         }
     }
 
@@ -675,6 +822,68 @@ mod tests {
         contour
     }
 
+    fn random_positive_rects(n: usize, radius: usize, size: usize) -> Vec<Vec<IntPoint>> {
+        let mut rects = Vec::with_capacity(n);
+
+        let mut rng = rand::rng();
+        for _ in 0..n {
+            let x = rng.random_range(0..radius) as i32;
+            let y = rng.random_range(0..radius) as i32;
+            let a = rng.random_range(1..size) as i32;
+            let b = rng.random_range(1..size) as i32;
+
+            let rect = vec![
+                IntPoint::new(x, y),
+                IntPoint::new(x + a, y),
+                IntPoint::new(x + a, y + b),
+                IntPoint::new(x, y + b),
+            ];
+
+            rects.push(rect);
+        }
+
+        rects
+    }
+
+    fn random_rects(n: usize, radius: usize, size: usize) -> Vec<Vec<IntPoint>> {
+        let mut rects = Vec::with_capacity(n);
+
+        let mut rng = rand::rng();
+        for _ in 0..n {
+            let x = rng.random_range(0..radius) as i32;
+            let y = rng.random_range(0..radius) as i32;
+            let a = rng.random_range(1..size) as i32;
+            let b = rng.random_range(1..size) as i32;
+
+            let rect = vec![
+                IntPoint::new(x, y),
+                IntPoint::new(x + a, y),
+                IntPoint::new(x + a, y + b),
+                IntPoint::new(x, y + b),
+            ];
+
+            rects.push(rect);
+        }
+
+        for _ in 0..n {
+            let x = rng.random_range(0..radius) as i32;
+            let y = rng.random_range(0..radius) as i32;
+            let a = rng.random_range(1..size) as i32;
+            let b = rng.random_range(1..size) as i32;
+
+            let rect = vec![
+                IntPoint::new(x, y),
+                IntPoint::new(x, y + b),
+                IntPoint::new(x + a, y + b),
+                IntPoint::new(x + a, y),
+            ];
+
+            rects.push(rect);
+        }
+
+        rects
+    }
+
     #[derive(Debug, PartialEq, Eq)]
     struct SegFill {
         a: IntPoint,
@@ -709,8 +918,9 @@ mod tests {
         let fill_rule = i_overlay::core::fill_rule::FillRule::NonZero;
         let overlay_rule = i_overlay::core::overlay_rule::OverlayRule::Subject;
 
+
         let graph = overlay.build_graph_view(fill_rule)?;
-        let shapes = graph.extract_shape_vectors(overlay_rule);
+        let shapes = graph.extract_shape_vectors(overlay_rule, &mut Default::default());
         let mut s_fills = Vec::new();
 
         for shape in shapes {
