@@ -6,7 +6,6 @@ use crate::gear::segment::Segment;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct SegmentEnd {
     pub(super) x: i32,
-    pub(super) min: i32,
     pub(super) max: i32,
     pub(super) count: LRCount,
 }
@@ -62,7 +61,6 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
                     let pt = SegmentEnd {
                         x: si.range.max,
                         max,
-                        min,
                         count: LRCount::new(self.last_next, next),
                     };
 
@@ -73,7 +71,6 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
                     Some(SegmentEnd {
                         x: si.range.max,
                         count: LRCount::new(self.last_next, ShapeCountBoolean::empty()),
-                        min: si.range.min,
                         max: si.range.max,
                     })
                 }
@@ -84,7 +81,6 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
 
                 let se = SegmentEnd {
                     x: si.range.min,
-                    min: si.range.min,
                     max: si.range.max,
                     count: LRCount::new(self.last_next, si.count),
                 };
@@ -135,7 +131,6 @@ mod tests {
                 x: 0,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(1)),
                 max: 2,
-                min: 0,
             }
         );
 
@@ -145,7 +140,6 @@ mod tests {
                 x: 2,
                 count: LRCount::new(ShapeCountBoolean::subj(1), ShapeCountBoolean::subj(0)),
                 max: 2,
-                min: 0,
             }
         );
     }
@@ -191,7 +185,6 @@ mod tests {
                 x: 0,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(1)),
                 max: 2,
-                min: 0,
             }
         );
 
@@ -201,7 +194,6 @@ mod tests {
                 x: 2,
                 count: LRCount::new(ShapeCountBoolean::subj(1), ShapeCountBoolean::subj(0)),
                 max: 2,
-                min: 0,
             }
         );
 
@@ -211,7 +203,6 @@ mod tests {
                 x: 3,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(2)),
                 max: 4,
-                min: 3,
             }
         );
 
@@ -221,7 +212,6 @@ mod tests {
                 x: 4,
                 count: LRCount::new(ShapeCountBoolean::subj(2), ShapeCountBoolean::subj(3)),
                 max: 5,
-                min: 4,
             }
         );
 
@@ -231,7 +221,6 @@ mod tests {
                 x: 5,
                 count: LRCount::new(ShapeCountBoolean::subj(3), ShapeCountBoolean::subj(0)),
                 max: 5,
-                min: 5,
             }
         );
 
@@ -241,7 +230,6 @@ mod tests {
                 x: 6,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(4)),
                 max: 7,
-                min: 6,
             }
         );
 
@@ -251,7 +239,6 @@ mod tests {
                 x: 7,
                 count: LRCount::new(ShapeCountBoolean::subj(4), ShapeCountBoolean::subj(0)),
                 max: 7,
-                min: 7,
             }
         );
     }

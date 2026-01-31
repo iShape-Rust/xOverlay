@@ -120,13 +120,13 @@ struct NodeCursor {
     fill: SegmentFill,
 }
 
-struct ScanBuffer {
+pub(crate) struct ScanBuffer {
     active: Vec<Anchor>,
     buffer: Vec<Anchor>,
 }
 
 impl ScanBuffer {
-    fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             active: Vec::with_capacity(capacity),
             buffer: Vec::with_capacity(capacity),
@@ -227,7 +227,7 @@ impl ScanBuffer {
     }
 
     #[inline]
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.active.clear();
         self.buffer.clear();
     }
@@ -261,7 +261,6 @@ impl AnchorBuffer for Vec<Anchor> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::ToString;
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;

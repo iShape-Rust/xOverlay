@@ -35,6 +35,11 @@ impl LinkIndex {
         debug_assert!(order < 4);
         order ^ 0b10
     }
+
+    #[inline(always)]
+    pub(super) fn order(&self) -> usize {
+        *self as usize
+    }
 }
 
 #[cfg(not(debug_assertions))]
