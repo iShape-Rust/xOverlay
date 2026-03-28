@@ -318,7 +318,7 @@ mod tests {
     use i_shape::int::path::IntPath;
     use i_shape::int::shape::{IntContour, IntShape};
     use i_shape::int_shape;
-    use rand::Rng;
+    use rand::RngExt;
 
     #[test]
     fn test_buffer_0() {

@@ -566,7 +566,7 @@ mod tests {
     use i_float::int::point::IntPoint;
     use i_float::int::rect::IntRect;
     use i_shape::int::path::IntPath;
-    use rand::Rng;
+    use rand::RngExt;
 
     impl GeometrySource {
         fn test_count(&self) -> usize {

@@ -17,6 +17,7 @@ enum SubResult {
     Path(SubPath),
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct SubPath {
     pub(crate) start: IntPoint,
     pub(crate) end: IntPoint,

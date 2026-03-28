@@ -16,6 +16,11 @@ pub(super) struct Link {
     index: u32,
     fill: SegmentFill,
 }
+#[cfg(not(debug_assertions))]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Link {
+    data: u32,
+}
 
 impl LinkIndex {
     #[inline(always)]
@@ -40,12 +45,6 @@ impl LinkIndex {
     pub(super) fn order(&self) -> usize {
         *self as usize
     }
-}
-
-#[cfg(not(debug_assertions))]
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Link {
-    data: u32,
 }
 
 #[cfg(debug_assertions)]
