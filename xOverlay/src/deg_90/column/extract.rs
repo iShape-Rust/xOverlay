@@ -150,13 +150,15 @@ impl ColumnGraph {
         while next_node_index != start {
             if let Some(next_link_index) = visited[next_node_index].visit_and_next(link_index.opposite(), dir) {
                 let next_node = &self.nodes[next_node_index];
-                points.push(next_node.point);
+                points.add_skipping_vertical(next_node.point);
 
                 let next_link = next_node.links[next_link_index.order()];
                 next_node_index = next_link.index();
                 link_index = next_link_index;
             }
         }
+
+        points.remove_last_if_vertical();
 
         // a closed contour
         let contour = points.to_vec();
@@ -167,9 +169,41 @@ impl ColumnGraph {
         }
     }
 }
+trait VerticalMiddleFilter {
+    fn add_skipping_vertical(&mut self, point: IntPoint);
+    fn remove_last_if_vertical(&mut self);
+}
 
-
-
+impl VerticalMiddleFilter for Vec<IntPoint> {
+    #[inline(always)]
+    fn add_skipping_vertical(&mut self, p: IntPoint) {
+        let n = self.len();
+        if n < 2 {
+            self.push(p);
+            return
+        }
+        let a = self[n - 2];
+        let b = &mut self[n - 1];
+        if a.x == b.x && a.x == p.x {
+            b.y = p.y;
+        } else {
+            self.push(p);
+        }
+    }
+    #[inline(always)]
+    fn remove_last_if_vertical(&mut self) {
+        let n = self.len();
+        if n < 2 {
+            return;
+        }
+        let a = self[0];
+        let b = self[n - 1];
+        let p = self[n - 2];
+        if a.x == b.x && a.x == p.x {
+            self.pop();
+        }
+    }
+}
 
 impl Link {
     #[inline(always)]
@@ -178,7 +212,6 @@ impl Link {
         fill == SUBJ_TOP || fill == CLIP_TOP
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -208,9 +241,9 @@ mod tests {
     }
 
     #[test]
-    fn test_0() {
+    fn test_square_1_column() {
         #[rustfmt::skip]
-        let graph = test_graph(&int_shape![[
+        let graph = single_graph_column(&int_shape![[
             [-5, -5],
             [ 5, -5],
             [ 5,  5],
@@ -226,8 +259,35 @@ mod tests {
         debug_assert_eq!(result.shapes[0][0].len(), 4);
     }
 
+    #[test]
+    fn test_window_1_column() {
+        #[rustfmt::skip]
+        let graph = single_graph_column(&int_shape![
+            [
+                [-5, -5],
+                [ 5, -5],
+                [ 5,  5],
+                [-5,  5],
+            ],
+            [
+                [-2, -2],
+                [-2,  2],
+                [ 2,  2],
+                [ 2, -2],
+            ]
+    ]);
 
-    fn test_graph(contours: &IntShape) -> ColumnGraph {
+        let mut visited = Vec::new();
+        let mut points = Vec::new();
+        let result = graph.extract(&mut visited, &mut points);
+
+        debug_assert_eq!(result.shapes.len(), 1);
+        debug_assert_eq!(result.shapes[0].len(), 1);
+        debug_assert_eq!(result.shapes[0][0].len(), 4);
+    }
+
+
+    fn single_graph_column(contours: &IntShape) -> ColumnGraph {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
