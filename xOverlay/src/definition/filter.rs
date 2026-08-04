@@ -1,4 +1,7 @@
-use crate::definition::segment::{SegmentFill, ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP};
+use crate::definition::segment::{
+    ALL, BOTH_BOTTOM, BOTH_TOP, CLIP_BOTH, CLIP_BOTTOM, CLIP_TOP, SUBJ_BOTH, SUBJ_BOTTOM, SUBJ_TOP,
+    SegmentFill,
+};
 
 pub(crate) trait FilterStrategy {
     fn is_included(fill: SegmentFill) -> bool;

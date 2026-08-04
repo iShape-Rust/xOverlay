@@ -917,7 +917,6 @@ mod tests {
         let fill_rule = i_overlay::core::fill_rule::FillRule::NonZero;
         let overlay_rule = i_overlay::core::overlay_rule::OverlayRule::Subject;
 
-
         let graph = overlay.build_graph_view(fill_rule)?;
         let shapes = graph.extract_vector_shapes(overlay_rule, &mut Default::default());
         let mut s_fills = Vec::new();

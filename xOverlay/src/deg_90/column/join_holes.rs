@@ -185,14 +185,14 @@ impl FirstBottom for [ShapeEdge] {
 
 #[cfg(test)]
 mod tests {
+    use crate::deg_90::column::extract::SubPath;
     use crate::deg_90::column::graph::ColumnGraph;
     use crate::deg_90::column::join_holes::{FirstBottom, ShapeEdge};
     use crate::geom::range::LineRange;
     use alloc::vec;
     use i_key_sort::sort::one_key::OneKeySort;
-    use i_shape::{int_path, int_shape, int_shapes};
     use i_shape::int::path::IntPath;
-    use crate::deg_90::column::extract::SubPath;
+    use i_shape::{int_path, int_shape, int_shapes};
 
     fn sub_path(path: IntPath<i32>) -> SubPath {
         SubPath {

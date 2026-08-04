@@ -1,15 +1,15 @@
+use crate::core::cpu_count::CPUCount;
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
-use crate::deg_90::layout::ColumnLayout;
-use crate::geom::segment::Segment;
 use crate::definition::winding_count::ShapeCountBoolean;
+use crate::deg_90::config::ColumnConfig90;
+use crate::deg_90::layout::ColumnLayout;
 use crate::geom::range::LineRange;
+use crate::geom::segment::Segment;
 use crate::util::x_range::XRangeAndCount;
 use alloc::vec;
 use alloc::vec::Vec;
 use i_shape::int::shape::IntContour;
-use crate::core::cpu_count::CPUCount;
-use crate::deg_90::config::ColumnConfig90;
 
 struct Mapper {
     layout: ColumnLayout,
@@ -170,11 +170,7 @@ impl ColumnMap {
         }
     }
 
-    fn add_segments(
-        &mut self,
-        segments: &[Segment],
-        layout: &ColumnLayout,
-    ) {
+    fn add_segments(&mut self, segments: &[Segment], layout: &ColumnLayout) {
         for s in segments.iter() {
             let i0 = layout.index(s.range.min);
             let i1 = layout.index_round_down(s.range.max);
@@ -206,7 +202,11 @@ impl ColumnMap {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_columns_count(subj: &[IntContour<i32>], clip: &[IntContour<i32>], count: usize) -> Self {
+    pub(crate) fn with_columns_count(
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        count: usize,
+    ) -> Self {
         assert!(count > 0, "column count must be greater than zero");
 
         let (subj_range, _) = subj.x_range_and_count(CPUCount::Single);
@@ -294,10 +294,10 @@ impl Mapper {
 
 #[cfg(test)]
 mod tests {
-    use crate::deg_90::column_map::ColumnMap;
-    use i_shape::int_shape;
     use crate::core::cpu_count::CPUCount;
+    use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
+    use i_shape::int_shape;
 
     #[test]
     fn test_0() {

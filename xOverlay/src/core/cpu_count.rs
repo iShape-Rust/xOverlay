@@ -27,7 +27,7 @@ impl CPUCount {
                 },
                 CPUCount::Fixed(count) => (*count).max(1),
                 CPUCount::Single => 1,
-            }
+            };
         }
 
         #[cfg(not(feature = "allow_multithreading"))]

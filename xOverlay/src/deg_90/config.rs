@@ -19,7 +19,7 @@ pub struct ColumnConfig90 {
     // production: ~ 10_000
     pub(super) min_allowed_segments_per_column: usize,
 
-    pub(super) max_allowed_segments_per_line: usize
+    pub(super) max_allowed_segments_per_line: usize,
 }
 
 impl ColumnConfig90 {

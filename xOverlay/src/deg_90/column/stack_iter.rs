@@ -1,11 +1,13 @@
-use core::cmp::Ordering;
-use core::num::NonZeroU32;
-use core::slice::Iter;
 use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::anchor::Anchor;
-use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIter, SegmentSplitPointIterator};
+use crate::deg_90::column::segment_iter::{
+    SegmentEnd, SegmentSplitPointIter, SegmentSplitPointIterator,
+};
 use crate::geom::segment::Segment;
+use core::cmp::Ordering;
+use core::num::NonZeroU32;
+use core::slice::Iter;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct StackPoint {
@@ -65,7 +67,14 @@ impl<'a> Iterator for StackIter<'a> {
                         self.split = self.split_iter.next();
                         self.anchor = self.anchors_iter.next();
 
-                        StackPoint { x: s.x, node: a.node, c0, c1, cb, skip }
+                        StackPoint {
+                            x: s.x,
+                            node: a.node,
+                            c0,
+                            c1,
+                            cb,
+                            skip,
+                        }
                     }
                     Ordering::Less => {
                         // s < a
@@ -75,7 +84,14 @@ impl<'a> Iterator for StackIter<'a> {
 
                         self.split = self.split_iter.next();
 
-                        StackPoint { x: s.x, node: None, c0, c1, cb, skip }
+                        StackPoint {
+                            x: s.x,
+                            node: None,
+                            c0,
+                            c1,
+                            cb,
+                            skip,
+                        }
                     }
                     Ordering::Greater => {
                         // a < s
@@ -85,7 +101,14 @@ impl<'a> Iterator for StackIter<'a> {
 
                         self.anchor = self.anchors_iter.next();
 
-                        StackPoint { x: a.x, node: a.node, c0, c1, cb, skip }
+                        StackPoint {
+                            x: a.x,
+                            node: a.node,
+                            c0,
+                            c1,
+                            cb,
+                            skip,
+                        }
                     }
                 };
 
@@ -98,7 +121,14 @@ impl<'a> Iterator for StackIter<'a> {
                 let c1 = s.count.right;
                 let cb = ShapeCountBoolean::empty();
 
-                Some(StackPoint { x: s.x, node: None, c0, c1, cb, skip: false })
+                Some(StackPoint {
+                    x: s.x,
+                    node: None,
+                    c0,
+                    c1,
+                    cb,
+                    skip: false,
+                })
             }
             (None, Some(a)) => {
                 self.anchor = self.anchors_iter.next();
@@ -106,7 +136,14 @@ impl<'a> Iterator for StackIter<'a> {
                 let c1 = a.count.right;
                 let cb = a.count.right;
 
-                Some(StackPoint { x: a.x, node: a.node, c0, c1, cb, skip: true })
+                Some(StackPoint {
+                    x: a.x,
+                    node: a.node,
+                    c0,
+                    c1,
+                    cb,
+                    skip: true,
+                })
             }
             (None, None) => None,
         }

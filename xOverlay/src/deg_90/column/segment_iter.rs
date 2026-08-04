@@ -109,8 +109,8 @@ mod tests {
     use crate::definition::winding_count::ShapeCountBoolean;
     use crate::deg_90::column::count::LRCount;
     use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIterator};
-    use crate::geom::segment::Segment;
     use crate::geom::range::LineRange;
+    use crate::geom::segment::Segment;
     use alloc::vec;
 
     #[test]

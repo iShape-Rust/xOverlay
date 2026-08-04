@@ -130,7 +130,6 @@ mod tests {
         assert!(h.is_empty());
     }
 
-
     #[test]
     fn test_2() {
         let mut h = PosMinHeap::with_capacity(8);

@@ -5,12 +5,12 @@
 extern crate alloc;
 
 pub mod core;
-pub(crate) mod graph;
-mod geom;
-pub(crate) mod util;
-mod deg_90;
-mod partition;
 mod definition;
+mod deg_90;
+mod geom;
+pub(crate) mod graph;
+mod partition;
+pub(crate) mod util;
 
 pub use i_float;
 pub use i_shape;

@@ -1,9 +1,9 @@
+mod anchor;
 mod build;
+mod count;
 mod extract;
+mod graph;
+mod join_holes;
 mod link;
 mod segment_iter;
-mod count;
 mod stack_iter;
-mod graph;
-mod anchor;
-mod join_holes;

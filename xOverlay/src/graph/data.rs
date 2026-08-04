@@ -1,8 +1,8 @@
+use crate::core::options::IntOverlayOptions;
+use crate::definition::segment::SegmentFill;
 use alloc::vec::Vec;
 use core::ops::Range;
 use i_float::int::point::IntPoint;
-use crate::definition::segment::SegmentFill;
-use crate::core::options::IntOverlayOptions;
 
 pub struct OverlayGraph {
     pub(crate) options: IntOverlayOptions,
@@ -13,7 +13,7 @@ pub struct OverlayGraph {
 
 pub(crate) struct OverlayNode {
     pub(crate) point: IntPoint,
-    pub(crate) links: Range<usize> // indices to a links
+    pub(crate) links: Range<usize>, // indices to a links
 }
 
 #[derive(Debug, Clone, Copy, Default)]

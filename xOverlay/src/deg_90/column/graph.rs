@@ -1,6 +1,6 @@
+use crate::deg_90::column::link::Link;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use crate::deg_90::column::link::Link;
 
 pub(super) struct Node {
     pub(super) point: IntPoint,

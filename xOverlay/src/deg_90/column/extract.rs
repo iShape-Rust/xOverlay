@@ -1,10 +1,10 @@
-use alloc::vec;
+use crate::definition::segment::{CLIP_TOP, SUBJ_TOP};
 use crate::deg_90::column::graph::{ColumnGraph, Node};
+use crate::deg_90::column::link::{Link, LinkIndex};
+use alloc::vec;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 use i_shape::int::shape::{IntContour, IntShapes};
-use crate::definition::segment::{CLIP_TOP, SUBJ_TOP};
-use crate::deg_90::column::link::{Link, LinkIndex};
 
 pub(crate) struct ExtResult {
     shapes: IntShapes<i32>,
@@ -24,7 +24,6 @@ pub(crate) struct SubPath {
     pub(crate) path: IntContour<i32>,
     pub(crate) holes: Vec<IntContour<i32>>,
 }
-
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct NodeVisitor {
@@ -88,7 +87,7 @@ impl NodeVisitor {
             for _ in 0..4 {
                 next = next.shift(dir);
                 if self.visit_if_not_yet(next.order()) {
-                    return Some(next)
+                    return Some(next);
                 }
             }
             unreachable!("Must return link index!")
@@ -104,7 +103,11 @@ impl ColumnGraph {
         self.nodes.iter().map(|n| NodeVisitor::new(n)).collect()
     }
 
-    pub(crate) fn extract(&self, visited: &mut Vec<NodeVisitor>, points: &mut Vec<IntPoint>) -> ExtResult {
+    pub(crate) fn extract(
+        &self,
+        visited: &mut Vec<NodeVisitor>,
+        points: &mut Vec<IntPoint>,
+    ) -> ExtResult {
         visited.resize(self.nodes.len(), Default::default());
 
         for (i, n) in self.nodes.iter().enumerate() {
@@ -139,7 +142,13 @@ impl ColumnGraph {
         ExtResult { shapes, subpaths }
     }
 
-    fn find_sub_result(&self, start: usize, dir: bool, visited: &mut Vec<NodeVisitor>, points: &mut Vec<IntPoint>) -> SubResult {
+    fn find_sub_result(
+        &self,
+        start: usize,
+        dir: bool,
+        visited: &mut Vec<NodeVisitor>,
+        points: &mut Vec<IntPoint>,
+    ) -> SubResult {
         points.clear();
 
         let start_node = &self.nodes[start];
@@ -148,7 +157,9 @@ impl ColumnGraph {
         let start_link = start_node.links[link_index.order()];
         let mut next_node_index = start_link.index();
         while next_node_index != start {
-            if let Some(next_link_index) = visited[next_node_index].visit_and_next(link_index.opposite(), dir) {
+            if let Some(next_link_index) =
+                visited[next_node_index].visit_and_next(link_index.opposite(), dir)
+            {
                 let next_node = &self.nodes[next_node_index];
                 points.add_skipping_vertical(next_node.point);
 
@@ -180,7 +191,7 @@ impl VerticalMiddleFilter for Vec<IntPoint> {
         let n = self.len();
         if n < 2 {
             self.push(p);
-            return
+            return;
         }
         let a = self[n - 2];
         let b = &mut self[n - 1];
@@ -215,9 +226,6 @@ impl Link {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec::Vec;
-    use i_shape::int::shape::IntShape;
-    use i_shape::int_shape;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
     use crate::deg_90::column::build::ScanBuffer;
@@ -225,6 +233,9 @@ mod tests {
     use crate::deg_90::column::link::LinkIndex;
     use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
+    use alloc::vec::Vec;
+    use i_shape::int::shape::IntShape;
+    use i_shape::int_shape;
 
     #[test]
     fn test_shift() {
@@ -305,7 +316,10 @@ mod tests {
         debug_assert_eq!(result.shapes[0][1].len(), 4);
     }
 
-    fn first_column_graph_with_columns_count(contours: &IntShape<i32>, columns_count: usize) -> ColumnGraph {
+    fn first_column_graph_with_columns_count(
+        contours: &IntShape<i32>,
+        columns_count: usize,
+    ) -> ColumnGraph {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
@@ -314,7 +328,7 @@ mod tests {
             max_allowed_segments_per_line: 1000_000,
         };
 
-        let mut buffer= ScanBuffer::with_capacity(16);
+        let mut buffer = ScanBuffer::with_capacity(16);
 
         let mut map = ColumnMap::with_columns_count(contours, &[], columns_count);
         debug_assert!(map.columns.len() >= 1);

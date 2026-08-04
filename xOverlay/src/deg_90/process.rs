@@ -1,9 +1,9 @@
 use crate::core::fill_rule::FillRule;
+use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use crate::deg_90::config::ColumnConfig90;
 use crate::deg_90::merge::Merge;
-use crate::core::overlay::Overlay;
 use crate::deg_90::sub_graph::SubGraph;
 use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;

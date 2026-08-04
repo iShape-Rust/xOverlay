@@ -1,8 +1,7 @@
 use crate::definition::segment::SegmentFill;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum LinkIndex {
     Left = 0,
     Up = 1,

@@ -1,2 +1,2 @@
-mod extract;
 pub mod data;
+mod extract;
