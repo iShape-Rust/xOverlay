@@ -131,7 +131,7 @@ trait BestEdge {
 
 impl BestEdge for IntContour<i32> {
     fn best_edge(&self, p: IntPoint, best: &mut i32) -> bool {
-        debug_assert!(self.area_two() < 0);
+        debug_assert!(self.area_two() > 0);
         let mut result = false;
         let mut a = *self.last().unwrap();
         for &b in self.iter() {
