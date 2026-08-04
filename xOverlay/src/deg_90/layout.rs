@@ -148,6 +148,30 @@ impl ColumnLayout {
             power,
         })
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_range_and_count(range: LineRange, count: usize) -> Self {
+        assert!(count > 0, "column count must be greater than zero");
+
+        let width = (range.max - range.min) as usize;
+        assert!(width > 0, "range must have positive width");
+
+        for power in 0..(usize::BITS as usize) {
+            let calculated_count = (width.saturating_sub(1) >> power) + 1;
+            if calculated_count == count {
+                return Self {
+                    range,
+                    count,
+                    power,
+                };
+            }
+        }
+
+        panic!(
+            "column count {} is not representable for range width {}",
+            count, width
+        );
+    }
 }
 
 #[cfg(test)]
@@ -200,5 +224,23 @@ mod tests {
         assert_eq!(layout.index(range.max - 1), layout.count - 1);
         assert_eq!(layout.index_round_down(range.min), 0);
         assert_eq!(layout.index_round_down(range.max), layout.count - 1);
+    }
+
+    #[test]
+    fn test_constructor_with_range_and_count() {
+        let range = LineRange::with_min_max(0, 512);
+        let layout = ColumnLayout::with_range_and_count(range, 8);
+
+        assert_eq!(layout.count, 8);
+        assert_eq!(layout.step(), 64);
+        assert_eq!(layout.left_border(layout.count - 1), 448);
+        assert_eq!(layout.index(range.max - 1), layout.count - 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not representable")]
+    fn test_constructor_with_range_and_count_panics_for_unrepresentable_count() {
+        let range = LineRange::with_min_max(0, 512);
+        let _ = ColumnLayout::with_range_and_count(range, 3);
     }
 }

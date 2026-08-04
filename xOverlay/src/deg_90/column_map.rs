@@ -204,6 +204,35 @@ impl ColumnMap {
             }
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_columns_count(subj: &[IntContour], clip: &[IntContour], count: usize) -> Self {
+        assert!(count > 0, "column count must be greater than zero");
+
+        let (subj_range, _) = subj.x_range_and_count(CPUCount::Single);
+        let (clip_range, _) = clip.x_range_and_count(CPUCount::Single);
+
+        let range = LineRange::with_min_max(
+            subj_range.min.min(clip_range.min),
+            subj_range.max.max(clip_range.max),
+        );
+
+        let layout = ColumnLayout::with_range_and_count(range, count);
+
+        let mut mapper = Mapper::new(layout);
+        mapper.add_contours(subj);
+        mapper.add_contours(clip);
+
+        let mut column_map = Self {
+            columns: Vec::with_capacity(mapper.layout.count),
+        };
+
+        column_map.pre_init_columns(&mapper);
+        column_map.add_contours(subj, ShapeType::Subject, &mapper.layout);
+        column_map.add_contours(clip, ShapeType::Clip, &mapper.layout);
+
+        column_map
+    }
 }
 
 impl Mapper {

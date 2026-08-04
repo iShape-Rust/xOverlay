@@ -218,7 +218,6 @@ mod tests {
     use alloc::vec::Vec;
     use i_shape::int::shape::IntShape;
     use i_shape::int_shape;
-    use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
     use crate::deg_90::column::build::ScanBuffer;
@@ -243,12 +242,31 @@ mod tests {
     #[test]
     fn test_square_1_column() {
         #[rustfmt::skip]
-        let graph = single_graph_column(&int_shape![[
+        let graph = first_column_graph_with_columns_count(&int_shape![[
             [-5, -5],
             [ 5, -5],
             [ 5,  5],
             [-5,  5],
-        ]]);
+        ]], 1);
+
+        let mut visited = Vec::new();
+        let mut points = Vec::new();
+        let result = graph.extract(&mut visited, &mut points);
+
+        debug_assert_eq!(result.shapes.len(), 1);
+        debug_assert_eq!(result.shapes[0].len(), 1);
+        debug_assert_eq!(result.shapes[0][0].len(), 4);
+    }
+
+    #[test]
+    fn test_square_2_columns() {
+        #[rustfmt::skip]
+        let graph = first_column_graph_with_columns_count(&int_shape![[
+            [-5, -5],
+            [ 5, -5],
+            [ 5,  5],
+            [-5,  5],
+        ]], 2);
 
         let mut visited = Vec::new();
         let mut points = Vec::new();
@@ -262,7 +280,7 @@ mod tests {
     #[test]
     fn test_window_1_column() {
         #[rustfmt::skip]
-        let graph = single_graph_column(&int_shape![
+        let graph = first_column_graph_with_columns_count(&int_shape![
             [
                 [-5, -5],
                 [ 5, -5],
@@ -275,19 +293,19 @@ mod tests {
                 [ 2,  2],
                 [ 2, -2],
             ]
-    ]);
+    ], 1);
 
         let mut visited = Vec::new();
         let mut points = Vec::new();
         let result = graph.extract(&mut visited, &mut points);
 
         debug_assert_eq!(result.shapes.len(), 1);
-        debug_assert_eq!(result.shapes[0].len(), 1);
+        debug_assert_eq!(result.shapes[0].len(), 2);
         debug_assert_eq!(result.shapes[0][0].len(), 4);
+        debug_assert_eq!(result.shapes[0][1].len(), 4);
     }
 
-
-    fn single_graph_column(contours: &IntShape) -> ColumnGraph {
+    fn first_column_graph_with_columns_count(contours: &IntShape, columns_count: usize) -> ColumnGraph {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
@@ -298,8 +316,9 @@ mod tests {
 
         let mut buffer= ScanBuffer::with_capacity(16);
 
-        let mut map = ColumnMap::with_subj_and_clip(contours, &[], CPUCount::Single, config);
-        debug_assert!(map.columns.len() == 1);
+        let mut map = ColumnMap::with_columns_count(contours, &[], columns_count);
+        debug_assert!(map.columns.len() >= 1);
+
         let column = &mut map.columns[0];
         column.test_partition(config);
         let fill_rule = FillRule::NonZero;
