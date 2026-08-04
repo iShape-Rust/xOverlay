@@ -3,7 +3,7 @@ use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
-use x_overlay::core::solver::Solver;
+use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
 
@@ -56,7 +56,7 @@ impl LinesNetTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), Solver::new(multithreading)).expect("valid"));
+            let overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), CPUCount::new(multithreading)));
             black_box(overlay.overlay(FillRule::NonZero, rule));
         }
 
@@ -68,13 +68,13 @@ impl LinesNetTest {
         println!("{}     - {:.6}", polygons_count, time);
     }
 
-    fn many_lines_x(a: i32, n: usize) -> Vec<IntPath> {
+    fn many_lines_x(a: i32, n: usize) -> Vec<IntPath<i32>> {
         let w = a / 2;
         let s = a * (n as i32) / 2;
         let mut x = -s + w / 2;
         let mut result = Vec::with_capacity(n);
         for _ in 0..n {
-            let path: IntPath = vec![
+            let path: IntPath<i32> = vec![
                 IntPoint::new(x, -s),
                 IntPoint::new(x, s),
                 IntPoint::new(x + w, s),
@@ -87,13 +87,13 @@ impl LinesNetTest {
         result
     }
 
-    fn many_lines_y(a: i32, n: usize) -> Vec<IntPath> {
+    fn many_lines_y(a: i32, n: usize) -> Vec<IntPath<i32>> {
         let h = a / 2;
         let s = a * (n as i32) / 2;
         let mut y = -s + h / 2;
         let mut result = Vec::with_capacity(n);
         for _ in 0..n {
-            let path: IntPath = vec![
+            let path: IntPath<i32> = vec![
                 IntPoint::new(-s, y),
                 IntPoint::new(s, y),
                 IntPoint::new(s, y - h),

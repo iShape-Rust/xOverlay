@@ -15,7 +15,7 @@ use crate::deg_90::column::graph::{ColumnGraph, Node};
 use crate::deg_90::column::link::{Link, LinkIndex};
 use crate::deg_90::column::stack_iter::StackIter;
 use crate::deg_90::column_map::Column;
-use crate::gear::segment::Segment;
+use crate::geom::segment::Segment;
 use alloc::vec::Vec;
 use core::mem::swap;
 use core::num::NonZeroU32;

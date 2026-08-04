@@ -1,5 +1,5 @@
 use crate::core::winding::WindingCount;
-use crate::gear::segment::Segment;
+use crate::geom::segment::Segment;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::partition::min_heap::PosMinHeap;
@@ -158,7 +158,7 @@ impl LineSolver {
 #[cfg(test)]
 mod tests {
     use crate::core::winding::WindingCount;
-    use crate::gear::segment::Segment;
+    use crate::geom::segment::Segment;
     use crate::definition::winding_count::ShapeCountBoolean;
     use crate::geom::range::LineRange;
     use crate::partition::min_heap::PosMinHeap;

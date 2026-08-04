@@ -3,7 +3,7 @@ use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
-use x_overlay::core::solver::Solver;
+use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::shape::IntContour;
 
@@ -50,7 +50,7 @@ impl WindMillTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), Solver::new(multithreading)).expect("valid"));
+            let overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), CPUCount::new(multithreading)));
             black_box(overlay.overlay(FillRule::NonZero, rule));
         }
 
@@ -61,7 +61,7 @@ impl WindMillTest {
     }
 
 
-    fn geometry(size: i32, count: usize) -> (Vec<IntContour>, Vec<IntContour>) {
+    fn geometry(size: i32, count: usize) -> (Vec<IntContour<i32>>, Vec<IntContour<i32>>) {
         let mut subj_paths = Vec::with_capacity(4 * count * count);
         let mut clip_paths = Vec::with_capacity(4 * count * count);
 
@@ -85,7 +85,7 @@ impl WindMillTest {
         (subj_paths, clip_paths)
     }
 
-    fn shapes(center: IntPoint, a: i32) -> (Vec<IntContour>, Vec<IntContour>) {
+    fn shapes(center: IntPoint, a: i32) -> (Vec<IntContour<i32>>, Vec<IntContour<i32>>) {
         let clip_paths = vec![
             vec![
                 IntPoint::new(-3 * a + center.x, 1 * a + center.y),

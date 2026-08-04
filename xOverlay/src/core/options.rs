@@ -1,5 +1,5 @@
 use crate::core::direction::ContourDirection;
-use crate::deg_90::config::ColumnConfig90;
+pub use crate::deg_90::config::ColumnConfig90;
 
 /// Configuration options for polygon Boolean operations using [`Overlay`].
 ///

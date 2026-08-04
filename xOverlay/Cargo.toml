@@ -12,9 +12,6 @@ readme = "README.md"
 i_float = "^4.0.0"
 i_shape = "^4.0.0"
 #i_key_sort = "~0.6.0"
-i_tree = "~0.19.0"
-
-
 rayon = { optional = true, version = "^1.11" }
 #i_float = { path = "../iFloat" }
 #i_shape = { path = "../iShape" }

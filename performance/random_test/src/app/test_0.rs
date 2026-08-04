@@ -29,7 +29,7 @@ impl RandomTest0 {
         }
     }
 
-    fn random_ccw_rects(n: usize, p: usize) -> (Vec<IntContour>, usize) {
+    fn random_ccw_rects(n: usize, p: usize) -> (Vec<IntContour<i32>>, usize) {
         let w = 1i32 << p;
         let mut rng = rand::rng();
         let mut seen = vec![0u8; 1 << (2 * p)];

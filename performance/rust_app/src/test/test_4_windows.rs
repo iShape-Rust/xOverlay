@@ -3,7 +3,7 @@ use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
-use x_overlay::core::solver::Solver;
+use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
 
@@ -56,13 +56,12 @@ impl WindowsTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = black_box(Overlay::with_contours_custom(
+            let overlay = black_box(Overlay::with_contours_custom(
                 &subj_paths,
                 &clip_paths,
                 Default::default(),
-                Solver::new(multithreading),
-            )
-            .expect("valid"));
+                CPUCount::new(multithreading),
+            ));
             black_box(overlay.overlay(FillRule::NonZero, rule));
         }
         let duration = start.elapsed();
@@ -79,7 +78,7 @@ impl WindowsTest {
         b: i32,
         offset: i32,
         n: usize,
-    ) -> (Vec<IntPath>, Vec<IntPath>) {
+    ) -> (Vec<IntPath<i32>>, Vec<IntPath<i32>>) {
         let mut boundaries = Vec::with_capacity(n * n);
         let mut holes = Vec::with_capacity(n * n);
         let mut y = start.y;
@@ -88,7 +87,7 @@ impl WindowsTest {
         for _ in 0..n {
             let mut x = start.x;
             for _ in 0..n {
-                let boundary: IntPath = vec![
+                let boundary: IntPath<i32> = vec![
                     IntPoint::new(x, y),
                     IntPoint::new(x, y + a),
                     IntPoint::new(x + a, y + a),
@@ -96,7 +95,7 @@ impl WindowsTest {
                 ];
                 boundaries.push(boundary);
 
-                let hole: IntPath = vec![
+                let hole: IntPath<i32> = vec![
                     IntPoint::new(x + c, y + c),
                     IntPoint::new(x + c, y + d),
                     IntPoint::new(x + d, y + d),

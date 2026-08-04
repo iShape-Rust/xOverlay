@@ -8,7 +8,7 @@ pub struct RandomTestI1;
 
 impl RandomTestI1 {
 
-    pub fn run(subj: &[IntContour]) -> IntShapes {
+    pub fn run(subj: &[IntContour<i32>]) -> IntShapes<i32> {
         let mut overlay = Overlay::with_contours(subj, &[]);
         overlay.overlay(OverlayRule::Subject, FillRule::NonZero)
     }

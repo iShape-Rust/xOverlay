@@ -3,7 +3,7 @@ use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
-use x_overlay::core::solver::Solver;
+use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
 
@@ -51,7 +51,7 @@ impl CrossTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), Solver::new(multithreading)).expect("valid"));
+            let overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), CPUCount::new(multithreading)));
             black_box(overlay.overlay(FillRule::NonZero, rule));
         }
 
@@ -63,19 +63,19 @@ impl CrossTest {
         println!("{}     - {:.6}", polygons_count, time);
     }
 
-    fn concentric_squares(a: i32, n: usize) -> (Vec<IntPath>, Vec<IntPath>) {
+    fn concentric_squares(a: i32, n: usize) -> (Vec<IntPath<i32>>, Vec<IntPath<i32>>) {
         let mut vert = Vec::with_capacity(2 * n);
         let mut horz = Vec::with_capacity(2 * n);
         let s = 2 * a;
         let mut r = s;
         for _ in 0..n {
-            let hz_top: IntPath = vec![
+            let hz_top: IntPath<i32> = vec![
                 IntPoint::new(-r, r - a),
                 IntPoint::new(-r, r),
                 IntPoint::new(r, r),
                 IntPoint::new(r, r - a),
             ];
-            let hz_bot: IntPath = vec![
+            let hz_bot: IntPath<i32> = vec![
                 IntPoint::new(-r, -r),
                 IntPoint::new(-r, -r + a),
                 IntPoint::new(r, -r + a),
@@ -84,13 +84,13 @@ impl CrossTest {
             horz.push(hz_top);
             horz.push(hz_bot);
 
-            let vt_left: IntPath = vec![
+            let vt_left: IntPath<i32> = vec![
                 IntPoint::new(-r, -r),
                 IntPoint::new(-r, r),
                 IntPoint::new(-r + a, r),
                 IntPoint::new(-r + a, -r),
             ];
-            let vt_right: IntPath = vec![
+            let vt_right: IntPath<i32> = vec![
                 IntPoint::new(r - a, -r),
                 IntPoint::new(r - a, r),
                 IntPoint::new(r, r),

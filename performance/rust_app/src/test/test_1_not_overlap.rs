@@ -3,7 +3,7 @@ use std::time::Instant;
 use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
-use x_overlay::core::solver::Solver;
+use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::i_shape::int::path::IntPath;
 
@@ -55,7 +55,7 @@ impl NotOverlapTest {
         let start = Instant::now();
 
         for _i in 0..sq_it_count {
-            let mut overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), Solver::new(multithreading)).expect("valid"));
+            let overlay = black_box(Overlay::with_contours_custom(&subj_paths, &clip_paths, Default::default(), CPUCount::new(multithreading)));
             black_box(overlay.overlay(FillRule::NonZero, rule));
         }
 
@@ -67,13 +67,13 @@ impl NotOverlapTest {
         println!("{:.1}     - {:.6}", polygons_count, time);
     }
 
-    fn many_squares(start: IntPoint, size: i32, offset: i32, n: usize) -> Vec<IntPath> {
+    fn many_squares(start: IntPoint, size: i32, offset: i32, n: usize) -> Vec<IntPath<i32>> {
         let mut result = Vec::with_capacity(n * n);
         let mut y = start.y;
         for _ in 0..n {
             let mut x = start.x;
             for _ in 0..n {
-                let path: IntPath = vec![
+                let path: IntPath<i32> = vec![
                     IntPoint::new(x, y),
                     IntPoint::new(x, y + size),
                     IntPoint::new(x + size, y + size),

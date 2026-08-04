@@ -5,7 +5,7 @@ use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::anchor::Anchor;
 use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIter, SegmentSplitPointIterator};
-use crate::gear::segment::Segment;
+use crate::geom::segment::Segment;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct StackPoint {

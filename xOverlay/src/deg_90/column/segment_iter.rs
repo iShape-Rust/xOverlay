@@ -1,7 +1,7 @@
 use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::count::LRCount;
-use crate::gear::segment::Segment;
+use crate::geom::segment::Segment;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct SegmentEnd {
@@ -109,7 +109,7 @@ mod tests {
     use crate::definition::winding_count::ShapeCountBoolean;
     use crate::deg_90::column::count::LRCount;
     use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIterator};
-    use crate::gear::segment::Segment;
+    use crate::geom::segment::Segment;
     use crate::geom::range::LineRange;
     use alloc::vec;
 

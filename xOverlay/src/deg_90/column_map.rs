@@ -1,7 +1,7 @@
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
 use crate::deg_90::layout::ColumnLayout;
-use crate::gear::segment::Segment;
+use crate::geom::segment::Segment;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
 use crate::util::x_range::XRangeAndCount;
@@ -16,17 +16,17 @@ struct Mapper {
     parts: Vec<usize>,
 }
 
-pub(super) struct Column {
+pub(crate) struct Column {
     pub(super) range: LineRange,
     pub(super) segments: Vec<Segment>,
 }
 
 pub(crate) struct ColumnMap {
-    pub(super) columns: Vec<Column>,
+    pub(crate) columns: Vec<Column>,
 }
 
 impl ColumnMap {
-    pub(super) fn with_subj_and_clip(
+    pub(crate) fn with_subj_and_clip(
         subj: &[IntContour<i32>],
         clip: &[IntContour<i32>],
         cpu_count: CPUCount,

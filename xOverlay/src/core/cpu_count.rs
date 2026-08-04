@@ -7,6 +7,15 @@ pub enum CPUCount {
 
 impl CPUCount {
     #[inline]
+    pub const fn new(multithreading: bool) -> Self {
+        if multithreading {
+            Self::Auto
+        } else {
+            Self::Single
+        }
+    }
+
+    #[inline]
     pub(crate) fn count(&self) -> usize {
         #[cfg(feature = "allow_multithreading")]
         {

@@ -31,7 +31,7 @@ impl CircleCompare for [IntPoint] {
     }
 }
 
-impl CircleCompare for [IntShape] {
+impl CircleCompare for [IntShape<i32>] {
     fn are_equal(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -58,7 +58,7 @@ impl CircleCompare for [IntShape] {
 }
 
 #[allow(dead_code)]
-pub fn is_group_of_shapes_one_of(group: &Vec<IntShape>, groups: &Vec<Vec<IntShape>>) -> bool {
+pub fn is_group_of_shapes_one_of(group: &Vec<IntShape<i32>>, groups: &Vec<Vec<IntShape<i32>>>) -> bool {
     for item in groups.iter() {
         if item.are_equal(group) {
             return true;
@@ -69,7 +69,7 @@ pub fn is_group_of_shapes_one_of(group: &Vec<IntShape>, groups: &Vec<Vec<IntShap
 }
 
 #[allow(dead_code)]
-pub fn is_paths_one_of(paths: &IntPaths, groups: &Vec<IntPaths>) -> bool {
+pub fn is_paths_one_of(paths: &IntPaths<i32>, groups: &Vec<IntPaths<i32>>) -> bool {
     for item in groups.iter() {
         if item.eq(paths) {
             return true;

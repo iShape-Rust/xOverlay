@@ -3,13 +3,13 @@ use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use crate::deg_90::config::ColumnConfig90;
 use crate::deg_90::merge::Merge;
-use crate::deg_90::overlay::Overlay90;
+use crate::core::overlay::Overlay;
 use crate::deg_90::sub_graph::SubGraph;
 use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;
 use alloc::vec::Vec;
 
-impl Overlay90 {
+impl Overlay {
     pub(crate) fn process_overlay(
         self,
         fill_rule: FillRule,
@@ -17,7 +17,7 @@ impl Overlay90 {
     ) -> OverlayGraph {
         #[cfg(feature = "allow_multithreading")]
         {
-            if self.cpus.is_parallel() {
+            if self.cpu_count.is_parallel() {
                 return self.parallel_process(fill_rule, overlay_rule);
             }
         }
