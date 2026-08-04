@@ -7,8 +7,8 @@ use crate::gear::section::Section;
 use crate::geom::x_segment::XSegment;
 use alloc::vec::Vec;
 use core::mem::swap;
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::iter::ParallelIterator;
+#[cfg(feature = "allow_multithreading")]
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use crate::graph::data::OverlayGraph;
 
 impl Overlay {
@@ -17,11 +17,14 @@ impl Overlay {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> OverlayGraph {
-        if self.cpu_count.count() == 1 {
-            self.serial_process(fill_rule, overlay_rule)
-        } else {
-            self.parallel_process(fill_rule, overlay_rule)
+        #[cfg(feature = "allow_multithreading")]
+        {
+            if self.cpu_count.is_parallel() {
+                return self.parallel_process(fill_rule, overlay_rule);
+            }
         }
+
+        self.serial_process(fill_rule, overlay_rule)
     }
 
     fn serial_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
@@ -33,6 +36,7 @@ impl Overlay {
         OverlayGraph::new(1, SegmentsPack::with_packs(packs), self.options)
     }
 
+    #[cfg(feature = "allow_multithreading")]
     fn parallel_process(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
         let packs: Vec<_> = self
             .sections

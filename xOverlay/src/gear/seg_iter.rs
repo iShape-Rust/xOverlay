@@ -105,8 +105,8 @@ pub(crate) struct DropCollinear;
 impl PointFilter for DropCollinear {
     #[inline(always)]
     fn keep_vertex(p0: IntPoint, p1: IntPoint, p2: IntPoint) -> bool {
-        let a = p1.subtract(p0);
-        let b = p1.subtract(p2);
+        let a = p1 - p0;
+        let b = p1 - p2;
         a.cross_product(b) != 0
     }
 }

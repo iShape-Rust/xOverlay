@@ -650,8 +650,8 @@ mod tests {
         f: u8,
     }
 
-    fn contour_to_template_s_fills(contours: &[IntContour]) -> Option<Vec<SegFill>> {
-        let mut overlay = i_overlay::core::overlay::Overlay::with_contours(&contours, &[]);
+    fn contour_to_template_s_fills(contours: &[IntContour<i32>]) -> Option<Vec<SegFill>> {
+        let mut overlay = i_overlay::core::overlay::Overlay::with_contours(contours, &[]);
         let graph = overlay
             .build_graph_view(i_overlay::core::fill_rule::FillRule::NonZero)?;
 
@@ -677,7 +677,7 @@ mod tests {
     }
 
     fn contour_to_subject_s_fills(
-        contours: &IntShape,
+        contours: &IntShape<i32>,
         config: ColumnConfig90,
         buffer: &mut FillBuffer,
     ) -> Vec<SegFill> {
@@ -701,7 +701,7 @@ mod tests {
         s_fills
     }
 
-    fn test_contours(contours: &IntShape) {
+    fn test_contours(contours: &IntShape<i32>) {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,

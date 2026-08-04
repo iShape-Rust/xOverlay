@@ -15,14 +15,14 @@ pub struct Overlay90 {
 
 impl Overlay90 {
     #[inline]
-    pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Self {
+    pub fn with_contours(subj: &[IntContour<i32>], clip: &[IntContour<i32>]) -> Self {
         Self::with_contours_custom(subj, clip, CPUCount::Auto, Default::default())
     }
 
     #[inline]
     pub fn with_contours_custom(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         cpus: CPUCount,
         options: IntOverlayOptions,
     ) -> Self {
@@ -35,7 +35,7 @@ impl Overlay90 {
     }
 
     #[inline]
-    pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes {
+    pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes<i32> {
         self.process_overlay(fill_rule, overlay_rule)
             .extract_shapes(overlay_rule)
     }

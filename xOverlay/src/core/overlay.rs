@@ -23,14 +23,14 @@ pub struct Overlay {
 
 impl Overlay {
     #[inline]
-    pub fn with_contours(subj: &[IntContour], clip: &[IntContour]) -> Result<Self, OverlayError> {
+    pub fn with_contours(subj: &[IntContour<i32>], clip: &[IntContour<i32>]) -> Result<Self, OverlayError> {
         Self::with_contours_custom(subj, clip, Default::default(), CPUCount::Auto)
     }
 
     #[inline]
     pub fn with_contours_custom(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         options: IntOverlayOptions,
         cpu_count: CPUCount,
     ) -> Result<Self, OverlayError> {
@@ -38,7 +38,7 @@ impl Overlay {
     }
 
     #[inline]
-    pub fn overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes {
+    pub fn overlay(&mut self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes<i32> {
         self.process_overlay(fill_rule, overlay_rule)
             .extract_shapes(overlay_rule)
     }
@@ -48,7 +48,7 @@ impl Overlay {
         &mut self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-        output: &mut FlatContoursBuffer,
+        output: &mut FlatContoursBuffer<i32>,
     ) {
         self.process_overlay(fill_rule, overlay_rule)
             .extract_contours_into(overlay_rule, output);

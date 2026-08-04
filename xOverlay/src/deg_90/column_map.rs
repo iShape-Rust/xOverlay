@@ -27,8 +27,8 @@ pub(crate) struct ColumnMap {
 
 impl ColumnMap {
     pub(super) fn with_subj_and_clip(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         cpu_count: CPUCount,
         config: ColumnConfig90,
     ) -> Self {
@@ -50,8 +50,8 @@ impl ColumnMap {
     }
 
     fn calculate_layout(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         cpu_count: CPUCount,
         config: ColumnConfig90,
     ) -> ColumnLayout {
@@ -108,7 +108,7 @@ impl ColumnMap {
 
     fn add_contours(
         &mut self,
-        contours: &[IntContour],
+        contours: &[IntContour<i32>],
         shape_type: ShapeType,
         layout: &ColumnLayout,
     ) {
@@ -206,7 +206,7 @@ impl ColumnMap {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_columns_count(subj: &[IntContour], clip: &[IntContour], count: usize) -> Self {
+    pub(crate) fn with_columns_count(subj: &[IntContour<i32>], clip: &[IntContour<i32>], count: usize) -> Self {
         assert!(count > 0, "column count must be greater than zero");
 
         let (subj_range, _) = subj.x_range_and_count(CPUCount::Single);
@@ -245,7 +245,7 @@ impl Mapper {
         }
     }
 
-    fn add_contours(&mut self, contours: &[IntContour]) {
+    fn add_contours(&mut self, contours: &[IntContour<i32>]) {
         for contour in contours {
             if contour.len() >= 4 {
                 self.add_contour(contour);
@@ -254,7 +254,7 @@ impl Mapper {
     }
 
     #[inline]
-    fn add_contour(&mut self, contour: &IntContour) {
+    fn add_contour(&mut self, contour: &IntContour<i32>) {
         let mut p0 = *contour.last().unwrap();
         for &pi in contour.iter() {
             if pi.x == p0.x {

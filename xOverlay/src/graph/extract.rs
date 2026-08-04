@@ -17,7 +17,7 @@ impl OverlayGraph {
     ///
     /// Note: Outer boundary paths have a counterclockwise order, and holes have a clockwise order.
     #[inline]
-    pub fn extract_shapes(&mut self, overlay_rule: OverlayRule) -> IntShapes {
+    pub fn extract_shapes(&mut self, overlay_rule: OverlayRule) -> IntShapes<i32> {
         //
         // self.links.filter_by_overlay_into(overlay_rule, &mut buffer.visited);
         // let shapes = self.extract(overlay_rule, &mut buffer);
@@ -39,7 +39,7 @@ impl OverlayGraph {
     pub fn extract_contours_into(
         &mut self,
         overlay_rule: OverlayRule,
-        output: &mut FlatContoursBuffer,
+        output: &mut FlatContoursBuffer<i32>,
     ) {
         // let mut buffer = self.buffer.take().unwrap_or_default();
         // self.links.filter_by_overlay_into(overlay_rule, &mut buffer.visited);
@@ -47,7 +47,7 @@ impl OverlayGraph {
         // self.buffer = Some(buffer);
     }
 
-    fn extract(&self, overlay_rule: OverlayRule) -> IntShapes {
+    fn extract(&self, overlay_rule: OverlayRule) -> IntShapes<i32> {
         // let clockwise = self.options.output_direction == ContourDirection::Clockwise;
         //
         // let mut shapes = Vec::new();
@@ -152,7 +152,7 @@ impl OverlayGraph {
     // }
     // }
 
-    fn extract_contours(&self, overlay_rule: OverlayRule, output: &mut FlatContoursBuffer) {
+    fn extract_contours(&self, overlay_rule: OverlayRule, output: &mut FlatContoursBuffer<i32>) {
         // let clockwise = self.options.output_direction == ContourDirection::Clockwise;
         // let len = buffer.visited.len();
         // buffer.points.reserve_capacity(len);

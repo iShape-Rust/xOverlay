@@ -14,7 +14,7 @@ pub(crate) struct TileMap {
 }
 
 impl TileMap {
-    fn with_subj_and_clip(subj: &[IntContour], clip: &[IntContour], cpu: CPUCount, column_max_width_count: usize) -> Result<Self, OverlayError> {
+    fn with_subj_and_clip(subj: &[IntContour<i32>], clip: &[IntContour<i32>], cpu: CPUCount, column_max_width_count: usize) -> Result<Self, OverlayError> {
         let layout = Self::calculate_layout(subj, clip, cpu, column_max_width_count);
 
         let mut mapper = TileMapper::new(layout);
@@ -30,7 +30,7 @@ impl TileMap {
         Ok(tilemap)
     }
 
-    fn calculate_layout(subj: &[IntContour], clip: &[IntContour], cpu: CPUCount, column_max_width_count: usize) -> TileLayout {
+    fn calculate_layout(subj: &[IntContour<i32>], clip: &[IntContour<i32>], cpu: CPUCount, column_max_width_count: usize) -> TileLayout {
         debug_assert!(column_max_width_count.is_power_of_two());
 
         let (subj_range, subj_count) = subj.x_range_and_count(cpu);

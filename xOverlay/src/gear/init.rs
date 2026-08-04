@@ -17,8 +17,8 @@ use i_shape::int::shape::IntContour;
 
 impl Overlay {
     pub(crate) fn init_contours_custom(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         options: IntOverlayOptions,
         cpu_count: CPUCount,
     ) -> Result<Self, OverlayError> {
@@ -63,7 +63,7 @@ impl Overlay {
     fn add_contours(
         &mut self,
         layout: &SLayout,
-        contours: &[IntContour],
+        contours: &[IntContour<i32>],
         shape_type: ShapeType,
     ) -> Result<(), OverlayError> {
         let (direct, invert) = ShapeCountBoolean::with_shape_type(shape_type);

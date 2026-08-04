@@ -1,10 +1,10 @@
-use i_float::fix_vec::FixVec;
 use i_float::int::point::IntPoint;
+use i_float::int::vector::IntVector;
 
 pub(crate) struct NearestVector {
     c: IntPoint,            // center
-    va: FixVec,             // our target vector
-    vb: FixVec,             // nearest vector to Va by specified rotation
+    va: IntVector<i32>,     // our target vector
+    vb: IntVector<i32>,     // nearest vector to Va by specified rotation
     ab_more_180: bool,      // is angle between Va and Vb more than 180 degrees
     pub(crate) best_id: usize,
     rotation_factor: i64,   // +1 for clockwise, -1 for counterclockwise
@@ -13,8 +13,8 @@ pub(crate) struct NearestVector {
 impl NearestVector {
     #[inline]
     pub(crate) fn new(c: IntPoint, a: IntPoint, b: IntPoint, best_id: usize, clockwise: bool) -> Self {
-        let va = a.subtract(c);
-        let vb = b.subtract(c);
+        let va = a - c;
+        let vb = b - c;
         let (ab_more_180, rotation_factor) = if clockwise {
             (va.cross_product(vb) >= 0, 1)
         } else {
@@ -25,7 +25,7 @@ impl NearestVector {
 
     #[inline]
     pub(crate) fn add(&mut self, p: IntPoint, id: usize) {
-        let vp = p.subtract(self.c);
+        let vp = p - self.c;
         let ap_more_180 = self.va.cross_product(vp) * self.rotation_factor >= 0;
 
         if self.ab_more_180 == ap_more_180 {
@@ -43,8 +43,8 @@ impl NearestVector {
 
 #[cfg(test)]
 mod tests {
-    use i_float::fix_vec::FixVec;
     use i_float::int::point::IntPoint;
+    use i_float::int::vector::IntVector;
     use crate::graph::nearest_vector::NearestVector;
 
     #[test]
@@ -55,8 +55,8 @@ mod tests {
 
         let nearest_ccw = NearestVector::new(c, a, b, 0, false);
 
-        assert_eq!(nearest_ccw.va, FixVec::new(1, 0));
-        assert_eq!(nearest_ccw.vb, FixVec::new(0, 1));
+        assert_eq!(nearest_ccw.va, IntVector::new(1, 0));
+        assert_eq!(nearest_ccw.vb, IntVector::new(0, 1));
         assert!(!nearest_ccw.ab_more_180);
     }
 
@@ -70,7 +70,7 @@ mod tests {
         let p = IntPoint::new(-1, 0);
 
         nearest_ccw.add(p, 1);
-        assert_eq!(nearest_ccw.vb, FixVec::new(0, 1));
+        assert_eq!(nearest_ccw.vb, IntVector::new(0, 1));
         assert!(!nearest_ccw.ab_more_180);
     }
 
@@ -83,7 +83,7 @@ mod tests {
         let mut nearest_ccw = NearestVector::new(c, a, b, 0, false);
         let p = IntPoint::new(0, 1);
         nearest_ccw.add(p, 1);
-        assert_eq!(nearest_ccw.vb, FixVec::new(0, 1));
+        assert_eq!(nearest_ccw.vb, IntVector::new(0, 1));
         assert!(!nearest_ccw.ab_more_180);
     }
 
@@ -98,7 +98,7 @@ mod tests {
 
         nearest_ccw.add(p, 1);
 
-        assert_eq!(nearest_ccw.vb, FixVec::new(1, 1));
+        assert_eq!(nearest_ccw.vb, IntVector::new(1, 1));
     }
 
     #[test]
@@ -123,8 +123,8 @@ mod tests {
 
         let nearest_cw = NearestVector::new(c, a, b, 0, true);
 
-        assert_eq!(nearest_cw.va, FixVec::new(1, 0));
-        assert_eq!(nearest_cw.vb, FixVec::new(0, -1));
+        assert_eq!(nearest_cw.va, IntVector::new(1, 0));
+        assert_eq!(nearest_cw.vb, IntVector::new(0, -1));
         assert!(!nearest_cw.ab_more_180);
     }
 
@@ -138,7 +138,7 @@ mod tests {
         let p = IntPoint::new(-1, 0);
 
         nearest_cw.add(p, 1);
-        assert_eq!(nearest_cw.vb, FixVec::new(0, -1));
+        assert_eq!(nearest_cw.vb, IntVector::new(0, -1));
         assert!(!nearest_cw.ab_more_180);
     }
 
@@ -151,7 +151,7 @@ mod tests {
         let mut nearest_cw = NearestVector::new(c, a, b, 0, true);
         let p = IntPoint::new(0, -1);
         nearest_cw.add(p, 1);
-        assert_eq!(nearest_cw.vb, FixVec::new(0, -1));
+        assert_eq!(nearest_cw.vb, IntVector::new(0, -1));
         assert!(!nearest_cw.ab_more_180);
     }
 
@@ -166,7 +166,7 @@ mod tests {
 
         nearest_cw.add(p, 1);
 
-        assert_eq!(nearest_cw.vb, FixVec::new(0, -1));
+        assert_eq!(nearest_cw.vb, IntVector::new(0, -1));
     }
 
     #[test]

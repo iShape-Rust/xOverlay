@@ -7,13 +7,13 @@ use crate::definition::segment::{CLIP_TOP, SUBJ_TOP};
 use crate::deg_90::column::link::{Link, LinkIndex};
 
 pub(crate) struct ExtResult {
-    shapes: IntShapes,
+    shapes: IntShapes<i32>,
     subpaths: Vec<SubPath>,
 }
 
 enum SubResult {
-    Hull(IntContour),
-    Hole(IntContour),
+    Hull(IntContour<i32>),
+    Hole(IntContour<i32>),
     Path(SubPath),
 }
 
@@ -21,8 +21,8 @@ enum SubResult {
 pub(crate) struct SubPath {
     pub(crate) start: IntPoint,
     pub(crate) end: IntPoint,
-    pub(crate) path: IntContour,
-    pub(crate) holes: Vec<IntContour>,
+    pub(crate) path: IntContour<i32>,
+    pub(crate) holes: Vec<IntContour<i32>>,
 }
 
 
@@ -305,7 +305,7 @@ mod tests {
         debug_assert_eq!(result.shapes[0][1].len(), 4);
     }
 
-    fn first_column_graph_with_columns_count(contours: &IntShape, columns_count: usize) -> ColumnGraph {
+    fn first_column_graph_with_columns_count(contours: &IntShape<i32>, columns_count: usize) -> ColumnGraph {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,

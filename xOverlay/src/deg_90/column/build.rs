@@ -773,7 +773,7 @@ mod tests {
         }
     }
 
-    fn test_contours(contours: &IntShape) {
+    fn test_contours(contours: &IntShape<i32>) {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
@@ -912,14 +912,14 @@ mod tests {
         }
     }
 
-    fn contour_to_template_s_fills(contours: &[IntContour]) -> Option<Vec<SegFill>> {
-        let mut overlay = i_overlay::core::overlay::Overlay::with_contours(&contours, &[]);
+    fn contour_to_template_s_fills(contours: &[IntContour<i32>]) -> Option<Vec<SegFill>> {
+        let mut overlay = i_overlay::core::overlay::Overlay::with_contours(contours, &[]);
         let fill_rule = i_overlay::core::fill_rule::FillRule::NonZero;
         let overlay_rule = i_overlay::core::overlay_rule::OverlayRule::Subject;
 
 
         let graph = overlay.build_graph_view(fill_rule)?;
-        let shapes = graph.extract_shape_vectors(overlay_rule, &mut Default::default());
+        let shapes = graph.extract_vector_shapes(overlay_rule, &mut Default::default());
         let mut s_fills = Vec::new();
 
         for shape in shapes {
@@ -938,7 +938,7 @@ mod tests {
     }
 
     fn contour_to_subject_s_fills(
-        contours: &IntShape,
+        contours: &IntShape<i32>,
         config: ColumnConfig90,
         buffer: &mut ScanBuffer,
     ) -> Vec<SegFill> {

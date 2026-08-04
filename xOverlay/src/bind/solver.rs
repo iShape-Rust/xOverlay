@@ -106,19 +106,19 @@ impl ShapeBinder {
 }
 
 pub(crate) trait JoinHoles {
-    fn join_unsorted_holes(&mut self, holes: Vec<IntContour>, clockwise: bool);
+    fn join_unsorted_holes(&mut self, holes: Vec<IntContour<i32>>, clockwise: bool);
     fn join_sorted_holes(
         &mut self,
-        holes: Vec<IntContour>,
+        holes: Vec<IntContour<i32>>,
         anchors: Vec<IdSegment>,
         clockwise: bool,
     );
-    fn scan_join(&mut self, holes: Vec<IntPath>, hole_segments: Vec<IdSegment>, clockwise: bool);
+    fn scan_join(&mut self, holes: Vec<IntPath<i32>>, hole_segments: Vec<IdSegment>, clockwise: bool);
 }
 
-impl JoinHoles for Vec<IntShape> {
+impl JoinHoles for Vec<IntShape<i32>> {
     #[inline]
-    fn join_unsorted_holes(&mut self, holes: Vec<IntPath>, clockwise: bool) {
+    fn join_unsorted_holes(&mut self, holes: Vec<IntPath<i32>>, clockwise: bool) {
         if self.is_empty() || holes.is_empty() {
             return;
         }
@@ -147,7 +147,7 @@ impl JoinHoles for Vec<IntShape> {
     #[inline]
     fn join_sorted_holes(
         &mut self,
-        holes: Vec<IntContour>,
+        holes: Vec<IntContour<i32>>,
         anchors: Vec<IdSegment>,
         clockwise: bool,
     ) {
@@ -167,7 +167,7 @@ impl JoinHoles for Vec<IntShape> {
         self.scan_join(holes, anchors, clockwise);
     }
 
-    fn scan_join(&mut self, holes: Vec<IntPath>, hole_segments: Vec<IdSegment>, clockwise: bool) {
+    fn scan_join(&mut self, holes: Vec<IntPath<i32>>, hole_segments: Vec<IdSegment>, clockwise: bool) {
         let x_min = hole_segments[0].v_segment.a.x;
         let x_max = hole_segments[hole_segments.len() - 1].v_segment.a.x;
 
@@ -212,7 +212,7 @@ pub(crate) trait LeftBottomSegment {
     fn left_bottom_segment(&self) -> VSegment;
 }
 
-impl LeftBottomSegment for IntContour {
+impl LeftBottomSegment for IntContour<i32> {
     fn left_bottom_segment(&self) -> VSegment {
         let mut index = 0;
         let mut a = *self.first().unwrap();

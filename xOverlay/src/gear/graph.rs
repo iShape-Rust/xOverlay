@@ -9,8 +9,8 @@ use core::ops::Range;
 use i_float::int::point::IntPoint;
 use i_float::int::rect::IntRect;
 use i_key_sort::sort::two_keys::TwoKeysSort;
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::iter::ParallelIterator;
+#[cfg(feature = "allow_multithreading")]
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 #[derive(Debug, Clone, Copy)]
 struct End {
@@ -178,7 +178,11 @@ impl OverlayGraph {
                 let slice = unsafe { ends.get_unchecked_mut(range) };
                 slice.sort_by_two_keys_and_buffer(false, &mut buffer, |e| e.point.x, |e| e.point.y);
             }
-        } else {
+            return;
+        }
+
+        #[cfg(feature = "allow_multithreading")]
+        {
             let optimal_count_per_cpu = ends.len() / cpu;
             let mut src = ends;
             let mut count = 0;
@@ -214,6 +218,9 @@ impl OverlayGraph {
 
             sections.par_iter_mut().for_each(|s| s.sort());
         }
+
+        #[cfg(not(feature = "allow_multithreading"))]
+        unreachable!("multiple CPUs require the allow_multithreading feature");
     }
 }
 

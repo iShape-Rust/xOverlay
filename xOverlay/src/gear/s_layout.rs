@@ -58,8 +58,8 @@ impl SLayout {
     }
 
     pub(crate) fn with_subj_and_clip(
-        subj: &[IntContour],
-        clip: &[IntContour],
+        subj: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
         optimal_sections_count: usize,
     ) -> Self {
         let (subj_rect, subj_count) = subj.rect_and_count();
@@ -112,7 +112,7 @@ trait RectAndCount {
     fn rect_and_count(&self) -> (IntRect, usize);
 }
 
-impl RectAndCount for [IntContour] {
+impl RectAndCount for [IntContour<i32>] {
     fn rect_and_count(&self) -> (IntRect, usize) {
         let mut rect = IntRect::new(i32::MAX, i32::MIN, i32::MAX, i32::MIN);
         let mut count = 0;

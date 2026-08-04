@@ -6,7 +6,7 @@ pub(crate) trait XRangeAndCount {
     fn x_range_and_count(&self, cpu_count: CPUCount) -> (LineRange, usize);
 }
 
-impl XRangeAndCount for [IntContour] {
+impl XRangeAndCount for [IntContour<i32>] {
     fn x_range_and_count(&self, cpu: CPUCount) -> (LineRange, usize) {
         #[cfg(feature = "allow_multithreading")]
         {

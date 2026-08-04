@@ -37,7 +37,7 @@ impl TileMapper {
         }
     }
 
-    pub(super) fn add_contours(&mut self, contours: &[IntContour]) {
+    pub(super) fn add_contours(&mut self, contours: &[IntContour<i32>]) {
         for contour in contours {
             if contour.len() >= 4 {
                 self.add_contour(contour);
@@ -46,7 +46,7 @@ impl TileMapper {
     }
 
     #[inline(always)]
-    fn add_contour(&mut self, contour: &IntContour) {
+    fn add_contour(&mut self, contour: &IntContour<i32>) {
         let mut p0 = contour[0];
         for &pi in contour.iter() {
             if pi.x == p0.x {
@@ -124,7 +124,7 @@ impl TileMap {
 
     pub(super) fn add_contours(
         &mut self,
-        contours: &[IntContour],
+        contours: &[IntContour<i32>],
         shape_type: ShapeType,
         layout: &TileLayout,
     ) -> Result<(), OverlayError> {

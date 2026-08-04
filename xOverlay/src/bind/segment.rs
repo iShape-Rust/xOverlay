@@ -69,7 +69,7 @@ pub(crate) trait IdSegments {
     );
 }
 
-impl IdSegments for IntPath {
+impl IdSegments for IntPath<i32> {
     #[inline]
     fn append_id_segments(
         &self,

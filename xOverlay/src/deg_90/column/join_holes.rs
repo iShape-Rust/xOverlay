@@ -9,11 +9,11 @@ use i_shape::int::shape::{IntContour, IntShapes};
 
 impl ColumnGraph {
     pub(super) fn join_holes(
-        holes: Vec<IntContour>,
-        shapes: &mut IntShapes,
+        holes: Vec<IntContour<i32>>,
+        shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
-        let mut active_segments_count = 0;
+        let mut active_segments_count: usize = 0;
 
         for shape in shapes.iter() {
             active_segments_count += shape[0].len() / 4;
@@ -33,8 +33,8 @@ impl ColumnGraph {
     }
 
     fn direct_join_holes(
-        holes: Vec<IntContour>,
-        shapes: &mut IntShapes,
+        holes: Vec<IntContour<i32>>,
+        shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
         for hole in holes.into_iter() {
@@ -66,8 +66,8 @@ impl ColumnGraph {
 
     fn sort_join_holes(
         capacity: usize,
-        holes: Vec<IntContour>,
-        shapes: &mut IntShapes,
+        holes: Vec<IntContour<i32>>,
+        shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
         let mut edges = Vec::with_capacity(capacity);
@@ -129,7 +129,7 @@ trait BestEdge {
     fn best_edge(&self, p: IntPoint, best: &mut i32) -> bool;
 }
 
-impl BestEdge for IntContour {
+impl BestEdge for IntContour<i32> {
     fn best_edge(&self, p: IntPoint, best: &mut i32) -> bool {
         debug_assert!(self.area_two() < 0);
         let mut result = false;
@@ -194,7 +194,7 @@ mod tests {
     use i_shape::int::path::IntPath;
     use crate::deg_90::column::extract::SubPath;
 
-    fn sub_path(path: IntPath) -> SubPath {
+    fn sub_path(path: IntPath<i32>) -> SubPath {
         SubPath {
             start: Default::default(),
             end: Default::default(),
