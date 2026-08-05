@@ -1,14 +1,39 @@
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column::graph::{ColumnGraph, Node};
 use crate::deg_90::column::link::LinkIndex;
-use alloc::vec;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
-use i_shape::int::shape::{IntContour, IntShapes};
+use i_shape::int::area::Area;
+use i_shape::int::shape::IntContour;
+#[cfg(test)]
+use i_shape::int::shape::IntShapes;
 
 pub(crate) struct ExtResult {
-    pub(super) shapes: IntShapes<i32>,
+    contours: Vec<IntContour<i32>>,
     pub(super) subpaths: Vec<SubPath>,
+}
+
+impl ExtResult {
+    pub(super) fn into_contours(self) -> Vec<IntContour<i32>> {
+        self.contours
+    }
+
+    #[cfg(test)]
+    fn into_shapes(self) -> IntShapes<i32> {
+        let mut shapes = Vec::new();
+        let mut holes = Vec::new();
+        for contour in self.contours {
+            let area = contour.area_two();
+            if area > 0 {
+                shapes.push(alloc::vec![contour]);
+            } else if area < 0 {
+                holes.push(contour);
+            }
+        }
+        let mut subpaths = self.subpaths;
+        ColumnGraph::join_holes(holes, &mut shapes, &mut subpaths);
+        shapes
+    }
 }
 
 enum SubResult {
@@ -115,8 +140,9 @@ impl ColumnGraph {
             visited[i] = NodeVisitor::new(n)
         }
 
-        let mut shapes = Vec::new();
-        let mut holes = Vec::new();
+        // Column merging only needs oriented contours. Hole attachment is deferred until the
+        // merged graph is rebuilt into shapes, so avoid allocating one-element shapes here.
+        let mut contours = Vec::new();
         let mut subpaths = Vec::new();
 
         for i in 0..self.nodes.len() {
@@ -127,10 +153,12 @@ impl ColumnGraph {
             let result = self.find_sub_result(i, true, overlay_rule, visited, points);
             match result {
                 SubResult::Hull(contour) => {
-                    shapes.push(vec![contour]);
+                    debug_assert!(contour.area_two() > 0, "hull must be counterclockwise");
+                    contours.push(contour);
                 }
                 SubResult::Hole(contour) => {
-                    holes.push(contour);
+                    debug_assert!(contour.area_two() < 0, "hole must be clockwise");
+                    contours.push(contour);
                 }
                 SubResult::Path(subpath) => {
                     subpaths.push(subpath);
@@ -138,9 +166,7 @@ impl ColumnGraph {
             }
         }
 
-        Self::join_holes(holes, &mut shapes, &mut subpaths);
-
-        ExtResult { shapes, subpaths }
+        ExtResult { contours, subpaths }
     }
 
     fn find_sub_result(
@@ -265,9 +291,10 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        debug_assert_eq!(result.shapes.len(), 1);
-        debug_assert_eq!(result.shapes[0].len(), 1);
-        debug_assert_eq!(result.shapes[0][0].len(), 4);
+        let shapes = result.into_shapes();
+        debug_assert_eq!(shapes.len(), 1);
+        debug_assert_eq!(shapes[0].len(), 1);
+        debug_assert_eq!(shapes[0][0].len(), 4);
     }
 
     #[test]
@@ -284,9 +311,10 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        debug_assert_eq!(result.shapes.len(), 1);
-        debug_assert_eq!(result.shapes[0].len(), 1);
-        debug_assert_eq!(result.shapes[0][0].len(), 4);
+        let shapes = result.into_shapes();
+        debug_assert_eq!(shapes.len(), 1);
+        debug_assert_eq!(shapes[0].len(), 1);
+        debug_assert_eq!(shapes[0][0].len(), 4);
     }
 
     #[test]
@@ -311,13 +339,14 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        assert_eq!(result.shapes.len(), 1);
-        assert_eq!(result.shapes[0].len(), 2);
-        assert_eq!(result.shapes[0][0].len(), 4);
-        assert_eq!(result.shapes[0][1].len(), 4);
-        assert!(result.shapes[0][0].area_two() > 0);
-        assert!(result.shapes[0][1].area_two() < 0);
-        assert_eq!(result.shapes.area_two(), 168);
+        let shapes = result.into_shapes();
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes[0][0].len(), 4);
+        assert_eq!(shapes[0][1].len(), 4);
+        assert!(shapes[0][0].area_two() > 0);
+        assert!(shapes[0][1].area_two() < 0);
+        assert_eq!(shapes.area_two(), 168);
     }
 
     #[test]
@@ -605,7 +634,7 @@ mod tests {
         let graph = ColumnGraph::new(column, fill_rule, overlay_rule, &mut buffer);
         let result = graph.extract(overlay_rule, &mut Vec::new(), &mut Vec::new());
         assert!(result.subpaths.is_empty());
-        result.shapes
+        result.into_shapes()
     }
 
     fn i_overlay_shapes(

@@ -44,17 +44,7 @@ pub(super) fn extract_contours(
         "a closed column graph must not produce open subpaths"
     );
 
-    let mut contours = Vec::new();
-    for shape in result.shapes {
-        for (index, mut contour) in shape.into_iter().enumerate() {
-            let area = contour.area_two();
-            let must_be_positive = index == 0;
-            if (must_be_positive && area < 0) || (!must_be_positive && area > 0) {
-                contour.reverse();
-            }
-            contours.push(contour);
-        }
-    }
+    let mut contours = result.into_contours();
 
     normalize_contour_directions(&mut contours, column.range);
     contours
