@@ -214,7 +214,8 @@ fn merge_border_contours(
         }
         debug_assert_eq!(current, start, "portal traversal must close at its start");
 
-        simplify_contour(&mut contour);
+        close_contour(&mut contour);
+        debug_assert!(is_simple_contour(&contour));
         if contour.len() >= 4 {
             merged.push(contour);
         }
@@ -233,51 +234,125 @@ fn append_contour_arc(
     end: usize,
     result: &mut IntContour<i32>,
 ) {
+    debug_assert!(is_simple_arc(contour, start, end));
+
     if start <= end {
-        result.extend_from_slice(&contour[start..=end]);
+        append_simple_slice(&contour[start..=end], result);
     } else {
-        result.extend_from_slice(&contour[start..]);
-        result.extend_from_slice(&contour[..=end]);
+        append_simple_slice(&contour[start..], result);
+        append_simple_slice(&contour[..=end], result);
     }
 }
 
-fn simplify_contour(contour: &mut IntContour<i32>) {
-    if contour.len() < 3 {
+fn append_simple_slice(slice: &[IntPoint], result: &mut IntContour<i32>) {
+    if result.is_empty() {
+        result.extend_from_slice(slice);
         return;
     }
 
-    let mut result = Vec::with_capacity(contour.len());
-    for &point in contour.iter() {
+    let mut index = 0;
+    while index < slice.len() {
+        let point = slice[index];
         if result.last() == Some(&point) {
+            index += 1;
             continue;
         }
 
-        while result.len() >= 2 {
+        if result.len() >= 2 {
             let a = result[result.len() - 2];
             let b = result[result.len() - 1];
-            if !is_collinear(a, b, point) {
-                break;
+            if is_collinear(a, b, point) {
+                result.pop();
+                continue;
             }
-            result.pop();
         }
+
         result.push(point);
+        index += 1;
+        break;
+    }
+
+    result.extend_from_slice(&slice[index..]);
+}
+
+fn close_contour(contour: &mut IntContour<i32>) {
+    while contour.len() > 1 && contour.first() == contour.last() {
+        contour.pop();
     }
 
     loop {
-        let n = result.len();
+        let n = contour.len();
         if n < 3 {
             break;
         }
-        if is_collinear(result[n - 1], result[0], result[1]) {
-            result.remove(0);
-        } else if is_collinear(result[n - 2], result[n - 1], result[0]) {
-            result.pop();
+        if is_collinear(contour[n - 1], contour[0], contour[1]) {
+            contour.remove(0);
+        } else if is_collinear(contour[n - 2], contour[n - 1], contour[0]) {
+            contour.pop();
         } else {
             break;
         }
     }
+}
 
-    *contour = result;
+#[cfg(debug_assertions)]
+fn is_simple_arc(contour: &[IntPoint], start: usize, end: usize) -> bool {
+    let count = contour.len();
+    let arc_len = if start <= end {
+        end - start + 1
+    } else {
+        count - start + end + 1
+    };
+
+    for offset in 1..arc_len {
+        let previous = contour[(start + offset - 1) % count];
+        let point = contour[(start + offset) % count];
+        if previous == point {
+            return false;
+        }
+    }
+
+    for offset in 2..arc_len {
+        let a = contour[(start + offset - 2) % count];
+        let b = contour[(start + offset - 1) % count];
+        let c = contour[(start + offset) % count];
+        if is_collinear(a, b, c) {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn is_simple_arc(_: &[IntPoint], _: usize, _: usize) -> bool {
+    true
+}
+
+#[cfg(debug_assertions)]
+fn is_simple_contour(contour: &[IntPoint]) -> bool {
+    let count = contour.len();
+    if count < 3 {
+        return true;
+    }
+
+    for index in 0..count {
+        let a = contour[index];
+        let b = contour[(index + 1) % count];
+        let c = contour[(index + 2) % count];
+        if a == b || is_collinear(a, b, c) {
+            return false;
+        }
+    }
+
+    true
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn is_simple_contour(_: &[IntPoint]) -> bool {
+    true
 }
 
 #[inline(always)]
