@@ -298,6 +298,7 @@ mod tests {
     use crate::core::overlay::Overlay;
     use crate::core::overlay_rule::OverlayRule;
     use crate::deg_90::column;
+    use crate::deg_90::column::SolverBuffer;
     use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
     use crate::geom::range::LineRange;
@@ -654,10 +655,18 @@ mod tests {
             assert_eq!(overlay.columns.len(), COLUMNS);
 
             let start = Instant::now();
+            let mut buffer = SolverBuffer::default();
             let sub_graphs = overlay
                 .columns
                 .into_iter()
-                .map(|column| column.test_process(fill_rule, overlay_rule, options.columns_config))
+                .map(|column| {
+                    column.test_process(
+                        fill_rule,
+                        overlay_rule,
+                        options.columns_config,
+                        &mut buffer,
+                    )
+                })
                 .collect::<Vec<_>>();
             column_time += start.elapsed();
 
@@ -841,15 +850,17 @@ mod tests {
                     overlay
                         .columns
                         .into_par_iter()
-                        .map(|column| {
+                        .map_init(SolverBuffer::default, |buffer, column| {
                             column.test_process(
                                 FillRule::NonZero,
                                 overlay_rule,
                                 options.columns_config,
+                                buffer,
                             )
                         })
                         .collect::<Vec<_>>()
                 } else {
+                    let mut buffer = SolverBuffer::default();
                     overlay
                         .columns
                         .into_iter()
@@ -858,18 +869,27 @@ mod tests {
                                 FillRule::NonZero,
                                 overlay_rule,
                                 options.columns_config,
+                                &mut buffer,
                             )
                         })
                         .collect::<Vec<_>>()
                 };
                 #[cfg(not(feature = "allow_multithreading"))]
-                let sub_graphs = overlay
-                    .columns
-                    .into_iter()
-                    .map(|column| {
-                        column.test_process(FillRule::NonZero, overlay_rule, options.columns_config)
-                    })
-                    .collect::<Vec<_>>();
+                let sub_graphs = {
+                    let mut buffer = SolverBuffer::default();
+                    overlay
+                        .columns
+                        .into_iter()
+                        .map(|column| {
+                            column.test_process(
+                                FillRule::NonZero,
+                                overlay_rule,
+                                options.columns_config,
+                                &mut buffer,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
                 column_time += start.elapsed();
 
                 let start = Instant::now();

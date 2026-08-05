@@ -19,14 +19,25 @@ use i_key_sort::sort::one_key_cmp::OneKeyAndCmpSort;
 use i_shape::int::area::Area;
 use i_shape::int::shape::{IntContour, IntShapes};
 
+#[derive(Default)]
+pub(super) struct SolverBuffer {
+    scan: ScanBuffer,
+    nodes: Vec<graph::Node>,
+    visited: Vec<extract::NodeVisitor>,
+    points: Vec<i_float::int::point::IntPoint>,
+}
+
 pub(super) fn extract_contours(
     column: &Column,
     fill_rule: FillRule,
     overlay_rule: OverlayRule,
+    buffer: &mut SolverBuffer,
 ) -> Vec<IntContour<i32>> {
-    let mut scan_buffer = ScanBuffer::with_capacity(column.segments.len());
-    let graph = ColumnGraph::new(column, fill_rule, overlay_rule, &mut scan_buffer);
-    let result = graph.extract(overlay_rule, &mut Vec::new(), &mut Vec::new());
+    buffer.scan.reserve(column.segments.len());
+    let nodes = core::mem::take(&mut buffer.nodes);
+    let graph = ColumnGraph::with_nodes(column, fill_rule, overlay_rule, &mut buffer.scan, nodes);
+    let result = graph.extract(overlay_rule, &mut buffer.visited, &mut buffer.points);
+    buffer.nodes = graph.nodes;
 
     debug_assert!(
         result.subpaths.is_empty(),

@@ -1,6 +1,7 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
+use crate::deg_90::column::SolverBuffer;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use crate::deg_90::config::ColumnConfig90;
 use crate::deg_90::merge::Merge;
@@ -45,10 +46,12 @@ impl Overlay {
     }
 
     fn serial_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
+        let config = self.options.columns_config;
+        let mut buffer = SolverBuffer::default();
         let sub_graphs: Vec<_> = self
             .columns
             .into_iter()
-            .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
+            .map(|c| c.process(fill_rule, overlay_rule, config, &mut buffer))
             .collect();
 
         sub_graphs.merge()
@@ -56,10 +59,13 @@ impl Overlay {
 
     #[cfg(feature = "allow_multithreading")]
     fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
+        let config = self.options.columns_config;
         let sub_graphs: Vec<_> = self
             .columns
             .into_par_iter()
-            .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
+            .map_init(SolverBuffer::default, |buffer, c| {
+                c.process(fill_rule, overlay_rule, config, buffer)
+            })
             .collect();
 
         sub_graphs.parallel_merge()
@@ -72,15 +78,16 @@ impl Column {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
         config: ColumnConfig90,
+        buffer: &mut SolverBuffer,
     ) -> SubGraph {
         if let Some(columns) = self.partition(config) {
             let sub_graphs: Vec<_> = columns
                 .into_iter()
-                .map(|column| SubGraph::with_column(column, fill_rule, overlay_rule))
+                .map(|column| SubGraph::with_column_buffer(column, fill_rule, overlay_rule, buffer))
                 .collect();
             sub_graphs.merge()
         } else {
-            SubGraph::with_column(self, fill_rule, overlay_rule)
+            SubGraph::with_column_buffer(self, fill_rule, overlay_rule, buffer)
         }
     }
 
@@ -95,6 +102,7 @@ impl Column {
 mod tests {
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
+    use crate::deg_90::column::SolverBuffer;
     use crate::deg_90::column_map::Column;
     use crate::deg_90::config::ColumnConfig90;
     use crate::deg_90::sub_graph::SubGraph;
@@ -110,8 +118,9 @@ mod tests {
             fill_rule: FillRule,
             overlay_rule: OverlayRule,
             config: ColumnConfig90,
+            buffer: &mut SolverBuffer,
         ) -> SubGraph {
-            self.process(fill_rule, overlay_rule, config)
+            self.process(fill_rule, overlay_rule, config, buffer)
         }
     }
 }

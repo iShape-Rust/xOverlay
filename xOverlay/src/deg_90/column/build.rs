@@ -22,13 +22,19 @@ use core::num::NonZeroU32;
 use i_float::int::point::IntPoint;
 
 impl ColumnGraph {
+    #[cfg(test)]
     #[rustfmt::skip]
     pub(crate) fn new(column: &Column, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer) -> Self {
+        Self::with_nodes(column, fill_rule, overlay_rule, buffer, Vec::new())
+    }
+
+    #[rustfmt::skip]
+    pub(crate) fn with_nodes(column: &Column, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer, nodes: Vec<Node>) -> Self {
         match fill_rule {
-            FillRule::EvenOdd => Self::with_fill_strategy::<EvenOddStrategy>(column, overlay_rule, buffer),
-            FillRule::NonZero => Self::with_fill_strategy::<NonZeroStrategy>(column, overlay_rule, buffer),
-            FillRule::Positive => Self::with_fill_strategy::<PositiveStrategy>(column, overlay_rule, buffer),
-            FillRule::Negative => Self::with_fill_strategy::<NegativeStrategy>(column, overlay_rule, buffer),
+            FillRule::EvenOdd => Self::with_fill_strategy::<EvenOddStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::NonZero => Self::with_fill_strategy::<NonZeroStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::Positive => Self::with_fill_strategy::<PositiveStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::Negative => Self::with_fill_strategy::<NegativeStrategy>(column, overlay_rule, buffer, nodes),
         }
     }
 
@@ -36,20 +42,25 @@ impl ColumnGraph {
     fn with_fill_strategy<Fill: FillStrategy<ShapeCountBoolean>>(
         column: &Column,
         overlay_rule: OverlayRule,
-        buffer: &mut ScanBuffer
+        buffer: &mut ScanBuffer,
+        nodes: Vec<Node>,
     ) -> Self {
         match overlay_rule {
-            OverlayRule::Subject => Self::with_fill_and_filter_strategy::<Fill, SubjectFilter>(column, buffer),
-            OverlayRule::Clip => Self::with_fill_and_filter_strategy::<Fill, ClipFilter>(column, buffer),
-            OverlayRule::Intersect => Self::with_fill_and_filter_strategy::<Fill, IntersectFilter>(column, buffer),
-            OverlayRule::Union => Self::with_fill_and_filter_strategy::<Fill, UnionFilter>(column, buffer),
-            OverlayRule::Difference => Self::with_fill_and_filter_strategy::<Fill, DifferenceFilter>(column, buffer),
-            OverlayRule::Xor => Self::with_fill_and_filter_strategy::<Fill, XorFilter>(column, buffer),
-            OverlayRule::InverseDifference => Self::with_fill_and_filter_strategy::<Fill, InverseDifferenceFilter>(column, buffer),
+            OverlayRule::Subject => Self::with_fill_and_filter_strategy::<Fill, SubjectFilter>(column, buffer, nodes),
+            OverlayRule::Clip => Self::with_fill_and_filter_strategy::<Fill, ClipFilter>(column, buffer, nodes),
+            OverlayRule::Intersect => Self::with_fill_and_filter_strategy::<Fill, IntersectFilter>(column, buffer, nodes),
+            OverlayRule::Union => Self::with_fill_and_filter_strategy::<Fill, UnionFilter>(column, buffer, nodes),
+            OverlayRule::Difference => Self::with_fill_and_filter_strategy::<Fill, DifferenceFilter>(column, buffer, nodes),
+            OverlayRule::Xor => Self::with_fill_and_filter_strategy::<Fill, XorFilter>(column, buffer, nodes),
+            OverlayRule::InverseDifference => Self::with_fill_and_filter_strategy::<Fill, InverseDifferenceFilter>(column, buffer, nodes),
         }
     }
 
-    fn with_fill_and_filter_strategy<Fill, Filter>(column: &Column, buffer: &mut ScanBuffer) -> Self
+    fn with_fill_and_filter_strategy<Fill, Filter>(
+        column: &Column,
+        buffer: &mut ScanBuffer,
+        mut nodes: Vec<Node>,
+    ) -> Self
     where
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
@@ -57,7 +68,8 @@ impl ColumnGraph {
         let n = column.segments.len();
         buffer.clear();
 
-        let mut nodes: Vec<Node> = Vec::with_capacity(n);
+        nodes.clear();
+        nodes.reserve(n);
 
         let mut i = 0;
         while i < n {
@@ -120,16 +132,27 @@ struct NodeCursor {
     fill: SegmentFill,
 }
 
+#[derive(Default)]
 pub(crate) struct ScanBuffer {
     active: Vec<Anchor>,
     buffer: Vec<Anchor>,
 }
 
 impl ScanBuffer {
+    #[cfg(test)]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             active: Vec::with_capacity(capacity),
             buffer: Vec::with_capacity(capacity),
+        }
+    }
+
+    pub(super) fn reserve(&mut self, capacity: usize) {
+        if self.active.capacity() < capacity {
+            self.active.reserve(capacity - self.active.len());
+        }
+        if self.buffer.capacity() < capacity {
+            self.buffer.reserve(capacity - self.buffer.len());
         }
     }
 

@@ -1,6 +1,7 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column;
+use crate::deg_90::column::SolverBuffer;
 use crate::deg_90::column_map::Column;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
@@ -20,13 +21,28 @@ pub(super) struct SubGraph {
 }
 
 impl SubGraph {
+    #[cfg(test)]
     pub(super) fn with_column(
         column: Column,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> Self {
+        Self::with_column_buffer(
+            column,
+            fill_rule,
+            overlay_rule,
+            &mut SolverBuffer::default(),
+        )
+    }
+
+    pub(super) fn with_column_buffer(
+        column: Column,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+        buffer: &mut SolverBuffer,
+    ) -> Self {
         let range = column.range;
-        let contours = column::extract_contours(&column, fill_rule, overlay_rule);
+        let contours = column::extract_contours(&column, fill_rule, overlay_rule, buffer);
 
         Self::with_contours(range, contours)
     }
