@@ -122,7 +122,7 @@ fn merge_border_contours(
             if !prev_off_border && !next_off_border {
                 continue;
             }
-            assert_ne!(
+            debug_assert_ne!(
                 prev_off_border, next_off_border,
                 "a border portal must have exactly one off-border edge"
             );
@@ -137,7 +137,7 @@ fn merge_border_contours(
         }
 
         let group = group_start..nodes.len();
-        assert_eq!(group.len() & 1, 0, "a contour must have paired portals");
+        debug_assert_eq!(group.len() & 1, 0, "a contour must have paired portals");
         for offset in group.clone() {
             if is_arc_start(&nodes[offset], &contours, border_x) {
                 let end_index = if offset + 1 < group.end {
@@ -145,7 +145,7 @@ fn merge_border_contours(
                 } else {
                     group.start
                 };
-                assert!(
+                debug_assert!(
                     !is_arc_start(&nodes[end_index], &contours, border_x),
                     "contour portals must alternate between start and end"
                 );
@@ -158,7 +158,7 @@ fn merge_border_contours(
         merged.extend(contours);
         return;
     }
-    assert_eq!(nodes.len() & 1, 0, "border nodes must form pairs");
+    debug_assert_eq!(nodes.len() & 1, 0, "border nodes must form pairs");
 
     let mut border_order = (0..nodes.len()).collect::<Vec<_>>();
     border_order.sort_by_two_keys(
@@ -176,7 +176,7 @@ fn merge_border_contours(
         let b = pair[1];
         let a_is_start = is_arc_start(&nodes[a], &contours, border_x);
         let b_is_start = is_arc_start(&nodes[b], &contours, border_x);
-        assert_ne!(
+        debug_assert_ne!(
             a_is_start, b_is_start,
             "each border pair must contain one contour start and one contour end"
         );
@@ -194,11 +194,11 @@ fn merge_border_contours(
         let mut contour = Vec::new();
         let mut current = start;
         for _ in 0..nodes.len() {
-            assert!(!visited[current], "portal cycle closes at the wrong start");
+            debug_assert!(!visited[current], "portal cycle closes at the wrong start");
             visited[current] = true;
 
             let end = arc_end[current];
-            assert_ne!(end, usize::MAX, "contour arc has no end portal");
+            debug_assert_ne!(end, usize::MAX, "contour arc has no end portal");
             append_contour_arc(
                 &contours[nodes[current].contour_index],
                 nodes[current].position,
@@ -207,12 +207,12 @@ fn merge_border_contours(
             );
 
             current = border_next[end];
-            assert_ne!(current, usize::MAX, "border end has no next contour arc");
+            debug_assert_ne!(current, usize::MAX, "border end has no next contour arc");
             if current == start {
                 break;
             }
         }
-        assert_eq!(current, start, "portal traversal must close at its start");
+        debug_assert_eq!(current, start, "portal traversal must close at its start");
 
         simplify_contour(&mut contour);
         if contour.len() >= 4 {
