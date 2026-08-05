@@ -134,10 +134,18 @@ impl ColumnGraph {
         visited: &mut Vec<NodeVisitor>,
         points: &mut Vec<IntPoint>,
     ) -> ExtResult {
-        visited.resize(self.nodes.len(), Default::default());
-
-        for (i, n) in self.nodes.iter().enumerate() {
-            visited[i] = NodeVisitor::new(n)
+        visited.clear();
+        visited.reserve(self.nodes.len());
+        for (slot, node) in visited
+            .spare_capacity_mut()
+            .iter_mut()
+            .zip(self.nodes.iter())
+        {
+            slot.write(NodeVisitor::new(node));
+        }
+        // Every slot in `0..self.nodes.len()` was initialized by the exact-length zip above.
+        unsafe {
+            visited.set_len(self.nodes.len());
         }
 
         // Column merging only needs oriented contours. Hole attachment is deferred until the

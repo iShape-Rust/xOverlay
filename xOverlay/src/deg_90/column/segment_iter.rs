@@ -6,7 +6,6 @@ use crate::geom::segment::Segment;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct SegmentEnd {
     pub(super) x: i32,
-    pub(super) max: i32,
     pub(super) count: LRCount,
 }
 
@@ -20,7 +19,6 @@ pub(super) struct SegmentSplitPointIter<'a> {
     segments: &'a [Segment],
     index: usize,
     active_end: End,
-    min: i32,
     last_next: ShapeCountBoolean,
 }
 
@@ -31,7 +29,6 @@ impl<'a> SegmentSplitPointIter<'a> {
             segments,
             active_end: End::Min,
             last_next: ShapeCountBoolean::empty(),
-            min: segments[0].range.min,
             index: 0,
         }
     }
@@ -51,16 +48,15 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
                 self.index += 1;
                 if self.index < self.segments.len() {
                     let sn = self.segments[self.index];
-                    let (next, min, max) = if si.range.max == sn.range.min {
-                        (sn.count, self.min, sn.range.max)
+                    let next = if si.range.max == sn.range.min {
+                        sn.count
                     } else {
                         self.active_end = End::Min;
-                        (ShapeCountBoolean::empty(), self.min, si.range.max)
+                        ShapeCountBoolean::empty()
                     };
 
                     let pt = SegmentEnd {
                         x: si.range.max,
-                        max,
                         count: LRCount::new(self.last_next, next),
                     };
 
@@ -71,7 +67,6 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
                     Some(SegmentEnd {
                         x: si.range.max,
                         count: LRCount::new(self.last_next, ShapeCountBoolean::empty()),
-                        max: si.range.max,
                     })
                 }
             }
@@ -81,7 +76,6 @@ impl<'a> Iterator for SegmentSplitPointIter<'a> {
 
                 let se = SegmentEnd {
                     x: si.range.min,
-                    max: si.range.max,
                     count: LRCount::new(self.last_next, si.count),
                 };
 
@@ -130,7 +124,6 @@ mod tests {
             SegmentEnd {
                 x: 0,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(1)),
-                max: 2,
             }
         );
 
@@ -139,7 +132,6 @@ mod tests {
             SegmentEnd {
                 x: 2,
                 count: LRCount::new(ShapeCountBoolean::subj(1), ShapeCountBoolean::subj(0)),
-                max: 2,
             }
         );
     }
@@ -184,7 +176,6 @@ mod tests {
             SegmentEnd {
                 x: 0,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(1)),
-                max: 2,
             }
         );
 
@@ -193,7 +184,6 @@ mod tests {
             SegmentEnd {
                 x: 2,
                 count: LRCount::new(ShapeCountBoolean::subj(1), ShapeCountBoolean::subj(0)),
-                max: 2,
             }
         );
 
@@ -202,7 +192,6 @@ mod tests {
             SegmentEnd {
                 x: 3,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(2)),
-                max: 4,
             }
         );
 
@@ -211,7 +200,6 @@ mod tests {
             SegmentEnd {
                 x: 4,
                 count: LRCount::new(ShapeCountBoolean::subj(2), ShapeCountBoolean::subj(3)),
-                max: 5,
             }
         );
 
@@ -220,7 +208,6 @@ mod tests {
             SegmentEnd {
                 x: 5,
                 count: LRCount::new(ShapeCountBoolean::subj(3), ShapeCountBoolean::subj(0)),
-                max: 5,
             }
         );
 
@@ -229,7 +216,6 @@ mod tests {
             SegmentEnd {
                 x: 6,
                 count: LRCount::new(ShapeCountBoolean::subj(0), ShapeCountBoolean::subj(4)),
-                max: 7,
             }
         );
 
@@ -238,7 +224,6 @@ mod tests {
             SegmentEnd {
                 x: 7,
                 count: LRCount::new(ShapeCountBoolean::subj(4), ShapeCountBoolean::subj(0)),
-                max: 7,
             }
         );
     }

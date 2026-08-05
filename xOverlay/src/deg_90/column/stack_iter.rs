@@ -16,7 +16,6 @@ pub(super) struct StackPoint {
     pub(super) c0: ShapeCountBoolean,
     pub(super) c1: ShapeCountBoolean,
     pub(super) cb: ShapeCountBoolean,
-    pub(super) skip: bool,
 }
 
 pub(super) struct StackIter<'a> {
@@ -58,7 +57,6 @@ impl<'a> Iterator for StackIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match (self.split, self.anchor) {
             (Some(s), Some(a)) => {
-                let skip = s.max < a.x;
                 let sp = match s.x.cmp(&a.x) {
                     Ordering::Equal => {
                         let c0 = s.count.left + a.count.left;
@@ -74,7 +72,6 @@ impl<'a> Iterator for StackIter<'a> {
                             c0,
                             c1,
                             cb,
-                            skip,
                         }
                     }
                     Ordering::Less => {
@@ -91,7 +88,6 @@ impl<'a> Iterator for StackIter<'a> {
                             c0,
                             c1,
                             cb,
-                            skip,
                         }
                     }
                     Ordering::Greater => {
@@ -108,7 +104,6 @@ impl<'a> Iterator for StackIter<'a> {
                             c0,
                             c1,
                             cb,
-                            skip,
                         }
                     }
                 };
@@ -128,7 +123,6 @@ impl<'a> Iterator for StackIter<'a> {
                     c0,
                     c1,
                     cb,
-                    skip: false,
                 })
             }
             (None, Some(a)) => {
@@ -143,7 +137,6 @@ impl<'a> Iterator for StackIter<'a> {
                     c0,
                     c1,
                     cb,
-                    skip: true,
                 })
             }
             (None, None) => None,
