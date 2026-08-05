@@ -40,6 +40,19 @@ impl Overlay {
         self.process_overlay(fill_rule, overlay_rule)
             .extract_shapes(overlay_rule)
     }
+
+    /// Executes the Boolean operation and returns its boundaries as a flat list of contours.
+    ///
+    /// Unlike [`Self::overlay`], this method does not group holes with their containing outer
+    /// contours. Outer contours and holes are distinguished by their winding direction.
+    #[inline]
+    pub fn overlay_contours(
+        self,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) -> Vec<IntContour<i32>> {
+        self.process_overlay_contours(fill_rule, overlay_rule)
+    }
 }
 
 #[cfg(test)]
@@ -59,5 +72,36 @@ mod tests {
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 1);
         assert_eq!(shapes.area_two(), 256);
+    }
+
+    #[test]
+    fn overlay_contours_skips_hole_grouping() {
+        let subject = int_shape![[[-8, -8], [8, -8], [8, 8], [-8, 8]]];
+        let clip = int_shape![[[-4, -4], [4, -4], [4, 4], [-4, 4]]];
+        let contours = Overlay::with_contours(&subject, &clip)
+            .overlay_contours(FillRule::NonZero, OverlayRule::Difference);
+
+        assert_eq!(contours.len(), 2);
+        assert_eq!(
+            contours
+                .iter()
+                .map(|contour| contour.area_two())
+                .sum::<i64>(),
+            384
+        );
+        assert_eq!(
+            contours
+                .iter()
+                .filter(|contour| contour.area_two() > 0)
+                .count(),
+            1
+        );
+        assert_eq!(
+            contours
+                .iter()
+                .filter(|contour| contour.area_two() < 0)
+                .count(),
+            1
+        );
     }
 }

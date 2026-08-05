@@ -9,6 +9,7 @@ use x_overlay::core::fill_rule::FillRule;
 use x_overlay::core::overlay::Overlay;
 use x_overlay::core::overlay_rule::OverlayRule;
 use x_overlay::i_float::int::point::IntPoint;
+use x_overlay::i_shape::flat::buffer::FlatContoursBuffer;
 use x_overlay::i_shape::int::area::Area;
 use x_overlay::i_shape::int::shape::{IntContour, IntShape, IntShapes};
 
@@ -270,9 +271,27 @@ fn run_workload(workload: &Workload, budget: Duration) {
     let i_validation = solve_i(workload);
     validate(workload, &i_validation, "iOverlay");
 
+    let serial_contours_validation = solve_x_contours(workload, CPUCount::Single);
+    validate_contours(
+        workload,
+        &serial_contours_validation,
+        "xOverlay contours serial",
+    );
+    let multi_contours_validation = solve_x_contours(workload, CPUCount::Auto);
+    validate_contours(
+        workload,
+        &multi_contours_validation,
+        "xOverlay contours multithread",
+    );
+    let i_contours_validation = solve_i_contours(workload);
+    validate_flat_contours(workload, &i_contours_validation, "iOverlay contours");
+
     let serial = measure_for(budget, || solve_x(workload, CPUCount::Single));
     let multithread = measure_for(budget, || solve_x(workload, CPUCount::Auto));
     let i_overlay = measure_for(budget, || solve_i(workload));
+    let serial_contours = measure_for(budget, || solve_x_contours(workload, CPUCount::Single));
+    let multithread_contours = measure_for(budget, || solve_x_contours(workload, CPUCount::Auto));
+    let i_overlay_contours = measure_for(budget, || solve_i_contours(workload));
 
     println!(
         "{}: n={}, inputs={}, area={}, output_shapes={}",
@@ -285,6 +304,9 @@ fn run_workload(workload: &Workload, budget: Duration) {
     print_measurement("xOverlay serial", serial);
     print_measurement("xOverlay multithread", multithread);
     print_measurement("iOverlay", i_overlay);
+    print_measurement("xOverlay contours serial", serial_contours);
+    print_measurement("xOverlay contours MT", multithread_contours);
+    print_measurement("iOverlay contours", i_overlay_contours);
 }
 
 fn solve_x(workload: &Workload, cpu_count: CPUCount) -> IntShapes<i32> {
@@ -298,15 +320,40 @@ fn solve_x(workload: &Workload, cpu_count: CPUCount) -> IntShapes<i32> {
 }
 
 fn solve_i(workload: &Workload) -> IntShapes<i32> {
-    let rule = match workload.rule {
+    let rule = i_overlay_rule(workload.rule);
+    let mut overlay = IOverlay::with_contours(&workload.subject, &workload.clip);
+    overlay.overlay(rule, IFillRule::NonZero)
+}
+
+fn solve_x_contours(workload: &Workload, cpu_count: CPUCount) -> IntShape<i32> {
+    let overlay = Overlay::with_contours_custom(
+        &workload.subject,
+        &workload.clip,
+        Default::default(),
+        cpu_count,
+    );
+    overlay.overlay_contours(FillRule::NonZero, workload.rule)
+}
+
+fn solve_i_contours(workload: &Workload) -> FlatContoursBuffer<i32> {
+    let mut overlay = IOverlay::with_contours(&workload.subject, &workload.clip);
+    let mut output = FlatContoursBuffer::default();
+    overlay.overlay_into(
+        i_overlay_rule(workload.rule),
+        IFillRule::NonZero,
+        &mut output,
+    );
+    output
+}
+
+fn i_overlay_rule(rule: OverlayRule) -> IOverlayRule {
+    match rule {
         OverlayRule::Xor => IOverlayRule::Xor,
         OverlayRule::Union => IOverlayRule::Union,
         OverlayRule::Intersect => IOverlayRule::Intersect,
         OverlayRule::Difference => IOverlayRule::Difference,
         _ => unreachable!(),
-    };
-    let mut overlay = IOverlay::with_contours(&workload.subject, &workload.clip);
-    overlay.overlay(rule, IFillRule::NonZero)
+    }
 }
 
 fn validate(workload: &Workload, shapes: &IntShapes<i32>, solver: &str) {
@@ -318,7 +365,34 @@ fn validate(workload: &Workload, shapes: &IntShapes<i32>, solver: &str) {
     );
 }
 
-fn measure_for(mut budget: Duration, mut operation: impl FnMut() -> IntShapes<i32>) -> Measurement {
+fn validate_contours(workload: &Workload, contours: &[IntContour<i32>], solver: &str) {
+    let area = contours
+        .iter()
+        .map(|contour| contour.area_two())
+        .sum::<i64>()
+        / 2;
+    assert_eq!(
+        area, workload.expected_area,
+        "{solver} produced the wrong area for {}",
+        workload.name
+    );
+}
+
+fn validate_flat_contours(workload: &Workload, contours: &FlatContoursBuffer<i32>, solver: &str) {
+    let area = contours
+        .ranges
+        .iter()
+        .map(|range| contours.points[range.clone()].area_two())
+        .sum::<i64>()
+        / 2;
+    assert_eq!(
+        area, workload.expected_area,
+        "{solver} produced the wrong area for {}",
+        workload.name
+    );
+}
+
+fn measure_for<T>(mut budget: Duration, mut operation: impl FnMut() -> T) -> Measurement {
     black_box(operation());
     if budget.is_zero() {
         budget = Duration::from_millis(1);

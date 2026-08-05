@@ -10,6 +10,7 @@ use crate::deg_90::sub_graph::SubGraph;
 use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;
 use alloc::vec::Vec;
+use i_shape::int::shape::IntContour;
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -19,6 +20,20 @@ impl Overlay {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> OverlayGraph {
+        let options = self.options;
+        OverlayGraph::with_sub_graph(self.process_sub_graph(fill_rule, overlay_rule), options)
+    }
+
+    pub(crate) fn process_overlay_contours(
+        self,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) -> Vec<IntContour<i32>> {
+        self.process_sub_graph(fill_rule, overlay_rule)
+            .into_contours()
+    }
+
+    fn process_sub_graph(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
         #[cfg(feature = "allow_multithreading")]
         {
             if self.cpu_count.is_parallel() {
@@ -29,25 +44,25 @@ impl Overlay {
         self.serial_process(fill_rule, overlay_rule)
     }
 
-    fn serial_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
+    fn serial_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
         let sub_graphs: Vec<_> = self
             .columns
             .into_iter()
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
-        OverlayGraph::with_sub_graphs(sub_graphs, self.options)
+        sub_graphs.merge()
     }
 
     #[cfg(feature = "allow_multithreading")]
-    fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
+    fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
         let sub_graphs: Vec<_> = self
             .columns
             .into_par_iter()
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
-        OverlayGraph::with_sub_graph(sub_graphs.parallel_merge(), self.options)
+        sub_graphs.parallel_merge()
     }
 }
 
