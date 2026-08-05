@@ -9,6 +9,8 @@ use i_shape::int::area::Area;
 use i_shape::int::path::ContourExtension;
 use i_shape::int::shape::{IntContour, IntShapes};
 
+const SWEEP_MIN_ANCHORS_PER_Y: usize = 256;
+
 impl ColumnGraph {
     pub(super) fn join_holes(
         holes: Vec<IntContour<i32>>,
@@ -34,7 +36,24 @@ impl ColumnGraph {
         if holes.len() <= log2 {
             Self::direct_join_holes(holes, shapes, sub_paths)
         } else {
-            Self::sort_join_holes(active_segments_count, holes, shapes, sub_paths)
+            let anchors_by_y = hole_anchors_by_y(&holes);
+            if prefer_sweep(&anchors_by_y) {
+                Self::sweep_join_holes_with_anchors(
+                    active_segments_count,
+                    holes,
+                    anchors_by_y,
+                    shapes,
+                    sub_paths,
+                )
+            } else {
+                Self::sort_join_holes_with_anchors(
+                    active_segments_count,
+                    holes,
+                    anchors_by_y,
+                    shapes,
+                    sub_paths,
+                )
+            }
         }
     }
 
@@ -70,9 +89,141 @@ impl ColumnGraph {
         }
     }
 
+    #[cfg(test)]
+    fn sweep_join_holes(
+        capacity: usize,
+        holes: Vec<IntContour<i32>>,
+        shapes: &mut IntShapes<i32>,
+        sub_paths: &mut Vec<SubPath>,
+    ) {
+        let anchors_by_y = hole_anchors_by_y(&holes);
+        Self::sweep_join_holes_with_anchors(capacity, holes, anchors_by_y, shapes, sub_paths);
+    }
+
+    fn sweep_join_holes_with_anchors(
+        capacity: usize,
+        holes: Vec<IntContour<i32>>,
+        anchors_by_y: Vec<HoleAnchor>,
+        shapes: &mut IntShapes<i32>,
+        sub_paths: &mut Vec<SubPath>,
+    ) {
+        let mut anchors_by_x = anchors_by_y.clone();
+        anchors_by_x.sort_by(|a, b| a.point.cmp(&b.point));
+
+        let mut positions = vec![0; holes.len()];
+        for (position, anchor) in anchors_by_x.iter().enumerate() {
+            positions[anchor.hole_index] = position;
+        }
+
+        let holes_capacity = holes.iter().map(|hole| hole.len() / 4).sum::<usize>();
+        let mut edges = Vec::with_capacity(capacity + holes_capacity);
+
+        for (index, shape) in shapes.iter().enumerate() {
+            append_sweep_edges(
+                &shape[0],
+                SweepTarget::Parent(HoleParent {
+                    index,
+                    is_shape: true,
+                }),
+                &mut edges,
+            );
+        }
+
+        for (index, sub_path) in sub_paths.iter().enumerate() {
+            append_sweep_edges(
+                &sub_path.path,
+                SweepTarget::Parent(HoleParent {
+                    index,
+                    is_shape: false,
+                }),
+                &mut edges,
+            );
+        }
+
+        for (index, hole) in holes.iter().enumerate() {
+            append_sweep_edges(hole, SweepTarget::Hole(index), &mut edges);
+        }
+
+        edges.sort_by_one_key(false, |edge| edge.y);
+
+        let mut active = ActiveAnchors::new(holes.len());
+        let mut targets = vec![None; holes.len()];
+        let mut edge_end = edges.len();
+        let mut anchor_end = anchors_by_y.len();
+
+        while edge_end > 0 || anchor_end > 0 {
+            let edge_y = if edge_end > 0 {
+                edges[edge_end - 1].y
+            } else {
+                i32::MIN
+            };
+            let anchor_y = if anchor_end > 0 {
+                anchors_by_y[anchor_end - 1].point.y
+            } else {
+                i32::MIN
+            };
+            let y = edge_y.max(anchor_y);
+
+            // Edges at the same y are processed before anchors. This preserves
+            // the strict "edge below anchor" rule used by the direct solver.
+            while edge_end > 0 && edges[edge_end - 1].y == y {
+                edge_end -= 1;
+                let edge = edges[edge_end];
+                let start = anchors_by_x.partition_point(|a| a.point.x < edge.x_min);
+                let end = anchors_by_x.partition_point(|a| a.point.x < edge.x_max);
+
+                while let Some(position) = active.first_in(start, end) {
+                    active.remove(position);
+                    let hole_index = anchors_by_x[position].hole_index;
+                    targets[hole_index] = Some(edge.target);
+                }
+            }
+
+            while anchor_end > 0 && anchors_by_y[anchor_end - 1].point.y == y {
+                anchor_end -= 1;
+                let hole_index = anchors_by_y[anchor_end].hole_index;
+                active.insert(positions[hole_index]);
+            }
+        }
+
+        debug_assert_eq!(active.count(), 0, "some hole anchors have no parent edge");
+
+        let mut parents = vec![None; holes.len()];
+        for anchor in anchors_by_y {
+            let parent = match targets[anchor.hole_index].expect("hole target must be resolved") {
+                SweepTarget::Parent(parent) => parent,
+                SweepTarget::Hole(target_hole_index) => {
+                    parents[target_hole_index].expect("target hole parent must already be resolved")
+                }
+            };
+            parents[anchor.hole_index] = Some(parent);
+        }
+
+        for (hole, parent) in holes.into_iter().zip(parents) {
+            let parent = parent.expect("hole parent must be resolved");
+            if parent.is_shape {
+                shapes[parent.index].push(hole);
+            } else {
+                sub_paths[parent.index].holes.push(hole);
+            }
+        }
+    }
+
+    #[cfg(test)]
     fn sort_join_holes(
         capacity: usize,
         holes: Vec<IntContour<i32>>,
+        shapes: &mut IntShapes<i32>,
+        sub_paths: &mut Vec<SubPath>,
+    ) {
+        let anchors_by_y = hole_anchors_by_y(&holes);
+        Self::sort_join_holes_with_anchors(capacity, holes, anchors_by_y, shapes, sub_paths);
+    }
+
+    fn sort_join_holes_with_anchors(
+        capacity: usize,
+        holes: Vec<IntContour<i32>>,
+        anchors_by_y: Vec<HoleAnchor>,
         shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
@@ -130,16 +281,9 @@ impl ColumnGraph {
 
         edges.sort_by_one_key(false, |e| e.y);
 
-        let mut anchors: Vec<_> = holes
-            .iter()
-            .enumerate()
-            .map(|(index, hole)| (hole.bottom_anchor(), index))
-            .collect();
-        anchors.sort_by_one_key(false, |anchor| anchor.0.y);
-
         let mut parents = vec![None; holes.len()];
-        for (p, hole_index) in anchors {
-            let e = edges.first_under(p);
+        for anchor in anchors_by_y {
+            let e = edges.first_under(anchor.point);
             let index = e.index as usize;
             let parent = if e.is_shape {
                 HoleParent {
@@ -155,7 +299,7 @@ impl ColumnGraph {
                 let target_hole_index = index - hole_index_offset;
                 parents[target_hole_index].expect("target hole parent must already be resolved")
             };
-            parents[hole_index] = Some(parent);
+            parents[anchor.hole_index] = Some(parent);
         }
 
         for (hole, parent) in holes.into_iter().zip(parents) {
@@ -166,6 +310,158 @@ impl ColumnGraph {
                 sub_paths[parent.index].holes.push(hole);
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HoleAnchor {
+    point: IntPoint,
+    hole_index: usize,
+}
+
+fn hole_anchors_by_y(holes: &[IntContour<i32>]) -> Vec<HoleAnchor> {
+    let mut anchors: Vec<_> = holes
+        .iter()
+        .enumerate()
+        .map(|(hole_index, hole)| HoleAnchor {
+            point: hole.bottom_anchor(),
+            hole_index,
+        })
+        .collect();
+    anchors.sort_by_one_key(false, |anchor| anchor.point.y);
+    anchors
+}
+
+fn prefer_sweep(anchors_by_y: &[HoleAnchor]) -> bool {
+    let mut max_count = 0;
+    let mut start = 0;
+
+    while start < anchors_by_y.len() {
+        let y = anchors_by_y[start].point.y;
+        let mut end = start + 1;
+        while end < anchors_by_y.len() && anchors_by_y[end].point.y == y {
+            end += 1;
+        }
+
+        max_count = max_count.max(end - start);
+        start = end;
+    }
+
+    max_count >= SWEEP_MIN_ANCHORS_PER_Y
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SweepTarget {
+    Parent(HoleParent),
+    Hole(usize),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SweepEdge {
+    y: i32,
+    x_min: i32,
+    x_max: i32,
+    target: SweepTarget,
+}
+
+fn append_sweep_edges(path: &IntContour<i32>, target: SweepTarget, edges: &mut Vec<SweepEdge>) {
+    let mut a = path[path.len() - 1];
+    for &b in path {
+        if a.x < b.x {
+            edges.push(SweepEdge {
+                y: a.y,
+                x_min: a.x,
+                x_max: b.x,
+                target,
+            });
+        }
+        a = b;
+    }
+}
+
+// A flat Fenwick tree over hole anchors sorted by x. It contains only anchors
+// that the descending sweep has activated but not resolved yet.
+struct ActiveAnchors {
+    tree: Vec<usize>,
+    search_bit: usize,
+}
+
+impl ActiveAnchors {
+    fn new(count: usize) -> Self {
+        let mut search_bit = 1;
+        while search_bit << 1 <= count {
+            search_bit <<= 1;
+        }
+
+        Self {
+            tree: vec![0; count + 1],
+            search_bit,
+        }
+    }
+
+    #[inline]
+    fn insert(&mut self, index: usize) {
+        let mut i = index + 1;
+        while i < self.tree.len() {
+            self.tree[i] += 1;
+            i += i & i.wrapping_neg();
+        }
+    }
+
+    #[inline]
+    fn remove(&mut self, index: usize) {
+        let mut i = index + 1;
+        while i < self.tree.len() {
+            self.tree[i] -= 1;
+            i += i & i.wrapping_neg();
+        }
+    }
+
+    #[inline]
+    fn count(&self) -> usize {
+        self.prefix_count(self.tree.len() - 1)
+    }
+
+    #[inline]
+    fn first_in(&self, start: usize, end: usize) -> Option<usize> {
+        if start >= end {
+            return None;
+        }
+
+        let before = self.prefix_count(start);
+        if self.prefix_count(end) == before {
+            None
+        } else {
+            Some(self.index_for_order(before + 1))
+        }
+    }
+
+    #[inline]
+    fn prefix_count(&self, end: usize) -> usize {
+        let mut result = 0;
+        let mut i = end;
+        while i > 0 {
+            result += self.tree[i];
+            i &= i - 1;
+        }
+        result
+    }
+
+    #[inline]
+    fn index_for_order(&self, mut order: usize) -> usize {
+        let mut index = 0;
+        let mut bit = self.search_bit;
+
+        while bit > 0 {
+            let next = index + bit;
+            if next < self.tree.len() && self.tree[next] < order {
+                index = next;
+                order -= self.tree[next];
+            }
+            bit >>= 1;
+        }
+
+        index
     }
 }
 
@@ -260,14 +556,23 @@ impl FirstBottom for [ShapeEdge] {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use crate::deg_90::column::extract::SubPath;
     use crate::deg_90::column::graph::ColumnGraph;
-    use crate::deg_90::column::join_holes::{BottomAnchor, FirstBottom, ShapeEdge};
+    use crate::deg_90::column::join_holes::{
+        hole_anchors_by_y, prefer_sweep, ActiveAnchors, BottomAnchor, FirstBottom, ShapeEdge,
+    };
     use crate::geom::range::LineRange;
     use alloc::vec;
+    use alloc::vec::Vec;
+    use i_float::int::point::IntPoint;
     use i_key_sort::sort::one_key::OneKeySort;
     use i_shape::int::path::IntPath;
+    use i_shape::int::shape::{IntShape, IntShapes};
     use i_shape::{int_path, int_shape, int_shapes};
+    use std::hint::black_box;
+    use std::time::{Duration, Instant};
 
     fn sub_path(path: IntPath<i32>) -> SubPath {
         SubPath {
@@ -284,6 +589,24 @@ mod tests {
 
         assert_ne!(hole[0].y, 1);
         assert_eq!(hole.bottom_anchor().y, 1);
+    }
+
+    #[test]
+    fn test_active_anchors() {
+        let mut active = ActiveAnchors::new(8);
+        active.insert(1);
+        active.insert(3);
+        active.insert(6);
+
+        assert_eq!(active.count(), 3);
+        assert_eq!(active.first_in(0, 1), None);
+        assert_eq!(active.first_in(0, 8), Some(1));
+        assert_eq!(active.first_in(2, 6), Some(3));
+        assert_eq!(active.first_in(4, 8), Some(6));
+
+        active.remove(3);
+        assert_eq!(active.first_in(2, 6), None);
+        assert_eq!(active.count(), 2);
     }
 
     #[test]
@@ -423,11 +746,14 @@ mod tests {
 
         let mut shapes_0 = shapes.clone();
         let mut shapes_1 = shapes.clone();
+        let mut shapes_2 = shapes.clone();
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut shapes_0, &mut sub_paths);
-        ColumnGraph::sort_join_holes(10, holes, &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sort_join_holes(10, holes.clone(), &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sweep_join_holes(10, holes, &mut shapes_2, &mut sub_paths);
 
         assert_eq!(shapes_0, shapes_1);
+        assert_eq!(shapes_0, shapes_2);
         assert_eq!(shapes_0[0].len(), 2);
         assert_eq!(shapes_0[1].len(), 1);
         assert_eq!(shapes_0[2].len(), 1);
@@ -452,11 +778,14 @@ mod tests {
 
         let mut shapes_0 = shapes.clone();
         let mut shapes_1 = shapes.clone();
+        let mut shapes_2 = shapes.clone();
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut shapes_0, &mut sub_paths);
-        ColumnGraph::sort_join_holes(10, holes, &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sort_join_holes(10, holes.clone(), &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sweep_join_holes(10, holes, &mut shapes_2, &mut sub_paths);
 
         assert_eq!(shapes_0, shapes_1);
+        assert_eq!(shapes_0, shapes_2);
         assert_eq!(shapes_0[0].len(), 5);
         assert_eq!(shapes_0[1].len(), 1);
         assert_eq!(shapes_0[2].len(), 1);
@@ -483,11 +812,14 @@ mod tests {
 
         let mut shapes_0 = shapes.clone();
         let mut shapes_1 = shapes.clone();
+        let mut shapes_2 = shapes.clone();
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut shapes_0, &mut sub_paths);
-        ColumnGraph::sort_join_holes(10, holes, &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sort_join_holes(10, holes.clone(), &mut shapes_1, &mut sub_paths);
+        ColumnGraph::sweep_join_holes(10, holes, &mut shapes_2, &mut sub_paths);
 
         assert_eq!(shapes_0, shapes_1);
+        assert_eq!(shapes_0, shapes_2);
         assert_eq!(shapes_0[0].len(), 5);
         assert_eq!(shapes_0[1].len(), 2);
         assert_eq!(shapes_0[2].len(), 2);
@@ -506,12 +838,15 @@ mod tests {
         let expected_hole = holes[0].clone();
         let mut sub_paths = vec![];
         let mut direct_shapes = shapes.clone();
-        let mut sorted_shapes = shapes;
+        let mut sorted_shapes = shapes.clone();
+        let mut sweep_shapes = shapes;
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut direct_shapes, &mut sub_paths);
-        ColumnGraph::sort_join_holes(2, holes, &mut sorted_shapes, &mut sub_paths);
+        ColumnGraph::sort_join_holes(2, holes.clone(), &mut sorted_shapes, &mut sub_paths);
+        ColumnGraph::sweep_join_holes(2, holes, &mut sweep_shapes, &mut sub_paths);
 
         assert_eq!(direct_shapes, sorted_shapes);
+        assert_eq!(direct_shapes, sweep_shapes);
         assert_eq!(direct_shapes[0].len(), 2);
         assert_eq!(direct_shapes[1].len(), 1);
         assert_eq!(direct_shapes[0][1], expected_hole);
@@ -528,14 +863,170 @@ mod tests {
             [[3, 5], [8, 5], [8, 1], [3, 1]],
         ];
         let mut direct_shapes = shapes.clone();
-        let mut sorted_shapes = shapes;
+        let mut sorted_shapes = shapes.clone();
+        let mut sweep_shapes = shapes;
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut direct_shapes, &mut vec![]);
-        ColumnGraph::sort_join_holes(2, holes, &mut sorted_shapes, &mut vec![]);
+        ColumnGraph::sort_join_holes(2, holes.clone(), &mut sorted_shapes, &mut vec![]);
+        ColumnGraph::sweep_join_holes(2, holes, &mut sweep_shapes, &mut vec![]);
 
         assert_eq!(direct_shapes, sorted_shapes);
+        assert_eq!(direct_shapes, sweep_shapes);
         assert_eq!(direct_shapes[0].len(), 3);
         assert_eq!(direct_shapes[1].len(), 1);
+    }
+
+    #[test]
+    #[ignore = "performance comparison; run explicitly with --release --ignored --nocapture"]
+    fn performance_join_holes_scenarios() {
+        run_performance_scenario("wide", ambiguous_hole_groups_wide);
+        run_performance_scenario("vertical", ambiguous_hole_groups_vertical);
+        run_performance_scenario("grid", ambiguous_hole_groups_grid);
+        run_performance_scenario("chain", hole_chain);
+    }
+
+    #[test]
+    fn test_adaptive_join_strategy_scenarios() {
+        let (_, wide_below_threshold) = ambiguous_hole_groups_wide(255);
+        let (_, wide) = ambiguous_hole_groups_wide(256);
+        let (_, vertical) = ambiguous_hole_groups_vertical(4_096);
+        let (_, grid) = ambiguous_hole_groups_grid(4_096);
+        let (_, chain) = hole_chain(4_096);
+
+        assert!(!prefer_sweep(&hole_anchors_by_y(&wide_below_threshold)));
+        assert!(prefer_sweep(&hole_anchors_by_y(&wide)));
+        assert!(!prefer_sweep(&hole_anchors_by_y(&vertical)));
+        assert!(!prefer_sweep(&hole_anchors_by_y(&grid)));
+        assert!(!prefer_sweep(&hole_anchors_by_y(&chain)));
+    }
+
+    fn run_performance_scenario(name: &str, build: fn(usize) -> (IntShapes<i32>, IntShape<i32>)) {
+        let (_, largest_holes) = build(4_096);
+        let selected = if prefer_sweep(&hole_anchors_by_y(&largest_holes)) {
+            "sweep"
+        } else {
+            "sort"
+        };
+        std::println!("scenario={name}, adaptive={selected}");
+
+        for size in [256, 512, 1_024, 2_048, 4_096] {
+            let (source_shapes, source_holes) = build(size);
+            let capacity = source_shapes.len();
+            let mut old_best = Duration::MAX;
+            let mut sweep_best = Duration::MAX;
+            let mut expected = None;
+
+            for _ in 0..5 {
+                let mut shapes = source_shapes.clone();
+                let holes = source_holes.clone();
+                let start = Instant::now();
+
+                ColumnGraph::sort_join_holes(capacity, holes, &mut shapes, &mut vec![]);
+
+                old_best = old_best.min(start.elapsed());
+                black_box(&shapes);
+                expected.get_or_insert(shapes);
+            }
+
+            for _ in 0..5 {
+                let mut shapes = source_shapes.clone();
+                let holes = source_holes.clone();
+                let start = Instant::now();
+
+                ColumnGraph::sweep_join_holes(capacity, holes, &mut shapes, &mut vec![]);
+
+                sweep_best = sweep_best.min(start.elapsed());
+                black_box(&shapes);
+                assert_eq!(expected.as_ref(), Some(&shapes));
+            }
+
+            std::println!(
+                "size={size:>5}, holes={:>5}, old={old_best:?}, sweep={sweep_best:?}, speedup={:.2}x",
+                source_holes.len(),
+                old_best.as_secs_f64() / sweep_best.as_secs_f64(),
+            );
+        }
+    }
+
+    fn ambiguous_hole_groups_wide(group_count: usize) -> (IntShapes<i32>, IntShape<i32>) {
+        ambiguous_hole_groups(group_count, |index| (16 * index as i32, 0))
+    }
+
+    fn ambiguous_hole_groups_vertical(group_count: usize) -> (IntShapes<i32>, IntShape<i32>) {
+        ambiguous_hole_groups(group_count, |index| (0, 16 * index as i32))
+    }
+
+    fn ambiguous_hole_groups_grid(group_count: usize) -> (IntShapes<i32>, IntShape<i32>) {
+        let mut columns = 1;
+        while columns * columns < group_count {
+            columns += 1;
+        }
+
+        ambiguous_hole_groups(group_count, |index| {
+            let column = index % columns;
+            let row = index / columns;
+            (16 * column as i32, 16 * row as i32)
+        })
+    }
+
+    fn ambiguous_hole_groups(
+        group_count: usize,
+        position: impl Fn(usize) -> (i32, i32),
+    ) -> (IntShapes<i32>, IntShape<i32>) {
+        let mut shapes = Vec::with_capacity(2 * group_count);
+        let mut holes = Vec::with_capacity(2 * group_count);
+
+        for group_index in 0..group_count {
+            let (x, y) = position(group_index);
+
+            shapes.push(vec![vec![
+                IntPoint::new(x, y),
+                IntPoint::new(x + 10, y),
+                IntPoint::new(x + 10, y + 10),
+                IntPoint::new(x, y + 10),
+            ]]);
+            shapes.push(vec![vec![
+                IntPoint::new(x + 5, y + 2),
+                IntPoint::new(x + 7, y + 2),
+                IntPoint::new(x + 7, y + 4),
+                IntPoint::new(x + 5, y + 4),
+            ]]);
+
+            holes.push(vec![
+                IntPoint::new(x + 4, y + 9),
+                IntPoint::new(x + 6, y + 9),
+                IntPoint::new(x + 6, y + 6),
+                IntPoint::new(x + 4, y + 6),
+            ]);
+            holes.push(vec![
+                IntPoint::new(x + 3, y + 5),
+                IntPoint::new(x + 8, y + 5),
+                IntPoint::new(x + 8, y + 1),
+                IntPoint::new(x + 3, y + 1),
+            ]);
+        }
+
+        (shapes, holes)
+    }
+
+    fn hole_chain(hole_count: usize) -> (IntShapes<i32>, IntShape<i32>) {
+        let top = 3 * hole_count as i32 + 2;
+        let shapes = int_shapes![[[[0, 0], [10, 0], [10, top], [0, top]],],];
+        let mut holes = Vec::with_capacity(hole_count);
+
+        for index in 0..hole_count {
+            let bottom = 2 + 3 * index as i32;
+            let top = bottom + 1;
+            holes.push(vec![
+                IntPoint::new(5, bottom),
+                IntPoint::new(2, bottom),
+                IntPoint::new(2, top),
+                IntPoint::new(8, top),
+                IntPoint::new(8, bottom),
+            ]);
+        }
+
+        (shapes, holes)
     }
 
     #[test]
@@ -559,12 +1050,19 @@ mod tests {
 
         let mut sub_paths_0 = sub_paths.clone();
         let mut sub_paths_1 = sub_paths.clone();
+        let mut sub_paths_2 = sub_paths.clone();
 
         ColumnGraph::direct_join_holes(holes.clone(), &mut shapes, &mut sub_paths_0);
-        ColumnGraph::sort_join_holes(10, holes, &mut shapes, &mut sub_paths_1);
+        ColumnGraph::sort_join_holes(10, holes.clone(), &mut shapes, &mut sub_paths_1);
+        ColumnGraph::sweep_join_holes(10, holes, &mut shapes, &mut sub_paths_2);
 
-        for (sp0, sp1) in sub_paths_0.iter().zip(sub_paths_1.iter()) {
+        for ((sp0, sp1), sp2) in sub_paths_0
+            .iter()
+            .zip(sub_paths_1.iter())
+            .zip(sub_paths_2.iter())
+        {
             assert_eq!(sp0.holes.len(), sp1.holes.len());
+            assert_eq!(sp0.holes.len(), sp2.holes.len());
         }
 
         assert_eq!(sub_paths_0[0].holes.len(), 4);
