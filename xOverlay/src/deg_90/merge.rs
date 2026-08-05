@@ -2,6 +2,7 @@ use crate::deg_90::sub_graph::SubGraph;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::mem;
 use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key::OneKeySort;
 use i_key_sort::sort::two_keys::TwoKeysSort;
@@ -24,12 +25,12 @@ impl Merge for Vec<SubGraph> {
         let Some(mut result) = iter.next() else {
             return SubGraph {
                 range: LineRange::default(),
-                contours: Vec::new(),
+                chunks: Default::default(),
             };
         };
 
         for right in iter {
-            result = merge_pair(result, right);
+            merge_pair(&mut result, right);
         }
 
         result
@@ -49,19 +50,27 @@ impl ParallelMerge for Vec<SubGraph> {
     }
 }
 
-fn merge_pair(left: SubGraph, right: SubGraph) -> SubGraph {
+fn merge_pair(left: &mut SubGraph, right: SubGraph) {
     debug_assert_eq!(
         left.range.max, right.range.min,
         "only neighboring column groups can be merged"
     );
 
     let border_x = left.range.max;
-    let contours = merge_contours(left.contours, right.contours, border_x);
+    let mut left_border = mem::take(&mut left.chunks.right);
+    let mut merged = mem::take(&mut left.chunks.both);
+    left_border.append(&mut merged);
 
-    SubGraph {
-        range: LineRange::with_min_max(left.range.min, right.range.max),
-        contours,
-    }
+    let mut right_border = right.chunks.left;
+    let mut right_both = right.chunks.both;
+    right_border.append(&mut right_both);
+
+    left.chunks.middle.extend(right.chunks.middle);
+    left.chunks.right = right.chunks.right;
+
+    merge_border_contours(left_border, right_border, border_x, &mut merged);
+    left.range.max = right.range.max;
+    left.append_classified(merged);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,19 +105,16 @@ struct BorderEdge {
     edge_index: usize,
 }
 
-fn merge_contours(
-    left: Vec<IntContour<i32>>,
-    right: Vec<IntContour<i32>>,
+fn merge_border_contours(
+    mut left: Vec<IntContour<i32>>,
+    mut right: Vec<IntContour<i32>>,
     border_x: i32,
-) -> Vec<IntContour<i32>> {
+    merged: &mut Vec<IntContour<i32>>,
+) {
     #[cfg(debug_assertions)]
     validate_border_nodes(&left, Side::Left, border_x);
     #[cfg(debug_assertions)]
     validate_border_nodes(&right, Side::Right, border_x);
-
-    let (mut left, mut untouched) = partition_border_contours(left, border_x);
-    let (mut right, mut right_untouched) = partition_border_contours(right, border_x);
-    untouched.append(&mut right_untouched);
 
     let cuts = border_cuts(&left, &right, border_x);
     split_border_edges(&mut left, border_x, &cuts);
@@ -127,10 +133,8 @@ fn merge_contours(
 
     // Same-side reduction can close a contour away from this seam. Do not put
     // such contours through the cross-seam edge graph either.
-    let (left, mut left_untouched) = partition_border_contours(left, border_x);
-    let (right, mut right_untouched) = partition_border_contours(right, border_x);
-    untouched.append(&mut left_untouched);
-    untouched.append(&mut right_untouched);
+    retain_border_contours(&mut left, merged, border_x);
+    retain_border_contours(&mut right, merged, border_x);
 
     let mut edges = Vec::new();
     append_edges(&left, Side::Left, &mut edges);
@@ -149,32 +153,29 @@ fn merge_contours(
 
     let matches = matching_edges(&left_border, &right_border);
     if matches.is_empty() {
-        untouched.extend(left);
-        untouched.extend(right);
-        return untouched;
+        merged.extend(left);
+        merged.extend(right);
+        return;
     }
 
     apply_matches(&mut edges, &matches);
-    untouched.extend(collect_contours(&edges));
-    untouched
+    merged.extend(collect_contours(&edges));
 }
 
-fn partition_border_contours(
-    contours: Vec<IntContour<i32>>,
+fn retain_border_contours(
+    contours: &mut Vec<IntContour<i32>>,
+    untouched: &mut Vec<IntContour<i32>>,
     border_x: i32,
-) -> (Vec<IntContour<i32>>, Vec<IntContour<i32>>) {
-    let mut touching = Vec::new();
-    let mut untouched = Vec::new();
+) {
+    let mut index = 0;
 
-    for contour in contours {
-        if has_border_edge(&contour, border_x) {
-            touching.push(contour);
+    while index < contours.len() {
+        if has_border_edge(&contours[index], border_x) {
+            index += 1;
         } else {
-            untouched.push(contour);
+            untouched.push(contours.swap_remove(index));
         }
     }
-
-    (touching, untouched)
 }
 
 fn has_border_edge(contour: &IntContour<i32>, border_x: i32) -> bool {
@@ -264,17 +265,16 @@ fn split_border_edges(contours: &mut [IntContour<i32>], border_x: i32, cuts: &[i
 
             let y0 = a.y.min(b.y);
             let y1 = a.y.max(b.y);
+            let start = cuts.partition_point(|&y| y <= y0);
+            let end = cuts.partition_point(|&y| y < y1);
+            let edge_cuts = &cuts[start..end];
             if a.y < b.y {
-                for &y in cuts {
-                    if y0 < y && y < y1 {
-                        result.push(IntPoint::new(border_x, y));
-                    }
+                for &y in edge_cuts {
+                    result.push(IntPoint::new(border_x, y));
                 }
             } else {
-                for &y in cuts.iter().rev() {
-                    if y0 < y && y < y1 {
-                        result.push(IntPoint::new(border_x, y));
-                    }
+                for &y in edge_cuts.iter().rev() {
+                    result.push(IntPoint::new(border_x, y));
                 }
             }
         }
@@ -585,7 +585,7 @@ mod tests {
 
     #[cfg(feature = "allow_multithreading")]
     use super::ParallelMerge;
-    use super::{Merge, SubGraph};
+    use super::{Merge, SubGraph, split_border_edges};
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::options::IntOverlayOptions;
@@ -608,6 +608,46 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
+    fn sub_graph_separates_all_four_border_classes() {
+        let graph = sub_graph(
+            0,
+            10,
+            vec![
+                rectangle(0, 0, 5, 5),
+                rectangle(5, 10, 5, 5),
+                rectangle(0, 20, 10, 5),
+                rectangle(2, 30, 6, 5),
+            ],
+        );
+
+        assert_eq!(graph.chunks.left.len(), 1);
+        assert_eq!(graph.chunks.right.len(), 1);
+        assert_eq!(graph.chunks.both.len(), 1);
+        assert_eq!(graph.chunks.middle.len(), 1);
+        assert_eq!(graph.chunks.middle[0].len(), 1);
+    }
+
+    #[test]
+    fn splits_border_edges_with_strictly_interior_cuts_in_edge_order() {
+        let cuts = [-5, 0, 2, 5, 10, 15];
+        let mut contours = vec![
+            int_path![[0, 0], [0, 10], [5, 10], [5, 0]],
+            int_path![[0, 10], [0, 0], [-5, 0], [-5, 10]],
+        ];
+
+        split_border_edges(&mut contours, 0, &cuts);
+
+        assert_eq!(
+            contours[0],
+            int_path![[0, 0], [0, 2], [0, 5], [0, 10], [5, 10], [5, 0]]
+        );
+        assert_eq!(
+            contours[1],
+            int_path![[0, 10], [0, 5], [0, 2], [0, 0], [-5, 0], [-5, 10]]
+        );
+    }
+
+    #[test]
     fn joins_rectangles_across_seam() {
         let left = sub_graph(
             -10,
@@ -616,10 +656,10 @@ mod tests {
         );
         let right = sub_graph(0, 10, vec![int_path![[0, -5], [10, -5], [10, 5], [0, 5]]]);
 
-        let merged = vec![left, right].merge();
-        assert_eq!(merged.contours.len(), 1);
-        assert_eq!(merged.contours[0].len(), 4);
-        assert_eq!(merged.contours[0].area_two(), 400);
+        let contours = vec![left, right].merge().into_contours();
+        assert_eq!(contours.len(), 1);
+        assert_eq!(contours[0].len(), 4);
+        assert_eq!(contours[0].area_two(), 400);
     }
 
     #[cfg(feature = "allow_multithreading")]
@@ -638,10 +678,12 @@ mod tests {
         let parallel = make_parts().parallel_merge();
 
         assert_eq!(parallel.range, serial.range);
-        assert_eq!(parallel.contours, serial.contours);
-        assert_eq!(parallel.contours.len(), 1);
-        assert_eq!(parallel.contours[0].len(), 4);
-        assert_eq!(parallel.contours[0].area_two(), 1_000);
+        let serial = serial.into_contours();
+        let parallel = parallel.into_contours();
+        assert_eq!(parallel, serial);
+        assert_eq!(parallel.len(), 1);
+        assert_eq!(parallel[0].len(), 4);
+        assert_eq!(parallel[0].area_two(), 1_000);
     }
 
     #[test]
@@ -653,10 +695,10 @@ mod tests {
         );
         let right = sub_graph(0, 10, vec![int_path![[0, 0], [10, 0], [10, 5], [0, 5]]]);
 
-        let merged = vec![left, right].merge();
-        assert_eq!(merged.contours.len(), 1);
-        assert_eq!(merged.contours[0].len(), 6);
-        assert_eq!(merged.contours[0].area_two(), 300);
+        let contours = vec![left, right].merge().into_contours();
+        assert_eq!(contours.len(), 1);
+        assert_eq!(contours[0].len(), 6);
+        assert_eq!(contours[0].area_two(), 300);
     }
 
     #[test]
@@ -690,10 +732,10 @@ mod tests {
             ]],
         );
 
-        let merged = vec![left, right].merge();
-        assert_eq!(merged.contours.len(), 2);
+        let contours = vec![left, right].merge().into_contours();
+        assert_eq!(contours.len(), 2);
 
-        let shapes = column::rebuild_shapes(merged.contours);
+        let shapes = column::rebuild_shapes(contours);
         assert_eq!(
             shapes.len(),
             1,
@@ -1199,9 +1241,6 @@ mod tests {
         max: i32,
         contours: Vec<Vec<i_float::int::point::IntPoint>>,
     ) -> SubGraph {
-        SubGraph {
-            range: LineRange::with_min_max(min, max),
-            contours,
-        }
+        SubGraph::with_contours(LineRange::with_min_max(min, max), contours)
     }
 }
