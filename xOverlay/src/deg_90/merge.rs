@@ -99,9 +99,10 @@ fn merge_border_contours(
     let mut arc_end = Vec::new();
     for (contour_index, contour) in contours.iter().enumerate() {
         let count = contour.len();
-        if count < 2 {
-            continue;
-        }
+        debug_assert!(
+            count >= 4,
+            "a merged contour must have at least four points"
+        );
 
         let side = if contour_index < left_count {
             Side::Left
