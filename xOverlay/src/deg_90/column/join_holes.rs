@@ -1,10 +1,12 @@
 use crate::deg_90::column::extract::SubPath;
 use crate::deg_90::column::graph::ColumnGraph;
 use crate::geom::range::LineRange;
+use alloc::vec;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key::OneKeySort;
 use i_shape::int::area::Area;
+use i_shape::int::path::ContourExtension;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 impl ColumnGraph {
@@ -13,6 +15,10 @@ impl ColumnGraph {
         shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
+        if holes.is_empty() {
+            return;
+        }
+
         let mut active_segments_count: usize = 0;
 
         for shape in shapes.iter() {
@@ -38,14 +44,14 @@ impl ColumnGraph {
         sub_paths: &mut Vec<SubPath>,
     ) {
         for hole in holes.into_iter() {
-            let p = hole[0];
+            let p = hole.bottom_anchor();
 
             let mut best = i32::MIN;
             let mut best_shape_index = usize::MAX;
             let mut best_sub_path_index = usize::MAX;
 
             for (index, shape) in shapes.iter_mut().enumerate() {
-                if shape[0].best_edge(p, &mut best) {
+                if shape[0].contains_point(p) && shape[0].best_edge(p, &mut best) {
                     best_shape_index = index;
                 }
             }
@@ -70,7 +76,8 @@ impl ColumnGraph {
         shapes: &mut IntShapes<i32>,
         sub_paths: &mut Vec<SubPath>,
     ) {
-        let mut edges = Vec::with_capacity(capacity);
+        let holes_capacity = holes.iter().map(|hole| hole.len() / 4).sum::<usize>();
+        let mut edges = Vec::with_capacity(capacity + holes_capacity);
         for (index, shape) in shapes.iter().enumerate() {
             let main = &shape[0];
             let mut a = main[main.len() - 1];
@@ -103,17 +110,85 @@ impl ColumnGraph {
             }
         }
 
-        edges.sort_by_one_key(false, |e| e.y);
-
-        for hole in holes.into_iter() {
-            let e = edges.first_under(hole[0]);
-            let index = e.index as usize;
-            if e.is_shape {
-                shapes[index].push(hole);
-            } else {
-                sub_paths[index].holes.push(hole);
+        let hole_index_offset = sub_paths.len();
+        for (index, hole) in holes.iter().enumerate() {
+            let mut a = hole[hole.len() - 1];
+            for &b in hole.iter() {
+                // Holes are clockwise, so left-to-right segments are their
+                // top edges: the outer boundary seen by a point above them.
+                if a.x < b.x {
+                    edges.push(ShapeEdge {
+                        y: a.y,
+                        line_range: LineRange::with_min_max(a.x, b.x),
+                        index: (hole_index_offset + index) as u32,
+                        is_shape: false,
+                    });
+                }
+                a = b;
             }
         }
+
+        edges.sort_by_one_key(false, |e| e.y);
+
+        let mut anchors: Vec<_> = holes
+            .iter()
+            .enumerate()
+            .map(|(index, hole)| (hole.bottom_anchor(), index))
+            .collect();
+        anchors.sort_by_one_key(false, |anchor| anchor.0.y);
+
+        let mut parents = vec![None; holes.len()];
+        for (p, hole_index) in anchors {
+            let e = edges.first_under(p);
+            let index = e.index as usize;
+            let parent = if e.is_shape {
+                HoleParent {
+                    index,
+                    is_shape: true,
+                }
+            } else if index < hole_index_offset {
+                HoleParent {
+                    index,
+                    is_shape: false,
+                }
+            } else {
+                let target_hole_index = index - hole_index_offset;
+                parents[target_hole_index].expect("target hole parent must already be resolved")
+            };
+            parents[hole_index] = Some(parent);
+        }
+
+        for (hole, parent) in holes.into_iter().zip(parents) {
+            let parent = parent.expect("hole parent must be resolved");
+            if parent.is_shape {
+                shapes[parent.index].push(hole);
+            } else {
+                sub_paths[parent.index].holes.push(hole);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HoleParent {
+    index: usize,
+    is_shape: bool,
+}
+
+trait BottomAnchor {
+    fn bottom_anchor(&self) -> IntPoint;
+}
+
+impl BottomAnchor for IntContour<i32> {
+    #[inline]
+    fn bottom_anchor(&self) -> IntPoint {
+        let mut anchor = self[0];
+        for &p in self.iter().skip(1) {
+            if p.y < anchor.y {
+                anchor = p;
+            }
+        }
+        anchor
     }
 }
 
@@ -187,7 +262,7 @@ impl FirstBottom for [ShapeEdge] {
 mod tests {
     use crate::deg_90::column::extract::SubPath;
     use crate::deg_90::column::graph::ColumnGraph;
-    use crate::deg_90::column::join_holes::{FirstBottom, ShapeEdge};
+    use crate::deg_90::column::join_holes::{BottomAnchor, FirstBottom, ShapeEdge};
     use crate::geom::range::LineRange;
     use alloc::vec;
     use i_key_sort::sort::one_key::OneKeySort;
@@ -201,6 +276,14 @@ mod tests {
             path,
             holes: vec![],
         }
+    }
+
+    #[test]
+    fn test_bottom_anchor_is_not_required_to_be_first() {
+        let hole = int_path![[5, 8], [9, 8], [9, 1], [1, 1], [1, 8]];
+
+        assert_ne!(hole[0].y, 1);
+        assert_eq!(hole.bottom_anchor().y, 1);
     }
 
     #[test]
@@ -408,6 +491,51 @@ mod tests {
         assert_eq!(shapes_0[0].len(), 5);
         assert_eq!(shapes_0[1].len(), 2);
         assert_eq!(shapes_0[2].len(), 2);
+    }
+
+    #[test]
+    fn test_hole_is_joined_to_outer_hull_not_inner_island() {
+        let shapes = int_shapes![
+            [[[0, 0], [10, 0], [10, 10], [0, 10]],],
+            [[[4, 2], [6, 2], [6, 4], [4, 4]],],
+        ];
+        // The first point is above the island and shares its x-range. The old
+        // code used it as the anchor and therefore selected the island.
+        // Any point with minimum y (here y = 1) identifies the outer hull.
+        let holes = int_shape![[[5, 8], [9, 8], [9, 1], [1, 1], [1, 8]],];
+        let expected_hole = holes[0].clone();
+        let mut sub_paths = vec![];
+        let mut direct_shapes = shapes.clone();
+        let mut sorted_shapes = shapes;
+
+        ColumnGraph::direct_join_holes(holes.clone(), &mut direct_shapes, &mut sub_paths);
+        ColumnGraph::sort_join_holes(2, holes, &mut sorted_shapes, &mut sub_paths);
+
+        assert_eq!(direct_shapes, sorted_shapes);
+        assert_eq!(direct_shapes[0].len(), 2);
+        assert_eq!(direct_shapes[1].len(), 1);
+        assert_eq!(direct_shapes[0][1], expected_hole);
+    }
+
+    #[test]
+    fn test_bottom_anchor_skips_island_from_another_hole() {
+        let shapes = int_shapes![
+            [[[0, 0], [10, 0], [10, 10], [0, 10]],],
+            [[[5, 2], [7, 2], [7, 4], [5, 4]],],
+        ];
+        let holes = int_shape![
+            [[4, 9], [6, 9], [6, 6], [4, 6]],
+            [[3, 5], [8, 5], [8, 1], [3, 1]],
+        ];
+        let mut direct_shapes = shapes.clone();
+        let mut sorted_shapes = shapes;
+
+        ColumnGraph::direct_join_holes(holes.clone(), &mut direct_shapes, &mut vec![]);
+        ColumnGraph::sort_join_holes(2, holes, &mut sorted_shapes, &mut vec![]);
+
+        assert_eq!(direct_shapes, sorted_shapes);
+        assert_eq!(direct_shapes[0].len(), 3);
+        assert_eq!(direct_shapes[1].len(), 1);
     }
 
     #[test]
