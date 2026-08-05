@@ -7,7 +7,7 @@ SOURCE := src/main.cpp
 CPPFLAGS += -I$(BOOST_PREFIX)/include
 CXXFLAGS ?= -O3 -DNDEBUG -std=c++20 -march=native
 
-.PHONY: all run compare clean
+.PHONY: all run compare large clean
 
 all: $(TARGET)
 
@@ -21,6 +21,10 @@ run: $(TARGET)
 compare: $(TARGET)
 	cargo run --manifest-path rust/Cargo.toml --release -- --scenario all --budget-ms 600
 	./$(TARGET) --scenario all --budget-ms 600
+
+large: $(TARGET)
+	cargo run --manifest-path rust/Cargo.toml --release -- --large-contours
+	./$(TARGET) --large-contours
 
 clean:
 	rm -rf build

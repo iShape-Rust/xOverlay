@@ -17,6 +17,7 @@ struct Config {
     scenario: String,
     n_override: Option<usize>,
     budget: Duration,
+    large_contours: bool,
 }
 
 struct Workload {
@@ -45,13 +46,18 @@ fn main() {
     let workloads = make_workloads(&config);
 
     println!(
-        "Rust comparison: xOverlay={}, iOverlay={}, fill=NonZero, budget={}ms",
+        "Rust comparison: xOverlay={}, iOverlay={}, fill=NonZero, budget={}ms, large_contours={}",
         env!("CARGO_PKG_VERSION"),
         i_overlay_version(),
-        config.budget.as_millis()
+        config.budget.as_millis(),
+        config.large_contours,
     );
     for workload in workloads {
-        run_workload(&workload, config.budget);
+        if config.large_contours {
+            run_large_contour_workload(&workload);
+        } else {
+            run_workload(&workload, config.budget);
+        }
     }
 }
 
@@ -63,6 +69,7 @@ fn parse_config() -> Config {
     let mut scenario = String::from("all");
     let mut n_override = None;
     let mut budget = Duration::from_millis(600);
+    let mut large_contours = false;
     let mut args = env::args().skip(1);
     while let Some(option) = args.next() {
         match option.as_str() {
@@ -79,9 +86,10 @@ fn parse_config() -> Config {
                         .expect("--budget-ms must be a positive integer"),
                 );
             }
+            "--large-contours" => large_contours = true,
             "--help" => {
                 println!(
-                    "Usage: overlay_comparison [--scenario NAME] [--n N] [--budget-ms MS]\n\
+                    "Usage: overlay_comparison [--scenario NAME] [--n N] [--budget-ms MS] [--large-contours]\n\
                      Scenarios: all, checkerboard, not-overlap, lines-net, windows, nested"
                 );
                 std::process::exit(0);
@@ -95,14 +103,38 @@ fn parse_config() -> Config {
         scenario != "all" || n_override.is_none(),
         "--n requires one scenario"
     );
+    assert!(
+        !large_contours
+            || matches!(
+                scenario.as_str(),
+                "all" | "checkerboard" | "not-overlap" | "lines-net"
+            ),
+        "--large-contours supports only all, checkerboard, not-overlap, and lines-net"
+    );
     Config {
         scenario,
         n_override,
         budget,
+        large_contours,
     }
 }
 
 fn make_workloads(config: &Config) -> Vec<Workload> {
+    if config.large_contours {
+        if config.scenario != "all" {
+            let default_n = if config.scenario == "lines-net" {
+                1_000
+            } else {
+                708
+            };
+            return vec![make_workload(
+                &config.scenario,
+                config.n_override.unwrap_or(default_n),
+            )];
+        }
+        return vec![checkerboard(708), not_overlap(708), lines_net(1_000)];
+    }
+
     if config.scenario != "all" {
         let default_n = if config.scenario == "nested" {
             4096
@@ -309,6 +341,48 @@ fn run_workload(workload: &Workload, budget: Duration) {
     print_measurement("iOverlay contours", i_overlay_contours);
 }
 
+fn run_large_contour_workload(workload: &Workload) {
+    let serial_validation = solve_x_contours(workload, CPUCount::Single);
+    validate_contours(
+        workload,
+        &serial_validation,
+        "xOverlay large contours serial",
+    );
+    drop(serial_validation);
+    let multi_validation = solve_x_contours(workload, CPUCount::Auto);
+    validate_contours(
+        workload,
+        &multi_validation,
+        "xOverlay large contours multithread",
+    );
+
+    let output_contours = multi_validation.len();
+    let output_points = multi_validation.iter().map(Vec::len).sum::<usize>();
+    drop(multi_validation);
+
+    let serial = measure_repeated(3, || solve_x_contours(workload, CPUCount::Single));
+    let multithread = measure_repeated(3, || solve_x_contours(workload, CPUCount::Auto));
+    let input_contours = workload.subject.len() + workload.clip.len();
+    let input_points = workload
+        .subject
+        .iter()
+        .chain(&workload.clip)
+        .map(Vec::len)
+        .sum::<usize>();
+    println!(
+        "{} LARGE: n={}, input_contours={}, input_points={}, output_contours={}, output_points={}, area={}",
+        workload.name,
+        workload.n,
+        input_contours,
+        input_points,
+        output_contours,
+        output_points,
+        workload.expected_area,
+    );
+    print_measurement("xOverlay contours serial", serial);
+    print_measurement("xOverlay contours MT", multithread);
+}
+
 fn solve_x(workload: &Workload, cpu_count: CPUCount) -> IntShapes<i32> {
     let overlay = Overlay::with_contours_custom(
         &workload.subject,
@@ -402,6 +476,18 @@ fn measure_for<T>(mut budget: Duration, mut operation: impl FnMut() -> T) -> Mea
     while iterations == 0 || start.elapsed() < budget {
         black_box(operation());
         iterations += 1;
+    }
+    Measurement {
+        iterations,
+        elapsed: start.elapsed(),
+    }
+}
+
+fn measure_repeated<T>(iterations: usize, mut operation: impl FnMut() -> T) -> Measurement {
+    assert!(iterations > 0);
+    let start = Instant::now();
+    for _ in 0..iterations {
+        black_box(operation());
     }
     Measurement {
         iterations,

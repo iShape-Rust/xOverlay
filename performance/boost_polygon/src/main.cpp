@@ -18,8 +18,10 @@ using namespace boost::polygon::operators;
 using Coordinate = std::int32_t;
 using Rectangle = bp::rectangle_data<Coordinate>;
 using Polygon = bp::polygon_90_with_holes_data<Coordinate>;
+using Contour = bp::polygon_90_data<Coordinate>;
 using PolygonSet = bp::polygon_90_set_data<Coordinate>;
 using Polygons = std::vector<Polygon>;
+using Contours = std::vector<Contour>;
 
 static_assert(std::is_same_v<
               typename bp::geometry_concept<PolygonSet>::type,
@@ -36,6 +38,7 @@ struct Config {
     std::string scenario = "all";
     std::size_t n_override = 0;
     std::chrono::milliseconds budget{600};
+    bool large_contours = false;
 };
 
 struct Workload {
@@ -78,9 +81,11 @@ static volatile std::size_t output_sink = 0;
             config.n_override = parse_size(argv[++index], option);
         } else if (option == "--budget-ms" && index + 1 < argc) {
             config.budget = std::chrono::milliseconds{parse_size(argv[++index], option)};
+        } else if (option == "--large-contours") {
+            config.large_contours = true;
         } else if (option == "--help") {
             std::cout
-                << "Usage: boost_polygon_bench [--scenario NAME] [--n N] [--budget-ms MS]\n"
+                << "Usage: boost_polygon_bench [--scenario NAME] [--n N] [--budget-ms MS] [--large-contours]\n"
                 << "Scenarios: all, checkerboard, not-overlap, lines-net, windows, nested\n";
             std::exit(EXIT_SUCCESS);
         } else {
@@ -89,6 +94,13 @@ static volatile std::size_t output_sink = 0;
     }
     if (config.scenario == "all" && config.n_override != 0) {
         throw std::invalid_argument("--n can only be used with one selected scenario");
+    }
+    if (config.large_contours && config.scenario != "all" &&
+        config.scenario != "checkerboard" && config.scenario != "not-overlap" &&
+        config.scenario != "lines-net") {
+        throw std::invalid_argument(
+            "--large-contours supports only all, checkerboard, not-overlap, and lines-net"
+        );
     }
     return config;
 }
@@ -262,6 +274,21 @@ static volatile std::size_t output_sink = 0;
 }
 
 [[nodiscard]] std::vector<Workload> make_workloads(const Config& config) {
+    if (config.large_contours) {
+        if (config.scenario != "all") {
+            const auto default_n = config.scenario == "lines-net" ? 1'000u : 708u;
+            return {make_workload(
+                config.scenario,
+                config.n_override == 0 ? default_n : config.n_override
+            )};
+        }
+        std::vector<Workload> result;
+        result.push_back(checkerboard(708));
+        result.push_back(not_overlap(708));
+        result.push_back(lines_net(1'000));
+        return result;
+    }
+
     if (config.scenario != "all") {
         const auto default_n = config.scenario == "nested" ? 4096u : 128u;
         return {make_workload(
@@ -314,13 +341,31 @@ static volatile std::size_t output_sink = 0;
     return polygons;
 }
 
+[[nodiscard]] Contours materialize_contours(
+    const PolygonSet& subject,
+    const PolygonSet& clip,
+    Operation operation
+) {
+    auto result = apply_operation(subject, clip, operation);
+    Contours contours;
+    result.get(contours);
+    return contours;
+}
+
 [[nodiscard]] Polygons solve_end_to_end(const Workload& workload) {
     const auto subject = make_set(workload.subject);
     const auto clip = make_set(workload.clip);
     return materialize(subject, clip, workload.operation);
 }
 
-void consume(const Polygons& polygons) {
+[[nodiscard]] Contours solve_contours_end_to_end(const Workload& workload) {
+    const auto subject = make_set(workload.subject);
+    const auto clip = make_set(workload.clip);
+    return materialize_contours(subject, clip, workload.operation);
+}
+
+template <typename Output>
+void consume(const Output& polygons) {
     output_sink = output_sink ^ polygons.size();
 }
 
@@ -335,6 +380,23 @@ template <typename OperationFn>
         ++iterations;
     } while (std::chrono::steady_clock::now() - start < budget);
 
+    return {
+        .iterations = iterations,
+        .elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start
+        ),
+    };
+}
+
+template <typename OperationFn>
+[[nodiscard]] Measurement measure_repeated(std::size_t iterations, OperationFn operation) {
+    if (iterations == 0) {
+        throw std::invalid_argument("measurement iterations must be positive");
+    }
+    const auto start = std::chrono::steady_clock::now();
+    for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
+        consume(operation());
+    }
     return {
         .iterations = iterations,
         .elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -390,6 +452,67 @@ void run_workload(const Workload& workload, std::chrono::milliseconds budget) {
     print_measurement("Boost 90 prepared", prepared);
 }
 
+void run_large_contour_workload(const Workload& workload) {
+    const auto prepared_subject = make_set(workload.subject);
+    const auto prepared_clip = make_set(workload.clip);
+    if (prepared_subject.orient() != bp::HORIZONTAL || prepared_clip.orient() != bp::HORIZONTAL) {
+        throw std::runtime_error("polygon_90_set_data is not using HORIZONTAL scan orientation");
+    }
+
+    auto validation = apply_operation(prepared_subject, prepared_clip, workload.operation);
+    const auto actual_area = bp::area(validation);
+    if (actual_area != workload.expected_area) {
+        throw std::runtime_error(
+            workload.name + " area mismatch: expected " +
+            std::to_string(workload.expected_area) + ", got " + std::to_string(actual_area)
+        );
+    }
+    std::size_t output_contours = 0;
+    std::size_t output_points = 0;
+    std::int64_t materialized_area = 0;
+    {
+        const auto validation_output = materialize_contours(
+            prepared_subject,
+            prepared_clip,
+            workload.operation
+        );
+        if (validation_output.empty()) {
+            throw std::runtime_error(workload.name + " unexpectedly produced no contours");
+        }
+        output_contours = validation_output.size();
+        for (const auto& contour : validation_output) {
+            output_points += static_cast<std::size_t>(
+                std::distance(bp::begin_points(contour), bp::end_points(contour))
+            );
+            materialized_area += bp::area(contour);
+        }
+    }
+    if (materialized_area != workload.expected_area) {
+        throw std::runtime_error(
+            workload.name + " materialized contour area mismatch: expected " +
+            std::to_string(workload.expected_area) + ", got " +
+            std::to_string(materialized_area)
+        );
+    }
+
+    const auto end_to_end = measure_repeated(3, [&] {
+        return solve_contours_end_to_end(workload);
+    });
+    const auto prepared = measure_repeated(3, [&] {
+        return materialize_contours(prepared_subject, prepared_clip, workload.operation);
+    });
+
+    const auto input_contours = workload.subject.size() + workload.clip.size();
+    std::cout << workload.name << " LARGE: n=" << workload.n
+              << ", input_contours=" << input_contours
+              << ", input_points=" << 4 * input_contours
+              << ", output_contours=" << output_contours
+              << ", output_points=" << output_points
+              << ", area=" << actual_area << '\n';
+    print_measurement("Boost contours end-to-end", end_to_end);
+    print_measurement("Boost contours prepared", prepared);
+}
+
 int main(int argc, char** argv) try {
     const auto config = parse_config(argc, argv);
     const auto workloads = make_workloads(config);
@@ -397,10 +520,18 @@ int main(int argc, char** argv) try {
     std::cout << "Boost.Polygon " << BOOST_LIB_VERSION << '\n'
               << "solver=polygon_90_set_data<int32_t>, "
                  "geometry_concept=polygon_90_set_concept, scan=HORIZONTAL, "
-                 "output=polygon_90_with_holes_data<int32_t>, budget="
+                 "output="
+              << (config.large_contours
+                      ? "polygon_90_data<int32_t> (flat, no-hole workloads)"
+                      : "polygon_90_with_holes_data<int32_t>")
+              << ", budget="
               << config.budget.count() << "ms\n";
     for (const auto& workload : workloads) {
-        run_workload(workload, config.budget);
+        if (config.large_contours) {
+            run_large_contour_workload(workload);
+        } else {
+            run_workload(workload, config.budget);
+        }
     }
     return EXIT_SUCCESS;
 } catch (const std::exception& error) {

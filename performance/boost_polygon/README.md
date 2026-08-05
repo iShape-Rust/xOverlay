@@ -77,6 +77,29 @@ Run the complete comparison with a 600 ms budget per implementation:
 make compare
 ```
 
+Run the large flat-output comparison:
+
+```sh
+make large
+```
+
+This mode skips Nested Squares and shape/hole grouping. It measures three runs
+of each solver after a separate validation run:
+
+| Scenario | N | Scale |
+|---|---:|---|
+| Checkerboard | 708 | 1,001,113 input contours / 4,004,452 input points |
+| Not Overlap | 708 | 1,001,113 output contours / 4,004,452 output points |
+| Lines Net | 1,000 | 1,000,000 output contours / 4,000,000 output points |
+
+xOverlay returns its native flat `Vec<IntContour<i32>>`. Boost uses
+`polygon_90_data<int32_t>` output. Boost's flat polygon output fractures holes,
+so Not Overlap and Lines Net are the strict contour-to-contour comparisons.
+Checkerboard is retained as a useful topology/throughput workload, but Boost
+fractures its result into more polygons than xOverlay boundary extraction
+(the total point count and analytical area still match). Windows is omitted
+because every result component contains a hole.
+
 Build and run only the Boost workloads:
 
 ```sh
