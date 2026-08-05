@@ -54,6 +54,7 @@ impl<'a> StackIter<'a> {
 impl<'a> Iterator for StackIter<'a> {
     type Item = StackPoint;
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         match (self.split, self.anchor) {
             (Some(s), Some(a)) => {
