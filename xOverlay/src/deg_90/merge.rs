@@ -192,12 +192,12 @@ fn merge_border_contours(
     }
 
     let mut visited = alloc::vec![false; nodes.len()];
+    let mut contour = Vec::new();
     for start in 0..nodes.len() {
         if !is_arc_start(&nodes[start], &contours, border_x) || visited[start] {
             continue;
         }
-
-        let mut contour = Vec::new();
+        contour.clear();
         let mut current = start;
         for _ in 0..nodes.len() {
             debug_assert!(!visited[current], "portal cycle closes at the wrong start");
@@ -226,7 +226,7 @@ fn merge_border_contours(
             contour.len() >= 4,
             "a merged contour must have at least four points"
         );
-        merged.push(contour);
+        merged.push(contour.to_vec());
     }
 }
 
