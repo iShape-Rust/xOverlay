@@ -171,7 +171,12 @@ fn merge_border_contours(
         },
     );
 
-    let mut border_next = alloc::vec![usize::MAX; nodes.len()];
+    let mut border_next = Vec::<mem::MaybeUninit<usize>>::with_capacity(nodes.len());
+    // `MaybeUninit<usize>` is valid without initialization. Only end-portal slots are written
+    // below, and traversal only reads slots obtained from `arc_end`.
+    unsafe {
+        border_next.set_len(nodes.len());
+    }
     for pair in border_order.chunks_exact(2) {
         let a = pair[0];
         let b = pair[1];
@@ -183,7 +188,7 @@ fn merge_border_contours(
         );
 
         let (end, start) = if a_is_start { (b, a) } else { (a, b) };
-        border_next[end] = start;
+        border_next[end].write(start);
     }
 
     let mut visited = alloc::vec![false; nodes.len()];
@@ -207,8 +212,8 @@ fn merge_border_contours(
                 &mut contour,
             );
 
-            current = border_next[end];
-            debug_assert_ne!(current, usize::MAX, "border end has no next contour arc");
+            // Every arc end belongs to exactly one border pair initialized above.
+            current = unsafe { border_next[end].assume_init() };
             if current == start {
                 break;
             }
