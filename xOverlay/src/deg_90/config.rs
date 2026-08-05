@@ -11,12 +11,12 @@ pub struct ColumnConfig90 {
 
     // how many segments we *want* to have per column_graph, on average, max limit
     // used to *propose* number of columns from total segments
-    // production: ~ 100_000
+    // preliminary default: 1_024; tuned against mixed orthogonal workloads
     pub(super) max_allow_segments_per_column: usize,
 
     // how many segments we *want* to have per column_graph, on average, min limit
     // used to *propose* number of columns from total segments
-    // production: ~ 10_000
+    // preliminary default: 256; tuned against mixed orthogonal workloads
     pub(super) min_allowed_segments_per_column: usize,
 
     pub(super) max_allowed_segments_per_line: usize,
@@ -52,9 +52,22 @@ impl Default for ColumnConfig90 {
         Self {
             min_columns_count: 1,
             min_column_width_power: 8,
-            max_allow_segments_per_column: 2 ^ 20,
-            min_allowed_segments_per_column: 2 ^ 16,
+            max_allow_segments_per_column: 1 << 10,
+            min_allowed_segments_per_column: 1 << 8,
             max_allowed_segments_per_line: 7,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ColumnConfig90;
+
+    #[test]
+    fn default_segment_limits_are_powers_of_two() {
+        let config = ColumnConfig90::default();
+
+        assert_eq!(config.max_allow_segments_per_column, 1 << 10);
+        assert_eq!(config.min_allowed_segments_per_column, 1 << 8);
     }
 }

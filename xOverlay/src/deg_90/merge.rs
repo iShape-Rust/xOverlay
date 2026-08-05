@@ -310,6 +310,8 @@ mod tests {
     use i_shape::{int_path, int_shape};
     use rand::rngs::StdRng;
     use rand::{RngExt, SeedableRng};
+    #[cfg(feature = "allow_multithreading")]
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
     use std::hint::black_box;
     use std::time::{Duration, Instant};
 
@@ -677,6 +679,254 @@ mod tests {
         print_profile_stage("column process", column_time, measured, iterations);
         print_profile_stage("serial merge", merge_time, measured, iterations);
         print_profile_stage("rebuild shapes", rebuild_time, measured, iterations);
+    }
+
+    #[test]
+    #[ignore = "stage profiling workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_nested_squares_stages() {
+        const N: usize = 4096;
+        let (subject, clip) = nested_square_contours(N);
+        profile_workload_stages(
+            "nested-squares",
+            &subject,
+            &clip,
+            OverlayRule::Xor,
+            Duration::from_secs(3),
+        );
+    }
+
+    #[test]
+    #[ignore = "layout diagnostic workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_nested_squares_layout_variants() {
+        const N: usize = 4096;
+        let (subject, clip) = nested_square_contours(N);
+
+        let mut fixed_density = IntOverlayOptions::default();
+        fixed_density.columns_config = ColumnConfig90 {
+            min_columns_count: 1,
+            min_column_width_power: 8,
+            max_allow_segments_per_column: 1 << 20,
+            min_allowed_segments_per_column: 1 << 16,
+            max_allowed_segments_per_line: 7,
+        };
+        profile_workload_stages_with_options(
+            "nested-squares/fixed-density",
+            &subject,
+            &clip,
+            OverlayRule::Xor,
+            fixed_density,
+            Duration::from_secs(2),
+        );
+
+        let mut fixed_partition = fixed_density;
+        fixed_partition.columns_config.max_allowed_segments_per_line = 128;
+        profile_workload_stages_with_options(
+            "nested-squares/fixed-density-line128",
+            &subject,
+            &clip,
+            OverlayRule::Xor,
+            fixed_partition,
+            Duration::from_secs(2),
+        );
+    }
+
+    #[test]
+    #[ignore = "column-count tuning workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_nested_squares_column_count_sweep() {
+        const N: usize = 4096;
+        let (subject, clip) = nested_square_contours(N);
+
+        for columns_count in [2, 4, 8, 16, 32, 64, 128, 256] {
+            let options = multi_column_options(&subject, &clip, columns_count);
+            for cpu_count in [CPUCount::Single, CPUCount::Auto] {
+                let start = Instant::now();
+                let overlay = Overlay::with_contours_custom(&subject, &clip, options, cpu_count);
+                let actual_columns = overlay.columns.len();
+                black_box(overlay.overlay(FillRule::NonZero, OverlayRule::Xor));
+                std::println!(
+                    "nested column sweep: requested={columns_count:>3}, actual={actual_columns:>3}, cpu={cpu_count:?}, elapsed={:?}",
+                    start.elapsed(),
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "stage profiling workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_windows_stages() {
+        const N: usize = 128;
+        let (subject, clip) = window_contours(N);
+        profile_workload_stages(
+            "windows",
+            &subject,
+            &clip,
+            OverlayRule::Difference,
+            Duration::from_secs(3),
+        );
+    }
+
+    #[test]
+    #[ignore = "layout diagnostic workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_windows_layout_variants() {
+        const N: usize = 128;
+        let (subject, clip) = window_contours(N);
+
+        for max_allowed_segments_per_line in [7, 128] {
+            let mut options = IntOverlayOptions::default();
+            options.columns_config = ColumnConfig90 {
+                min_columns_count: 1,
+                min_column_width_power: 8,
+                max_allow_segments_per_column: 1 << 20,
+                min_allowed_segments_per_column: 1 << 16,
+                max_allowed_segments_per_line,
+            };
+            profile_workload_stages_with_options(
+                if max_allowed_segments_per_line == 7 {
+                    "windows/fixed-density"
+                } else {
+                    "windows/fixed-density-line128"
+                },
+                &subject,
+                &clip,
+                OverlayRule::Difference,
+                options,
+                Duration::from_secs(2),
+            );
+        }
+    }
+
+    fn profile_workload_stages(
+        name: &str,
+        subject: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        overlay_rule: OverlayRule,
+        profile_time: Duration,
+    ) {
+        profile_workload_stages_with_options(
+            name,
+            subject,
+            clip,
+            overlay_rule,
+            IntOverlayOptions::default(),
+            profile_time,
+        );
+    }
+
+    fn profile_workload_stages_with_options(
+        name: &str,
+        subject: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        overlay_rule: OverlayRule,
+        options: IntOverlayOptions,
+        profile_time: Duration,
+    ) {
+        for cpu_count in [CPUCount::Single, CPUCount::Auto] {
+            let mut map_time = Duration::ZERO;
+            let mut column_time = Duration::ZERO;
+            let mut merge_time = Duration::ZERO;
+            let mut rebuild_time = Duration::ZERO;
+            let profile_start = Instant::now();
+            let mut iterations = 0;
+            let mut columns_count = 0;
+
+            while iterations == 0 || profile_start.elapsed() < profile_time {
+                let start = Instant::now();
+                let overlay = Overlay::with_contours_custom(subject, clip, options, cpu_count);
+                map_time += start.elapsed();
+                columns_count = overlay.columns.len();
+
+                let start = Instant::now();
+                #[cfg(feature = "allow_multithreading")]
+                let sub_graphs = if cpu_count.is_parallel() {
+                    overlay
+                        .columns
+                        .into_par_iter()
+                        .map(|column| {
+                            column.test_process(
+                                FillRule::NonZero,
+                                overlay_rule,
+                                options.columns_config,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    overlay
+                        .columns
+                        .into_iter()
+                        .map(|column| {
+                            column.test_process(
+                                FillRule::NonZero,
+                                overlay_rule,
+                                options.columns_config,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                #[cfg(not(feature = "allow_multithreading"))]
+                let sub_graphs = overlay
+                    .columns
+                    .into_iter()
+                    .map(|column| {
+                        column.test_process(FillRule::NonZero, overlay_rule, options.columns_config)
+                    })
+                    .collect::<Vec<_>>();
+                column_time += start.elapsed();
+
+                let start = Instant::now();
+                #[cfg(feature = "allow_multithreading")]
+                let merged = if cpu_count.is_parallel() {
+                    sub_graphs.parallel_merge()
+                } else {
+                    sub_graphs.merge()
+                };
+                #[cfg(not(feature = "allow_multithreading"))]
+                let merged = sub_graphs.merge();
+                merge_time += start.elapsed();
+
+                let start = Instant::now();
+                black_box(merged.into_shapes());
+                rebuild_time += start.elapsed();
+                iterations += 1;
+            }
+
+            let measured = map_time + column_time + merge_time + rebuild_time;
+            std::println!(
+                "{name}: cpu={cpu_count:?}, columns={columns_count}, iterations={iterations}, measured={measured:?}"
+            );
+            print_profile_stage("column map", map_time, measured, iterations);
+            print_profile_stage("column process", column_time, measured, iterations);
+            print_profile_stage("merge", merge_time, measured, iterations);
+            print_profile_stage("rebuild shapes", rebuild_time, measured, iterations);
+        }
+    }
+
+    fn window_contours(n: usize) -> (IntShape<i32>, IntShape<i32>) {
+        let origin = -(n as i32) * 30 / 2;
+        let mut subject = Vec::with_capacity(n * n);
+        let mut clip = Vec::with_capacity(n * n);
+        for row in 0..n {
+            let y = origin + row as i32 * 30;
+            for column in 0..n {
+                let x = origin + column as i32 * 30;
+                subject.push(rectangle(x, y, 20, 20));
+                clip.push(rectangle(x + 5, y + 5, 10, 10));
+            }
+        }
+        (subject, clip)
+    }
+
+    fn nested_square_contours(n: usize) -> (IntShape<i32>, IntShape<i32>) {
+        let mut subject = Vec::with_capacity(2 * n);
+        let mut clip = Vec::with_capacity(2 * n);
+        let mut radius = 8;
+        for _ in 0..n {
+            clip.push(rectangle(-radius, radius - 4, 2 * radius, 4));
+            clip.push(rectangle(-radius, -radius, 2 * radius, 4));
+            subject.push(rectangle(-radius, -radius, 4, 2 * radius));
+            subject.push(rectangle(radius - 4, -radius, 4, 2 * radius));
+            radius += 8;
+        }
+        (subject, clip)
     }
 
     fn print_profile_stage(label: &str, elapsed: Duration, total: Duration, iterations: usize) {
