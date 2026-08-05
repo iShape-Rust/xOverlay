@@ -236,6 +236,7 @@ fn is_arc_start(node: &BorderNode, contours: &[IntContour<i32>], border_x: i32) 
     contour[(node.position + 1) % contour.len()].x != border_x
 }
 
+#[inline(always)]
 fn append_contour_arc(
     contour: &IntContour<i32>,
     start: usize,
@@ -243,44 +244,27 @@ fn append_contour_arc(
     result: &mut IntContour<i32>,
 ) {
     debug_assert!(is_simple_arc(contour, start, end));
+    debug_assert_ne!(start, end, "a contour arc must contain an edge");
 
-    if start <= end {
-        append_simple_slice(&contour[start..=end], result);
+    let mut first = start;
+    if result.last() == Some(&contour[start]) {
+        debug_assert!(result.len() >= 2, "an accumulated arc must contain an edge");
+        let a = result[result.len() - 2];
+        let b = result[result.len() - 1];
+        first = (start + 1) % contour.len();
+        debug_assert!(
+            is_collinear(a, b, contour[first]),
+            "a shared border portal must join collinear edges"
+        );
+        result.pop();
+    }
+
+    if first <= end {
+        result.extend_from_slice(&contour[first..=end]);
     } else {
-        append_simple_slice(&contour[start..], result);
-        append_simple_slice(&contour[..=end], result);
+        result.extend_from_slice(&contour[first..]);
+        result.extend_from_slice(&contour[..=end]);
     }
-}
-
-fn append_simple_slice(slice: &[IntPoint], result: &mut IntContour<i32>) {
-    if result.is_empty() {
-        result.extend_from_slice(slice);
-        return;
-    }
-
-    let mut index = 0;
-    while index < slice.len() {
-        let point = slice[index];
-        if result.last() == Some(&point) {
-            index += 1;
-            continue;
-        }
-
-        if result.len() >= 2 {
-            let a = result[result.len() - 2];
-            let b = result[result.len() - 1];
-            if is_collinear(a, b, point) {
-                result.pop();
-                continue;
-            }
-        }
-
-        result.push(point);
-        index += 1;
-        break;
-    }
-
-    result.extend_from_slice(&slice[index..]);
 }
 
 fn close_contour(contour: &mut IntContour<i32>) {
