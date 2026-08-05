@@ -3,6 +3,8 @@ use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use i_float::int::point::IntPoint;
+use i_key_sort::sort::one_key::OneKeySort;
+use i_key_sort::sort::two_keys::TwoKeysSort;
 use i_shape::int::shape::IntContour;
 
 pub(super) trait Merge {
@@ -75,14 +77,18 @@ struct BorderEdge {
 }
 
 fn merge_contours(
-    mut left: Vec<IntContour<i32>>,
-    mut right: Vec<IntContour<i32>>,
+    left: Vec<IntContour<i32>>,
+    right: Vec<IntContour<i32>>,
     border_x: i32,
 ) -> Vec<IntContour<i32>> {
     #[cfg(debug_assertions)]
     validate_border_nodes(&left, Side::Left, border_x);
     #[cfg(debug_assertions)]
     validate_border_nodes(&right, Side::Right, border_x);
+
+    let (mut left, mut untouched) = partition_border_contours(left, border_x);
+    let (mut right, mut right_untouched) = partition_border_contours(right, border_x);
+    untouched.append(&mut right_untouched);
 
     let cuts = border_cuts(&left, &right, border_x);
     split_border_edges(&mut left, border_x, &cuts);
@@ -99,14 +105,21 @@ fn merge_contours(
     split_border_edges(&mut left, border_x, &cuts);
     split_border_edges(&mut right, border_x, &cuts);
 
+    // Same-side reduction can close a contour away from this seam. Do not put
+    // such contours through the cross-seam edge graph either.
+    let (left, mut left_untouched) = partition_border_contours(left, border_x);
+    let (right, mut right_untouched) = partition_border_contours(right, border_x);
+    untouched.append(&mut left_untouched);
+    untouched.append(&mut right_untouched);
+
     let mut edges = Vec::new();
     append_edges(&left, Side::Left, &mut edges);
     append_edges(&right, Side::Right, &mut edges);
 
     let mut left_border = border_edges(&edges, Side::Left, border_x);
     let mut right_border = border_edges(&edges, Side::Right, border_x);
-    left_border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
-    right_border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    left_border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
+    right_border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
 
     #[cfg(debug_assertions)]
     {
@@ -116,12 +129,45 @@ fn merge_contours(
 
     let matches = matching_edges(&left_border, &right_border);
     if matches.is_empty() {
-        left.extend(right);
-        return left;
+        untouched.extend(left);
+        untouched.extend(right);
+        return untouched;
     }
 
     apply_matches(&mut edges, &matches);
-    collect_contours(&edges)
+    untouched.extend(collect_contours(&edges));
+    untouched
+}
+
+fn partition_border_contours(
+    contours: Vec<IntContour<i32>>,
+    border_x: i32,
+) -> (Vec<IntContour<i32>>, Vec<IntContour<i32>>) {
+    let mut touching = Vec::new();
+    let mut untouched = Vec::new();
+
+    for contour in contours {
+        if has_border_edge(&contour, border_x) {
+            touching.push(contour);
+        } else {
+            untouched.push(contour);
+        }
+    }
+
+    (touching, untouched)
+}
+
+fn has_border_edge(contour: &IntContour<i32>, border_x: i32) -> bool {
+    let count = contour.len();
+    if count < 2 {
+        return false;
+    }
+
+    (0..count).any(|index| {
+        let a = contour[index];
+        let b = contour[(index + 1) % count];
+        a.x == border_x && b.x == border_x && a.y != b.y
+    })
 }
 
 fn reduce_local_border(
@@ -133,7 +179,7 @@ fn reduce_local_border(
     append_edges(&contours, side, &mut edges);
 
     let mut border = border_edges(&edges, side, border_x);
-    border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
     let (_, matches) = reduce_same_side_edges(&edges, border);
     if matches.is_empty() {
         return contours;
@@ -175,7 +221,7 @@ fn border_cuts(left: &[IntContour<i32>], right: &[IntContour<i32>], border_x: i3
             }
         }
     }
-    cuts.sort_unstable();
+    cuts.sort_by_one_key(false, |y| *y);
     cuts.dedup();
     cuts
 }
@@ -320,7 +366,7 @@ fn reduce_same_side_edges(
         start = end;
     }
 
-    remaining.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    remaining.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
     (remaining, matches)
 }
 
@@ -471,7 +517,7 @@ fn collect_border_nodes(contours: &[IntContour<i32>], border_x: i32) -> Vec<Bord
             });
         }
     }
-    nodes.sort_unstable_by_key(|node| node.y);
+    nodes.sort_by_one_key(false, |node| node.y);
     nodes
 }
 
@@ -515,6 +561,8 @@ fn assert_unique_spans(edges: &[BorderEdge]) {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use super::{Merge, SubGraph};
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
@@ -534,6 +582,8 @@ mod tests {
     use i_shape::{int_path, int_shape};
     use rand::rngs::StdRng;
     use rand::{RngExt, SeedableRng};
+    use std::hint::black_box;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn joins_rectangles_across_seam() {
@@ -732,6 +782,114 @@ mod tests {
         }
     }
 
+    #[test]
+    #[ignore = "performance comparison; run explicitly with --release --ignored --nocapture"]
+    fn performance_checkerboard_against_i_overlay() {
+        const N: usize = 128;
+        const BENCH_TIME: Duration = Duration::from_millis(600);
+
+        // Matches iOverlay's official CheckerboardTest workload:
+        // https://ishape-rust.github.io/iShape-js/overlay/performance/performance.html
+        let subject = many_squares(IntPoint::new(0, 0), 20, 30, N);
+        let clip = many_squares(IntPoint::new(15, 15), 20, 30, N - 1);
+        let fill_rule = FillRule::NonZero;
+        let overlay_rule = OverlayRule::Xor;
+
+        let expected = i_overlay_shapes(&subject, &clip, fill_rule, overlay_rule);
+        let one_column = extract_multi_column(&subject, &clip, 1, fill_rule, overlay_rule);
+        let two_columns = extract_multi_column(&subject, &clip, 2, fill_rule, overlay_rule);
+        let four_columns = extract_multi_column(&subject, &clip, 4, fill_rule, overlay_rule);
+        let eight_columns = extract_multi_column(&subject, &clip, 8, fill_rule, overlay_rule);
+        let thirty_columns = extract_multi_column(&subject, &clip, 30, fill_rule, overlay_rule);
+        let sixty_columns = extract_multi_column(&subject, &clip, 60, fill_rule, overlay_rule);
+        assert_eq!(one_column.area_two(), expected.area_two());
+        assert_eq!(two_columns.area_two(), expected.area_two());
+        assert_eq!(four_columns.area_two(), expected.area_two());
+        assert_eq!(eight_columns.area_two(), expected.area_two());
+        assert_eq!(thirty_columns.area_two(), expected.area_two());
+        assert_eq!(sixty_columns.area_two(), expected.area_two());
+
+        let x_one = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 1, fill_rule, overlay_rule)
+        });
+        let x_two = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 2, fill_rule, overlay_rule)
+        });
+        let x_four = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 4, fill_rule, overlay_rule)
+        });
+        let x_eight = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 8, fill_rule, overlay_rule)
+        });
+        let x_thirty = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 30, fill_rule, overlay_rule)
+        });
+        let x_sixty = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 60, fill_rule, overlay_rule)
+        });
+        let i_overlay = measure_for(BENCH_TIME, || {
+            i_overlay_shapes(&subject, &clip, fill_rule, overlay_rule)
+        });
+
+        std::println!(
+            "checkerboard: n={N}, squares={}, fill={fill_rule:?}, overlay={overlay_rule:?}, budget={BENCH_TIME:?}",
+            N * N + (N - 1) * (N - 1),
+        );
+        print_measurement("xOverlay columns=1", x_one);
+        print_measurement("xOverlay columns=2", x_two);
+        print_measurement("xOverlay columns=4", x_four);
+        print_measurement("xOverlay columns=8", x_eight);
+        print_measurement("xOverlay columns=30", x_thirty);
+        print_measurement("xOverlay columns=60", x_sixty);
+        print_measurement("iOverlay", i_overlay);
+        std::println!(
+            "vs iOverlay: columns(1)={:.2}x, columns(2)={:.2}x, columns(4)={:.2}x, columns(8)={:.2}x, columns(30)={:.2}x, columns(60)={:.2}x",
+            i_overlay.ns_per_iteration() / x_one.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_two.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_four.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_eight.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_thirty.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_sixty.ns_per_iteration(),
+        );
+    }
+
+    #[derive(Clone, Copy)]
+    struct Measurement {
+        iterations: usize,
+        elapsed: Duration,
+    }
+
+    impl Measurement {
+        fn ns_per_iteration(self) -> f64 {
+            self.elapsed.as_secs_f64() * 1_000_000_000.0 / self.iterations as f64
+        }
+    }
+
+    fn measure_for(budget: Duration, mut operation: impl FnMut() -> IntShapes<i32>) -> Measurement {
+        black_box(operation());
+
+        let start = Instant::now();
+        let mut iterations = 0;
+        while iterations == 0 || start.elapsed() < budget {
+            black_box(operation());
+            iterations += 1;
+        }
+
+        Measurement {
+            iterations,
+            elapsed: start.elapsed(),
+        }
+    }
+
+    fn print_measurement(name: &str, measurement: Measurement) {
+        let milliseconds = measurement.ns_per_iteration() / 1_000_000.0;
+        let iterations_per_second = 1_000.0 / milliseconds;
+        std::println!(
+            "{name:>20}: {milliseconds:>10.3} ms/iter, {iterations_per_second:>10.1} iter/s, iterations={}",
+            measurement.iterations,
+        );
+    }
+
     #[derive(Clone, Copy)]
     enum SideAnchor {
         Left,
@@ -769,6 +927,26 @@ mod tests {
         contours
     }
 
+    fn many_squares(start: IntPoint, size: i32, offset: i32, n: usize) -> IntShape<i32> {
+        let mut contours = Vec::with_capacity(n * n);
+        let mut y = start.y;
+        for _ in 0..n {
+            let mut x = start.x;
+            for _ in 0..n {
+                contours.push(vec![
+                    IntPoint::new(x, y),
+                    IntPoint::new(x, y + size),
+                    IntPoint::new(x + size, y + size),
+                    IntPoint::new(x + size, y),
+                ]);
+                x += offset;
+            }
+            y += offset;
+        }
+
+        contours
+    }
+
     fn rectangle(x: i32, y: i32, width: i32, height: i32) -> IntContour<i32> {
         vec![
             IntPoint::new(x, y),
@@ -785,14 +963,38 @@ mod tests {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> IntShapes<i32> {
+        let width = input_width(subject, clip);
+        let min_column_width_power = (0..usize::BITS as usize)
+            .find(|&power| ((width.saturating_sub(1) >> power) + 1) == columns_count)
+            .unwrap_or_else(|| {
+                panic!("column count {columns_count} is not representable for input width {width}")
+            });
         let options = IntOverlayOptions {
-            columns_config: ColumnConfig90::dev(columns_count),
+            columns_config: ColumnConfig90 {
+                min_columns_count: columns_count,
+                min_column_width_power,
+                min_allowed_segments_per_column: 1_000_000,
+                max_allow_segments_per_column: 1_000_000_000,
+                max_allowed_segments_per_line: 128,
+            },
             ..Default::default()
         };
         let overlay =
             Overlay::with_contours_custom(subject, clip, options, CPUCount::Fixed(columns_count));
         assert_eq!(overlay.columns.len(), columns_count);
         overlay.overlay(fill_rule, overlay_rule)
+    }
+
+    fn input_width(subject: &[IntContour<i32>], clip: &[IntContour<i32>]) -> usize {
+        let mut min_x = i32::MAX;
+        let mut max_x = i32::MIN;
+        for contour in subject.iter().chain(clip) {
+            for point in contour {
+                min_x = min_x.min(point.x);
+                max_x = max_x.max(point.x);
+            }
+        }
+        (max_x - min_x) as usize
     }
 
     fn i_overlay_shapes(

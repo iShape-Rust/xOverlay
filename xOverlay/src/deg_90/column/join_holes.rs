@@ -5,6 +5,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key::OneKeySort;
+use i_key_sort::sort::two_keys::TwoKeysSort;
 use i_shape::int::area::Area;
 use i_shape::int::path::ContourExtension;
 use i_shape::int::shape::{IntContour, IntShapes};
@@ -108,7 +109,7 @@ impl ColumnGraph {
         sub_paths: &mut Vec<SubPath>,
     ) {
         let mut anchors_by_x = anchors_by_y.clone();
-        anchors_by_x.sort_by(|a, b| a.point.cmp(&b.point));
+        anchors_by_x.sort_by_two_keys(false, |a| a.point.x, |a| a.point.y);
 
         let mut positions = vec![0; holes.len()];
         for (position, anchor) in anchors_by_x.iter().enumerate() {

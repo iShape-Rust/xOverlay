@@ -15,6 +15,7 @@ use crate::deg_90::column::graph::ColumnGraph;
 use crate::deg_90::column_map::Column;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
+use i_key_sort::sort::one_key_cmp::OneKeyAndCmpSort;
 use i_shape::int::area::Area;
 use i_shape::int::shape::{IntContour, IntShapes};
 
@@ -75,18 +76,17 @@ fn collect_reversed_contours(
     reverse: &mut [Option<bool>],
 ) {
     let mut border_nodes = collect_border_nodes(contours, border_x);
-    border_nodes.entries.sort_unstable_by(|a, b| {
-        let by_y = a.y.cmp(&b.y);
-        if by_y != core::cmp::Ordering::Equal {
-            return by_y;
-        }
-
-        let a_pair_y = border_pair_y(contours, *a, border_x);
-        let b_pair_y = border_pair_y(contours, *b, border_x);
-        // If nested intervals start together, process the longest (outermost)
-        // first so active depth matches their containment depth.
-        b_pair_y.cmp(&a_pair_y)
-    });
+    border_nodes.entries.sort_by_one_key_then_by(
+        false,
+        |node| node.y,
+        |a, b| {
+            let a_pair_y = border_pair_y(contours, *a, border_x);
+            let b_pair_y = border_pair_y(contours, *b, border_x);
+            // If nested intervals start together, process the longest (outermost)
+            // first so active depth matches their containment depth.
+            b_pair_y.cmp(&a_pair_y)
+        },
+    );
 
     let mut active_ends = Vec::new();
     for node in border_nodes.entries {

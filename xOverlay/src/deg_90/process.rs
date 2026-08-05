@@ -8,6 +8,8 @@ use crate::deg_90::sub_graph::SubGraph;
 use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;
 use alloc::vec::Vec;
+#[cfg(feature = "allow_multithreading")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 impl Overlay {
     pub(crate) fn process_overlay(
@@ -39,7 +41,7 @@ impl Overlay {
     fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> OverlayGraph {
         let sub_graphs: Vec<_> = self
             .columns
-            .into_iter()
+            .into_par_iter()
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
