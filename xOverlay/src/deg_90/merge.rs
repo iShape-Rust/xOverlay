@@ -1,10 +1,8 @@
 use crate::deg_90::sub_graph::SubGraph;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
-use core::cmp::Ordering;
 use core::mem;
 use i_float::int::point::IntPoint;
-use i_key_sort::sort::one_key::OneKeySort;
 use i_key_sort::sort::two_keys::TwoKeysSort;
 use i_shape::int::shape::IntContour;
 #[cfg(feature = "allow_multithreading")]
@@ -79,30 +77,12 @@ enum Side {
     Right,
 }
 
-#[cfg(debug_assertions)]
 #[derive(Clone, Copy, Debug)]
 struct BorderNode {
     y: i32,
-    ccw_dir: bool,
     contour_index: usize,
-    vertex_index_in_contour: usize,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Edge {
-    a: IntPoint,
-    b: IntPoint,
-    prev: usize,
-    next: usize,
-    alive: bool,
+    position: usize,
     side: Side,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct BorderEdge {
-    y0: i32,
-    y1: i32,
-    edge_index: usize,
 }
 
 fn merge_border_contours(
@@ -111,355 +91,154 @@ fn merge_border_contours(
     border_x: i32,
     merged: &mut Vec<IntContour<i32>>,
 ) {
-    #[cfg(debug_assertions)]
-    validate_border_nodes(&left, Side::Left, border_x);
-    #[cfg(debug_assertions)]
-    validate_border_nodes(&right, Side::Right, border_x);
+    let left_count = left.len();
+    left.append(&mut right);
+    let contours = left;
 
-    let cuts = border_cuts(&left, &right, border_x);
-    split_border_edges(&mut left, border_x, &cuts);
-    split_border_edges(&mut right, border_x, &cuts);
-
-    // A local hole may touch the artificial column border. Its seam edge then
-    // mirrors a hull seam edge on the same side. Resolve these local pairs
-    // first, producing the C-shaped boundary that participates in the actual
-    // inter-column merge.
-    left = reduce_local_border(left, Side::Left, border_x);
-    right = reduce_local_border(right, Side::Right, border_x);
-    // Local contour rebuilding removes collinear seam points. Restore the
-    // shared event partition before matching partially overlapping spans.
-    split_border_edges(&mut left, border_x, &cuts);
-    split_border_edges(&mut right, border_x, &cuts);
-
-    // Same-side reduction can close a contour away from this seam. Do not put
-    // such contours through the cross-seam edge graph either.
-    retain_border_contours(&mut left, merged, border_x);
-    retain_border_contours(&mut right, merged, border_x);
-
-    let mut edges = Vec::new();
-    append_edges(&left, Side::Left, &mut edges);
-    append_edges(&right, Side::Right, &mut edges);
-
-    let mut left_border = border_edges(&edges, Side::Left, border_x);
-    let mut right_border = border_edges(&edges, Side::Right, border_x);
-    left_border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
-    right_border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
-
-    #[cfg(debug_assertions)]
-    {
-        assert_unique_spans(&left_border);
-        assert_unique_spans(&right_border);
-    }
-
-    let matches = matching_edges(&left_border, &right_border);
-    if matches.is_empty() {
-        merged.extend(left);
-        merged.extend(right);
-        return;
-    }
-
-    apply_matches(&mut edges, &matches);
-    merged.extend(collect_contours(&edges));
-}
-
-fn retain_border_contours(
-    contours: &mut Vec<IntContour<i32>>,
-    untouched: &mut Vec<IntContour<i32>>,
-    border_x: i32,
-) {
-    let mut index = 0;
-
-    while index < contours.len() {
-        if has_border_edge(&contours[index], border_x) {
-            index += 1;
-        } else {
-            untouched.push(contours.swap_remove(index));
-        }
-    }
-}
-
-fn has_border_edge(contour: &IntContour<i32>, border_x: i32) -> bool {
-    let count = contour.len();
-    if count < 2 {
-        return false;
-    }
-
-    (0..count).any(|index| {
-        let a = contour[index];
-        let b = contour[(index + 1) % count];
-        a.x == border_x && b.x == border_x && a.y != b.y
-    })
-}
-
-fn reduce_local_border(
-    contours: Vec<IntContour<i32>>,
-    side: Side,
-    border_x: i32,
-) -> Vec<IntContour<i32>> {
-    let mut edges = Vec::new();
-    append_edges(&contours, side, &mut edges);
-
-    let mut border = border_edges(&edges, side, border_x);
-    border.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
-    let (_, matches) = reduce_same_side_edges(&edges, border);
-    if matches.is_empty() {
-        return contours;
-    }
-
-    apply_matches(&mut edges, &matches);
-    collect_contours(&edges)
-}
-
-fn apply_matches(edges: &mut [Edge], matches: &[(usize, usize)]) {
-    for &(left_edge, right_edge) in matches {
-        let left = edges[left_edge];
-        let right = edges[right_edge];
-        debug_assert_eq!(left.a, right.b, "matched seam edges must be mirrored");
-        debug_assert_eq!(left.b, right.a, "matched seam edges must be mirrored");
-        edges[left_edge].alive = false;
-        edges[right_edge].alive = false;
-    }
-
-    // All common seam atoms are marked first. Adjacent atoms therefore act as
-    // one removed chain and do not leave intermediate seam vertices behind.
-    for &(left_edge, right_edge) in matches {
-        let left_prev = previous_alive(edges, left_edge);
-        let left_next = next_alive(edges, left_edge);
-        let right_prev = previous_alive(edges, right_edge);
-        let right_next = next_alive(edges, right_edge);
-
-        connect(edges, left_prev, right_next);
-        connect(edges, right_prev, left_next);
-    }
-}
-
-fn border_cuts(left: &[IntContour<i32>], right: &[IntContour<i32>], border_x: i32) -> Vec<i32> {
-    let mut cuts = Vec::new();
-    for contour in left.iter().chain(right) {
-        for &point in contour {
-            if point.x == border_x {
-                cuts.push(point.y);
-            }
-        }
-    }
-    cuts.sort_by_one_key(false, |y| *y);
-    cuts.dedup();
-    cuts
-}
-
-fn split_border_edges(contours: &mut [IntContour<i32>], border_x: i32, cuts: &[i32]) {
-    for contour in contours {
-        if contour.len() < 2 {
+    let mut nodes = Vec::new();
+    let mut arc_end = Vec::new();
+    for (contour_index, contour) in contours.iter().enumerate() {
+        let count = contour.len();
+        if count < 2 {
             continue;
         }
 
-        let mut result = Vec::with_capacity(contour.len());
-        for index in 0..contour.len() {
-            let a = contour[index];
-            let b = contour[(index + 1) % contour.len()];
-            result.push(a);
-
-            if a.x != border_x || b.x != border_x || a.y == b.y {
+        let side = if contour_index < left_count {
+            Side::Left
+        } else {
+            Side::Right
+        };
+        let group_start = nodes.len();
+        for position in 0..count {
+            let point = contour[position];
+            if point.x != border_x {
                 continue;
             }
 
-            let y0 = a.y.min(b.y);
-            let y1 = a.y.max(b.y);
-            let start = cuts.partition_point(|&y| y <= y0);
-            let end = cuts.partition_point(|&y| y < y1);
-            let edge_cuts = &cuts[start..end];
-            if a.y < b.y {
-                for &y in edge_cuts {
-                    result.push(IntPoint::new(border_x, y));
-                }
-            } else {
-                for &y in edge_cuts.iter().rev() {
-                    result.push(IntPoint::new(border_x, y));
-                }
+            let prev = contour[(position + count - 1) % count];
+            let next = contour[(position + 1) % count];
+            let prev_off_border = prev.y == point.y && prev.x != border_x;
+            let next_off_border = next.y == point.y && next.x != border_x;
+            if !prev_off_border && !next_off_border {
+                continue;
             }
-        }
+            assert_ne!(
+                prev_off_border, next_off_border,
+                "a border portal must have exactly one off-border edge"
+            );
 
-        *contour = result;
-    }
-}
-
-fn append_edges(contours: &[IntContour<i32>], side: Side, edges: &mut Vec<Edge>) {
-    for contour in contours {
-        if contour.len() < 2 {
-            continue;
-        }
-
-        let offset = edges.len();
-        let count = contour.len();
-        edges.reserve(count);
-
-        for index in 0..count {
-            edges.push(Edge {
-                a: contour[index],
-                b: contour[(index + 1) % count],
-                prev: offset + (index + count - 1) % count,
-                next: offset + (index + 1) % count,
-                alive: true,
+            nodes.push(BorderNode {
+                y: point.y,
+                contour_index,
+                position,
                 side,
             });
+            arc_end.push(usize::MAX);
         }
-    }
-}
 
-fn border_edges(edges: &[Edge], side: Side, border_x: i32) -> Vec<BorderEdge> {
-    edges
-        .iter()
-        .enumerate()
-        .filter_map(|(edge_index, edge)| {
-            if edge.side != side
-                || edge.a.x != border_x
-                || edge.b.x != border_x
-                || edge.a.y == edge.b.y
-            {
-                return None;
-            }
-
-            Some(BorderEdge {
-                y0: edge.a.y.min(edge.b.y),
-                y1: edge.a.y.max(edge.b.y),
-                edge_index,
-            })
-        })
-        .collect()
-}
-
-fn matching_edges(left: &[BorderEdge], right: &[BorderEdge]) -> Vec<(usize, usize)> {
-    let mut matches = Vec::new();
-    let mut i = 0;
-    let mut j = 0;
-
-    while i < left.len() && j < right.len() {
-        let a = left[i];
-        let b = right[j];
-        match (a.y0, a.y1).cmp(&(b.y0, b.y1)) {
-            Ordering::Less => i += 1,
-            Ordering::Greater => j += 1,
-            Ordering::Equal => {
-                matches.push((a.edge_index, b.edge_index));
-                i += 1;
-                j += 1;
+        let group = group_start..nodes.len();
+        assert_eq!(group.len() & 1, 0, "a contour must have paired portals");
+        for offset in group.clone() {
+            if is_arc_start(&nodes[offset], &contours, border_x) {
+                let end_index = if offset + 1 < group.end {
+                    offset + 1
+                } else {
+                    group.start
+                };
+                assert!(
+                    !is_arc_start(&nodes[end_index], &contours, border_x),
+                    "contour portals must alternate between start and end"
+                );
+                arc_end[offset] = end_index;
             }
         }
     }
 
-    matches
-}
-
-fn reduce_same_side_edges(
-    edges: &[Edge],
-    border: Vec<BorderEdge>,
-) -> (Vec<BorderEdge>, Vec<(usize, usize)>) {
-    let mut remaining = Vec::with_capacity(border.len());
-    let mut matches = Vec::new();
-    let mut start = 0;
-
-    while start < border.len() {
-        let key = (border[start].y0, border[start].y1);
-        let mut end = start + 1;
-        while end < border.len() && (border[end].y0, border[end].y1) == key {
-            end += 1;
-        }
-
-        let mut up = Vec::new();
-        let mut down = Vec::new();
-        for border_edge in &border[start..end] {
-            let edge = edges[border_edge.edge_index];
-            if edge.a.y < edge.b.y {
-                up.push(*border_edge);
-            } else {
-                down.push(*border_edge);
-            }
-        }
-
-        let pair_count = up.len().min(down.len());
-        for index in 0..pair_count {
-            matches.push((up[index].edge_index, down[index].edge_index));
-        }
-        remaining.extend_from_slice(&up[pair_count..]);
-        remaining.extend_from_slice(&down[pair_count..]);
-
-        start = end;
+    if nodes.is_empty() {
+        merged.extend(contours);
+        return;
     }
+    assert_eq!(nodes.len() & 1, 0, "border nodes must form pairs");
 
-    remaining.sort_by_two_keys(false, |edge| edge.y0, |edge| edge.y1);
-    (remaining, matches)
-}
-
-fn previous_alive(edges: &[Edge], edge_index: usize) -> usize {
-    let mut current = edges[edge_index].prev;
-    for _ in 0..edges.len() {
-        if edges[current].alive {
-            return current;
-        }
-        current = edges[current].prev;
-    }
-    panic!("a contour cannot consist only of a removed seam")
-}
-
-fn next_alive(edges: &[Edge], edge_index: usize) -> usize {
-    let mut current = edges[edge_index].next;
-    for _ in 0..edges.len() {
-        if edges[current].alive {
-            return current;
-        }
-        current = edges[current].next;
-    }
-    panic!("a contour cannot consist only of a removed seam")
-}
-
-fn connect(edges: &mut [Edge], from: usize, to: usize) {
-    debug_assert!(edges[from].alive && edges[to].alive);
-    debug_assert_eq!(
-        edges[from].b, edges[to].a,
-        "stitched contour edges must share a vertex"
+    let mut border_order = (0..nodes.len()).collect::<Vec<_>>();
+    border_order.sort_by_two_keys(
+        false,
+        |index| nodes[*index].y,
+        |index| match nodes[*index].side {
+            Side::Left => 0,
+            Side::Right => 1,
+        },
     );
-    edges[from].next = to;
-    edges[to].prev = from;
-}
 
-fn collect_contours(edges: &[Edge]) -> Vec<IntContour<i32>> {
-    let mut visited = alloc::vec![false; edges.len()];
-    let mut contours = Vec::new();
+    let mut border_next = alloc::vec![usize::MAX; nodes.len()];
+    for pair in border_order.chunks_exact(2) {
+        let a = pair[0];
+        let b = pair[1];
+        let a_is_start = is_arc_start(&nodes[a], &contours, border_x);
+        let b_is_start = is_arc_start(&nodes[b], &contours, border_x);
+        assert_ne!(
+            a_is_start, b_is_start,
+            "each border pair must contain one contour start and one contour end"
+        );
 
-    for start in 0..edges.len() {
-        if !edges[start].alive || visited[start] {
+        let (end, start) = if a_is_start { (b, a) } else { (a, b) };
+        border_next[end] = start;
+    }
+
+    let mut visited = alloc::vec![false; nodes.len()];
+    for start in 0..nodes.len() {
+        if !is_arc_start(&nodes[start], &contours, border_x) || visited[start] {
             continue;
         }
 
         let mut contour = Vec::new();
         let mut current = start;
-        loop {
-            assert!(
-                edges[current].alive,
-                "a contour points to a removed seam edge"
-            );
-            assert!(
-                !visited[current],
-                "a stitched contour does not close at its start"
-            );
+        for _ in 0..nodes.len() {
+            assert!(!visited[current], "portal cycle closes at the wrong start");
             visited[current] = true;
-            contour.push(edges[current].a);
 
-            let next = edges[current].next;
-            assert_eq!(edges[current].b, edges[next].a, "broken contour linkage");
-            current = next;
+            let end = arc_end[current];
+            assert_ne!(end, usize::MAX, "contour arc has no end portal");
+            append_contour_arc(
+                &contours[nodes[current].contour_index],
+                nodes[current].position,
+                nodes[end].position,
+                &mut contour,
+            );
+
+            current = border_next[end];
+            assert_ne!(current, usize::MAX, "border end has no next contour arc");
             if current == start {
                 break;
             }
         }
+        assert_eq!(current, start, "portal traversal must close at its start");
 
         simplify_contour(&mut contour);
         if contour.len() >= 4 {
-            contours.push(contour);
+            merged.push(contour);
         }
     }
+}
 
-    contours
+#[inline(always)]
+fn is_arc_start(node: &BorderNode, contours: &[IntContour<i32>], border_x: i32) -> bool {
+    let contour = &contours[node.contour_index];
+    contour[(node.position + 1) % contour.len()].x != border_x
+}
+
+fn append_contour_arc(
+    contour: &IntContour<i32>,
+    start: usize,
+    end: usize,
+    result: &mut IntContour<i32>,
+) {
+    if start <= end {
+        result.extend_from_slice(&contour[start..=end]);
+    } else {
+        result.extend_from_slice(&contour[start..]);
+        result.extend_from_slice(&contour[..=end]);
+    }
 }
 
 fn simplify_contour(contour: &mut IntContour<i32>) {
@@ -506,86 +285,13 @@ fn is_collinear(a: IntPoint, b: IntPoint, c: IntPoint) -> bool {
     (a.x == b.x && b.x == c.x) || (a.y == b.y && b.y == c.y)
 }
 
-#[cfg(debug_assertions)]
-fn collect_border_nodes(contours: &[IntContour<i32>], border_x: i32) -> Vec<BorderNode> {
-    let mut nodes = Vec::new();
-    for (contour_index, contour) in contours.iter().enumerate() {
-        let n = contour.len();
-        if n < 3 {
-            continue;
-        }
-
-        for vertex_index_in_contour in 0..n {
-            let point = contour[vertex_index_in_contour];
-            if point.x != border_x {
-                continue;
-            }
-
-            let prev = contour[(vertex_index_in_contour + n - 1) % n];
-            let next = contour[(vertex_index_in_contour + 1) % n];
-            let prev_on_border = prev.x == border_x;
-            let next_on_border = next.x == border_x;
-            if prev_on_border == next_on_border {
-                continue;
-            }
-
-            nodes.push(BorderNode {
-                y: point.y,
-                ccw_dir: !next_on_border,
-                contour_index,
-                vertex_index_in_contour,
-            });
-        }
-    }
-    nodes.sort_by_one_key(false, |node| node.y);
-    nodes
-}
-
-#[cfg(debug_assertions)]
-fn validate_border_nodes(contours: &[IntContour<i32>], side: Side, border_x: i32) {
-    let nodes = collect_border_nodes(contours, border_x);
-    if nodes.is_empty() {
-        return;
-    }
-
-    debug_assert_eq!(nodes.len() & 1, 0, "border nodes must form intervals");
-    debug_assert!(nodes.windows(2).all(|pair| pair[0].y <= pair[1].y));
-
-    for node in &nodes {
-        let contour = &contours[node.contour_index];
-        let n = contour.len();
-        let prev = contour[(node.vertex_index_in_contour + n - 1) % n];
-        let next = contour[(node.vertex_index_in_contour + 1) % n];
-        debug_assert_eq!(node.ccw_dir, next.x != border_x);
-        debug_assert_ne!(prev.x == border_x, next.x == border_x);
-    }
-
-    let forward_count = nodes.iter().filter(|node| node.ccw_dir).count();
-    debug_assert_eq!(
-        forward_count * 2,
-        nodes.len(),
-        "every seam interval must have one forward and one backward portal on the {side:?} side"
-    );
-}
-
-#[cfg(debug_assertions)]
-fn assert_unique_spans(edges: &[BorderEdge]) {
-    for pair in edges.windows(2) {
-        debug_assert_ne!(
-            (pair[0].y0, pair[0].y1),
-            (pair[1].y0, pair[1].y1),
-            "filled shapes on one side cannot overlap on a seam"
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     extern crate std;
 
     #[cfg(feature = "allow_multithreading")]
     use super::ParallelMerge;
-    use super::{Merge, SubGraph, split_border_edges};
+    use super::{Merge, SubGraph};
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
     use crate::core::options::IntOverlayOptions;
@@ -625,26 +331,6 @@ mod tests {
         assert_eq!(graph.chunks.both.len(), 1);
         assert_eq!(graph.chunks.middle.len(), 1);
         assert_eq!(graph.chunks.middle[0].len(), 1);
-    }
-
-    #[test]
-    fn splits_border_edges_with_strictly_interior_cuts_in_edge_order() {
-        let cuts = [-5, 0, 2, 5, 10, 15];
-        let mut contours = vec![
-            int_path![[0, 0], [0, 10], [5, 10], [5, 0]],
-            int_path![[0, 10], [0, 0], [-5, 0], [-5, 10]],
-        ];
-
-        split_border_edges(&mut contours, 0, &cuts);
-
-        assert_eq!(
-            contours[0],
-            int_path![[0, 0], [0, 2], [0, 5], [0, 10], [5, 10], [5, 0]]
-        );
-        assert_eq!(
-            contours[1],
-            int_path![[0, 10], [0, 5], [0, 2], [0, 0], [-5, 0], [-5, 10]]
-        );
     }
 
     #[test]
