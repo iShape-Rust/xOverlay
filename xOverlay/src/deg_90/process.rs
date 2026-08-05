@@ -32,7 +32,7 @@ impl Overlay {
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
-        OverlayGraph::with_sub_graphs(sub_graphs)
+        OverlayGraph::with_sub_graphs(sub_graphs, self.options)
     }
 
     #[cfg(feature = "allow_multithreading")]
@@ -43,7 +43,7 @@ impl Overlay {
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
-        OverlayGraph::with_sub_graphs(sub_graphs)
+        OverlayGraph::with_sub_graphs(sub_graphs, self.options)
     }
 }
 
@@ -57,11 +57,11 @@ impl Column {
         if let Some(columns) = self.partition(config) {
             let sub_graphs: Vec<_> = columns
                 .into_iter()
-                .map(|column| SubGraph::with_column(column))
+                .map(|column| SubGraph::with_column(column, fill_rule, overlay_rule))
                 .collect();
             sub_graphs.merge()
         } else {
-            SubGraph::with_column(self)
+            SubGraph::with_column(self, fill_rule, overlay_rule)
         }
     }
 

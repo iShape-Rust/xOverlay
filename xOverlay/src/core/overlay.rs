@@ -41,3 +41,23 @@ impl Overlay {
             .extract_shapes(overlay_rule)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::core::fill_rule::FillRule;
+    use crate::core::overlay::Overlay;
+    use crate::core::overlay_rule::OverlayRule;
+    use i_shape::int::area::Area;
+    use i_shape::int_shape;
+
+    #[test]
+    fn overlay_returns_shapes_from_the_column_solver() {
+        let subject = int_shape![[[-8, -4], [8, -4], [8, 4], [-8, 4]]];
+        let shapes =
+            Overlay::with_contours(&subject, &[]).overlay(FillRule::NonZero, OverlayRule::Subject);
+
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 1);
+        assert_eq!(shapes.area_two(), 256);
+    }
+}

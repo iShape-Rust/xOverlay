@@ -1,5 +1,9 @@
 use crate::deg_90::sub_graph::SubGraph;
+use crate::geom::range::LineRange;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
+use i_float::int::point::IntPoint;
+use i_shape::int::shape::IntContour;
 
 pub(super) trait Merge {
     fn merge(self) -> SubGraph;
@@ -7,6 +11,881 @@ pub(super) trait Merge {
 
 impl Merge for Vec<SubGraph> {
     fn merge(self) -> SubGraph {
-        SubGraph {}
+        let mut iter = self.into_iter();
+        let Some(mut result) = iter.next() else {
+            return SubGraph {
+                range: LineRange::default(),
+                contours: Vec::new(),
+            };
+        };
+
+        for right in iter {
+            result = merge_pair(result, right);
+        }
+
+        result
+    }
+}
+
+fn merge_pair(left: SubGraph, right: SubGraph) -> SubGraph {
+    debug_assert_eq!(
+        left.range.max, right.range.min,
+        "only neighboring column groups can be merged"
+    );
+
+    let border_x = left.range.max;
+    let contours = merge_contours(left.contours, right.contours, border_x);
+
+    SubGraph {
+        range: LineRange::with_min_max(left.range.min, right.range.max),
+        contours,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Side {
+    Left,
+    Right,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Clone, Copy, Debug)]
+struct BorderNode {
+    y: i32,
+    ccw_dir: bool,
+    contour_index: usize,
+    vertex_index_in_contour: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Edge {
+    a: IntPoint,
+    b: IntPoint,
+    prev: usize,
+    next: usize,
+    alive: bool,
+    side: Side,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BorderEdge {
+    y0: i32,
+    y1: i32,
+    edge_index: usize,
+}
+
+fn merge_contours(
+    mut left: Vec<IntContour<i32>>,
+    mut right: Vec<IntContour<i32>>,
+    border_x: i32,
+) -> Vec<IntContour<i32>> {
+    #[cfg(debug_assertions)]
+    validate_border_nodes(&left, Side::Left, border_x);
+    #[cfg(debug_assertions)]
+    validate_border_nodes(&right, Side::Right, border_x);
+
+    let cuts = border_cuts(&left, &right, border_x);
+    split_border_edges(&mut left, border_x, &cuts);
+    split_border_edges(&mut right, border_x, &cuts);
+
+    // A local hole may touch the artificial column border. Its seam edge then
+    // mirrors a hull seam edge on the same side. Resolve these local pairs
+    // first, producing the C-shaped boundary that participates in the actual
+    // inter-column merge.
+    left = reduce_local_border(left, Side::Left, border_x);
+    right = reduce_local_border(right, Side::Right, border_x);
+    // Local contour rebuilding removes collinear seam points. Restore the
+    // shared event partition before matching partially overlapping spans.
+    split_border_edges(&mut left, border_x, &cuts);
+    split_border_edges(&mut right, border_x, &cuts);
+
+    let mut edges = Vec::new();
+    append_edges(&left, Side::Left, &mut edges);
+    append_edges(&right, Side::Right, &mut edges);
+
+    let mut left_border = border_edges(&edges, Side::Left, border_x);
+    let mut right_border = border_edges(&edges, Side::Right, border_x);
+    left_border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    right_border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+
+    #[cfg(debug_assertions)]
+    {
+        assert_unique_spans(&left_border);
+        assert_unique_spans(&right_border);
+    }
+
+    let matches = matching_edges(&left_border, &right_border);
+    if matches.is_empty() {
+        left.extend(right);
+        return left;
+    }
+
+    apply_matches(&mut edges, &matches);
+    collect_contours(&edges)
+}
+
+fn reduce_local_border(
+    contours: Vec<IntContour<i32>>,
+    side: Side,
+    border_x: i32,
+) -> Vec<IntContour<i32>> {
+    let mut edges = Vec::new();
+    append_edges(&contours, side, &mut edges);
+
+    let mut border = border_edges(&edges, side, border_x);
+    border.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    let (_, matches) = reduce_same_side_edges(&edges, border);
+    if matches.is_empty() {
+        return contours;
+    }
+
+    apply_matches(&mut edges, &matches);
+    collect_contours(&edges)
+}
+
+fn apply_matches(edges: &mut [Edge], matches: &[(usize, usize)]) {
+    for &(left_edge, right_edge) in matches {
+        let left = edges[left_edge];
+        let right = edges[right_edge];
+        debug_assert_eq!(left.a, right.b, "matched seam edges must be mirrored");
+        debug_assert_eq!(left.b, right.a, "matched seam edges must be mirrored");
+        edges[left_edge].alive = false;
+        edges[right_edge].alive = false;
+    }
+
+    // All common seam atoms are marked first. Adjacent atoms therefore act as
+    // one removed chain and do not leave intermediate seam vertices behind.
+    for &(left_edge, right_edge) in matches {
+        let left_prev = previous_alive(edges, left_edge);
+        let left_next = next_alive(edges, left_edge);
+        let right_prev = previous_alive(edges, right_edge);
+        let right_next = next_alive(edges, right_edge);
+
+        connect(edges, left_prev, right_next);
+        connect(edges, right_prev, left_next);
+    }
+}
+
+fn border_cuts(left: &[IntContour<i32>], right: &[IntContour<i32>], border_x: i32) -> Vec<i32> {
+    let mut cuts = Vec::new();
+    for contour in left.iter().chain(right) {
+        for &point in contour {
+            if point.x == border_x {
+                cuts.push(point.y);
+            }
+        }
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    cuts
+}
+
+fn split_border_edges(contours: &mut [IntContour<i32>], border_x: i32, cuts: &[i32]) {
+    for contour in contours {
+        if contour.len() < 2 {
+            continue;
+        }
+
+        let mut result = Vec::with_capacity(contour.len());
+        for index in 0..contour.len() {
+            let a = contour[index];
+            let b = contour[(index + 1) % contour.len()];
+            result.push(a);
+
+            if a.x != border_x || b.x != border_x || a.y == b.y {
+                continue;
+            }
+
+            let y0 = a.y.min(b.y);
+            let y1 = a.y.max(b.y);
+            if a.y < b.y {
+                for &y in cuts {
+                    if y0 < y && y < y1 {
+                        result.push(IntPoint::new(border_x, y));
+                    }
+                }
+            } else {
+                for &y in cuts.iter().rev() {
+                    if y0 < y && y < y1 {
+                        result.push(IntPoint::new(border_x, y));
+                    }
+                }
+            }
+        }
+
+        *contour = result;
+    }
+}
+
+fn append_edges(contours: &[IntContour<i32>], side: Side, edges: &mut Vec<Edge>) {
+    for contour in contours {
+        if contour.len() < 2 {
+            continue;
+        }
+
+        let offset = edges.len();
+        let count = contour.len();
+        edges.reserve(count);
+
+        for index in 0..count {
+            edges.push(Edge {
+                a: contour[index],
+                b: contour[(index + 1) % count],
+                prev: offset + (index + count - 1) % count,
+                next: offset + (index + 1) % count,
+                alive: true,
+                side,
+            });
+        }
+    }
+}
+
+fn border_edges(edges: &[Edge], side: Side, border_x: i32) -> Vec<BorderEdge> {
+    edges
+        .iter()
+        .enumerate()
+        .filter_map(|(edge_index, edge)| {
+            if edge.side != side
+                || edge.a.x != border_x
+                || edge.b.x != border_x
+                || edge.a.y == edge.b.y
+            {
+                return None;
+            }
+
+            Some(BorderEdge {
+                y0: edge.a.y.min(edge.b.y),
+                y1: edge.a.y.max(edge.b.y),
+                edge_index,
+            })
+        })
+        .collect()
+}
+
+fn matching_edges(left: &[BorderEdge], right: &[BorderEdge]) -> Vec<(usize, usize)> {
+    let mut matches = Vec::new();
+    let mut i = 0;
+    let mut j = 0;
+
+    while i < left.len() && j < right.len() {
+        let a = left[i];
+        let b = right[j];
+        match (a.y0, a.y1).cmp(&(b.y0, b.y1)) {
+            Ordering::Less => i += 1,
+            Ordering::Greater => j += 1,
+            Ordering::Equal => {
+                matches.push((a.edge_index, b.edge_index));
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+
+    matches
+}
+
+fn reduce_same_side_edges(
+    edges: &[Edge],
+    border: Vec<BorderEdge>,
+) -> (Vec<BorderEdge>, Vec<(usize, usize)>) {
+    let mut remaining = Vec::with_capacity(border.len());
+    let mut matches = Vec::new();
+    let mut start = 0;
+
+    while start < border.len() {
+        let key = (border[start].y0, border[start].y1);
+        let mut end = start + 1;
+        while end < border.len() && (border[end].y0, border[end].y1) == key {
+            end += 1;
+        }
+
+        let mut up = Vec::new();
+        let mut down = Vec::new();
+        for border_edge in &border[start..end] {
+            let edge = edges[border_edge.edge_index];
+            if edge.a.y < edge.b.y {
+                up.push(*border_edge);
+            } else {
+                down.push(*border_edge);
+            }
+        }
+
+        let pair_count = up.len().min(down.len());
+        for index in 0..pair_count {
+            matches.push((up[index].edge_index, down[index].edge_index));
+        }
+        remaining.extend_from_slice(&up[pair_count..]);
+        remaining.extend_from_slice(&down[pair_count..]);
+
+        start = end;
+    }
+
+    remaining.sort_unstable_by_key(|edge| (edge.y0, edge.y1));
+    (remaining, matches)
+}
+
+fn previous_alive(edges: &[Edge], edge_index: usize) -> usize {
+    let mut current = edges[edge_index].prev;
+    for _ in 0..edges.len() {
+        if edges[current].alive {
+            return current;
+        }
+        current = edges[current].prev;
+    }
+    panic!("a contour cannot consist only of a removed seam")
+}
+
+fn next_alive(edges: &[Edge], edge_index: usize) -> usize {
+    let mut current = edges[edge_index].next;
+    for _ in 0..edges.len() {
+        if edges[current].alive {
+            return current;
+        }
+        current = edges[current].next;
+    }
+    panic!("a contour cannot consist only of a removed seam")
+}
+
+fn connect(edges: &mut [Edge], from: usize, to: usize) {
+    debug_assert!(edges[from].alive && edges[to].alive);
+    debug_assert_eq!(
+        edges[from].b, edges[to].a,
+        "stitched contour edges must share a vertex"
+    );
+    edges[from].next = to;
+    edges[to].prev = from;
+}
+
+fn collect_contours(edges: &[Edge]) -> Vec<IntContour<i32>> {
+    let mut visited = alloc::vec![false; edges.len()];
+    let mut contours = Vec::new();
+
+    for start in 0..edges.len() {
+        if !edges[start].alive || visited[start] {
+            continue;
+        }
+
+        let mut contour = Vec::new();
+        let mut current = start;
+        loop {
+            assert!(
+                edges[current].alive,
+                "a contour points to a removed seam edge"
+            );
+            assert!(
+                !visited[current],
+                "a stitched contour does not close at its start"
+            );
+            visited[current] = true;
+            contour.push(edges[current].a);
+
+            let next = edges[current].next;
+            assert_eq!(edges[current].b, edges[next].a, "broken contour linkage");
+            current = next;
+            if current == start {
+                break;
+            }
+        }
+
+        simplify_contour(&mut contour);
+        if contour.len() >= 4 {
+            contours.push(contour);
+        }
+    }
+
+    contours
+}
+
+fn simplify_contour(contour: &mut IntContour<i32>) {
+    if contour.len() < 3 {
+        return;
+    }
+
+    let mut result = Vec::with_capacity(contour.len());
+    for &point in contour.iter() {
+        if result.last() == Some(&point) {
+            continue;
+        }
+
+        while result.len() >= 2 {
+            let a = result[result.len() - 2];
+            let b = result[result.len() - 1];
+            if !is_collinear(a, b, point) {
+                break;
+            }
+            result.pop();
+        }
+        result.push(point);
+    }
+
+    loop {
+        let n = result.len();
+        if n < 3 {
+            break;
+        }
+        if is_collinear(result[n - 1], result[0], result[1]) {
+            result.remove(0);
+        } else if is_collinear(result[n - 2], result[n - 1], result[0]) {
+            result.pop();
+        } else {
+            break;
+        }
+    }
+
+    *contour = result;
+}
+
+#[inline(always)]
+fn is_collinear(a: IntPoint, b: IntPoint, c: IntPoint) -> bool {
+    (a.x == b.x && b.x == c.x) || (a.y == b.y && b.y == c.y)
+}
+
+#[cfg(debug_assertions)]
+fn collect_border_nodes(contours: &[IntContour<i32>], border_x: i32) -> Vec<BorderNode> {
+    let mut nodes = Vec::new();
+    for (contour_index, contour) in contours.iter().enumerate() {
+        let n = contour.len();
+        if n < 3 {
+            continue;
+        }
+
+        for vertex_index_in_contour in 0..n {
+            let point = contour[vertex_index_in_contour];
+            if point.x != border_x {
+                continue;
+            }
+
+            let prev = contour[(vertex_index_in_contour + n - 1) % n];
+            let next = contour[(vertex_index_in_contour + 1) % n];
+            let prev_on_border = prev.x == border_x;
+            let next_on_border = next.x == border_x;
+            if prev_on_border == next_on_border {
+                continue;
+            }
+
+            nodes.push(BorderNode {
+                y: point.y,
+                ccw_dir: !next_on_border,
+                contour_index,
+                vertex_index_in_contour,
+            });
+        }
+    }
+    nodes.sort_unstable_by_key(|node| node.y);
+    nodes
+}
+
+#[cfg(debug_assertions)]
+fn validate_border_nodes(contours: &[IntContour<i32>], side: Side, border_x: i32) {
+    let nodes = collect_border_nodes(contours, border_x);
+    if nodes.is_empty() {
+        return;
+    }
+
+    debug_assert_eq!(nodes.len() & 1, 0, "border nodes must form intervals");
+    debug_assert!(nodes.windows(2).all(|pair| pair[0].y <= pair[1].y));
+
+    for node in &nodes {
+        let contour = &contours[node.contour_index];
+        let n = contour.len();
+        let prev = contour[(node.vertex_index_in_contour + n - 1) % n];
+        let next = contour[(node.vertex_index_in_contour + 1) % n];
+        debug_assert_eq!(node.ccw_dir, next.x != border_x);
+        debug_assert_ne!(prev.x == border_x, next.x == border_x);
+    }
+
+    let forward_count = nodes.iter().filter(|node| node.ccw_dir).count();
+    debug_assert_eq!(
+        forward_count * 2,
+        nodes.len(),
+        "every seam interval must have one forward and one backward portal on the {side:?} side"
+    );
+}
+
+#[cfg(debug_assertions)]
+fn assert_unique_spans(edges: &[BorderEdge]) {
+    for pair in edges.windows(2) {
+        debug_assert_ne!(
+            (pair[0].y0, pair[0].y1),
+            (pair[1].y0, pair[1].y1),
+            "filled shapes on one side cannot overlap on a seam"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Merge, SubGraph};
+    use crate::core::cpu_count::CPUCount;
+    use crate::core::fill_rule::FillRule;
+    use crate::core::options::IntOverlayOptions;
+    use crate::core::overlay::Overlay;
+    use crate::core::overlay_rule::OverlayRule;
+    use crate::deg_90::column;
+    use crate::deg_90::column_map::ColumnMap;
+    use crate::deg_90::config::ColumnConfig90;
+    use crate::geom::range::LineRange;
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use i_float::int::point::IntPoint;
+    use i_shape::int::area::Area;
+    use i_shape::int::path::ContourExtension;
+    use i_shape::int::shape::{IntContour, IntShape, IntShapes};
+    use i_shape::{int_path, int_shape};
+    use rand::rngs::StdRng;
+    use rand::{RngExt, SeedableRng};
+
+    #[test]
+    fn joins_rectangles_across_seam() {
+        let left = sub_graph(
+            -10,
+            0,
+            vec![int_path![[-10, -5], [0, -5], [0, 5], [-10, 5]]],
+        );
+        let right = sub_graph(0, 10, vec![int_path![[0, -5], [10, -5], [10, 5], [0, 5]]]);
+
+        let merged = vec![left, right].merge();
+        assert_eq!(merged.contours.len(), 1);
+        assert_eq!(merged.contours[0].len(), 4);
+        assert_eq!(merged.contours[0].area_two(), 400);
+    }
+
+    #[test]
+    fn joins_partially_overlapping_seam_intervals() {
+        let left = sub_graph(
+            -10,
+            0,
+            vec![int_path![[-10, 0], [0, 0], [0, 10], [-10, 10]]],
+        );
+        let right = sub_graph(0, 10, vec![int_path![[0, 0], [10, 0], [10, 5], [0, 5]]]);
+
+        let merged = vec![left, right].merge();
+        assert_eq!(merged.contours.len(), 1);
+        assert_eq!(merged.contours[0].len(), 6);
+        assert_eq!(merged.contours[0].area_two(), 300);
+    }
+
+    #[test]
+    fn mirrored_cs_create_a_hole() {
+        let left = sub_graph(
+            -10,
+            0,
+            vec![int_path![
+                [-10, -10],
+                [0, -10],
+                [0, -5],
+                [-5, -5],
+                [-5, 5],
+                [0, 5],
+                [0, 10],
+                [-10, 10],
+            ]],
+        );
+        let right = sub_graph(
+            0,
+            10,
+            vec![int_path![
+                [0, -10],
+                [10, -10],
+                [10, 10],
+                [0, 10],
+                [0, 5],
+                [5, 5],
+                [5, -5],
+                [0, -5],
+            ]],
+        );
+
+        let merged = vec![left, right].merge();
+        assert_eq!(merged.contours.len(), 2);
+
+        let shapes = column::rebuild_shapes(merged.contours);
+        assert_eq!(
+            shapes.len(),
+            1,
+            "areas: {:?}",
+            shapes
+                .iter()
+                .map(|shape| shape.iter().map(|c| c.area_two()).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 600);
+        assert!(shapes[0][0].area_two() > 0);
+        assert!(shapes[0][1].area_two() < 0);
+    }
+
+    #[test]
+    fn column_graphs_rebuild_a_hole_across_the_seam() {
+        let subject = int_shape![
+            [[-16, -16], [16, -16], [16, 16], [-16, 16]],
+            [[-5, -5], [-5, 5], [5, 5], [5, -5]],
+        ];
+        let map = ColumnMap::with_columns_count(&subject, &[], 2);
+        assert_eq!(map.columns.len(), 2);
+
+        let parts: Vec<_> = map
+            .columns
+            .into_iter()
+            .map(|column| SubGraph::with_column(column, FillRule::NonZero, OverlayRule::Subject))
+            .collect();
+        let shapes = parts.merge().into_shapes();
+
+        assert_eq!(
+            shapes.len(),
+            1,
+            "areas: {:?}",
+            shapes
+                .iter()
+                .map(|shape| shape.iter().map(|c| c.area_two()).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 1848);
+        assert!(shapes[0][0].area_two() > 0);
+        assert!(shapes[0][1].area_two() < 0);
+    }
+
+    #[test]
+    fn column_graphs_rebuild_a_hole_across_multiple_seams() {
+        let subject = int_shape![
+            [[-32, -32], [32, -32], [32, 32], [-32, 32]],
+            [[-20, -10], [-20, 10], [20, 10], [20, -10]],
+        ];
+        let map = ColumnMap::with_columns_count(&subject, &[], 4);
+        assert_eq!(map.columns.len(), 4);
+
+        let parts: Vec<_> = map
+            .columns
+            .into_iter()
+            .map(|column| SubGraph::with_column(column, FillRule::NonZero, OverlayRule::Subject))
+            .collect();
+        let shapes = parts.merge().into_shapes();
+
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 6592);
+        assert!(shapes[0][0].area_two() > 0);
+        assert!(shapes[0][1].area_two() < 0);
+    }
+
+    #[test]
+    fn randomized_multi_column_merge_matches_i_overlay() {
+        const GEOMETRY_SEED: u64 = 0xC011_4D6E_5EED;
+        let mut rng = StdRng::seed_from_u64(GEOMETRY_SEED);
+
+        for case_index in 0..128 {
+            let subject = random_rectangles(&mut rng, 8, SideAnchor::Left);
+            let clip = random_rectangles(&mut rng, 8, SideAnchor::Right);
+
+            for fill_rule in [
+                FillRule::EvenOdd,
+                FillRule::NonZero,
+                FillRule::Positive,
+                FillRule::Negative,
+            ] {
+                for overlay_rule in [
+                    OverlayRule::Subject,
+                    OverlayRule::Clip,
+                    OverlayRule::Intersect,
+                    OverlayRule::Union,
+                    OverlayRule::Difference,
+                    OverlayRule::InverseDifference,
+                    OverlayRule::Xor,
+                ] {
+                    let expected = i_overlay_shapes(&subject, &clip, fill_rule, overlay_rule);
+
+                    for columns_count in [2, 4, 8] {
+                        let actual = extract_multi_column(
+                            &subject,
+                            &clip,
+                            columns_count,
+                            fill_rule,
+                            overlay_rule,
+                        );
+
+                        assert_eq!(
+                            actual.area_two(),
+                            expected.area_two(),
+                            "area mismatch: seed={GEOMETRY_SEED:#x}, case={case_index}, columns={columns_count}, fill={fill_rule:?}, overlay={overlay_rule:?}, subject={subject:?}, clip={clip:?}, actual={actual:?}, expected={expected:?}"
+                        );
+                        assert_valid_directions(
+                            &actual,
+                            GEOMETRY_SEED,
+                            case_index,
+                            columns_count,
+                            fill_rule,
+                            overlay_rule,
+                        );
+                        assert_same_random_samples(
+                            &actual,
+                            &expected,
+                            GEOMETRY_SEED ^ (case_index as u64).rotate_left(19),
+                            case_index,
+                            columns_count,
+                            fill_rule,
+                            overlay_rule,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum SideAnchor {
+        Left,
+        Right,
+    }
+
+    fn random_rectangles(rng: &mut StdRng, count: usize, anchor: SideAnchor) -> IntShape<i32> {
+        let anchor_x = match anchor {
+            SideAnchor::Left => -64,
+            SideAnchor::Right => 62,
+        };
+        let anchor_y = match anchor {
+            SideAnchor::Left => -62,
+            SideAnchor::Right => 60,
+        };
+        let mut contours = Vec::with_capacity(count + 1);
+        let mut anchor = rectangle(anchor_x, anchor_y, 2, 2);
+        if rng.random_range(0..2) == 0 {
+            anchor.reverse();
+        }
+        contours.push(anchor);
+
+        for _ in 0..count {
+            let x = 2 * rng.random_range(-28..25);
+            let y = 2 * rng.random_range(-28..25);
+            let width = 2 * rng.random_range(1..9);
+            let height = 2 * rng.random_range(1..9);
+            let mut contour = rectangle(x, y, width, height);
+            if rng.random_range(0..2) == 0 {
+                contour.reverse();
+            }
+            contours.push(contour);
+        }
+
+        contours
+    }
+
+    fn rectangle(x: i32, y: i32, width: i32, height: i32) -> IntContour<i32> {
+        vec![
+            IntPoint::new(x, y),
+            IntPoint::new(x + width, y),
+            IntPoint::new(x + width, y + height),
+            IntPoint::new(x, y + height),
+        ]
+    }
+
+    fn extract_multi_column(
+        subject: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        columns_count: usize,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) -> IntShapes<i32> {
+        let options = IntOverlayOptions {
+            columns_config: ColumnConfig90::dev(columns_count),
+            ..Default::default()
+        };
+        let overlay =
+            Overlay::with_contours_custom(subject, clip, options, CPUCount::Fixed(columns_count));
+        assert_eq!(overlay.columns.len(), columns_count);
+        overlay.overlay(fill_rule, overlay_rule)
+    }
+
+    fn i_overlay_shapes(
+        subject: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) -> IntShapes<i32> {
+        use i_overlay::core::fill_rule::FillRule as IFillRule;
+        use i_overlay::core::overlay::Overlay as IOverlay;
+        use i_overlay::core::overlay_rule::OverlayRule as IOverlayRule;
+
+        let i_fill_rule = match fill_rule {
+            FillRule::EvenOdd => IFillRule::EvenOdd,
+            FillRule::NonZero => IFillRule::NonZero,
+            FillRule::Positive => IFillRule::Positive,
+            FillRule::Negative => IFillRule::Negative,
+        };
+        let i_overlay_rule = match overlay_rule {
+            OverlayRule::Subject => IOverlayRule::Subject,
+            OverlayRule::Clip => IOverlayRule::Clip,
+            OverlayRule::Intersect => IOverlayRule::Intersect,
+            OverlayRule::Union => IOverlayRule::Union,
+            OverlayRule::Difference => IOverlayRule::Difference,
+            OverlayRule::InverseDifference => IOverlayRule::InverseDifference,
+            OverlayRule::Xor => IOverlayRule::Xor,
+        };
+
+        let mut overlay = IOverlay::with_contours(subject, clip);
+        overlay.overlay(i_overlay_rule, i_fill_rule)
+    }
+
+    fn assert_valid_directions(
+        shapes: &IntShapes<i32>,
+        geometry_seed: u64,
+        case_index: usize,
+        columns_count: usize,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) {
+        for (shape_index, shape) in shapes.iter().enumerate() {
+            assert!(
+                shape.first().is_some_and(|hull| hull.area_two() > 0),
+                "invalid hull direction: seed={geometry_seed:#x}, case={case_index}, columns={columns_count}, shape={shape_index}, fill={fill_rule:?}, overlay={overlay_rule:?}"
+            );
+            assert!(
+                shape[1..].iter().all(|hole| hole.area_two() < 0),
+                "invalid hole direction: seed={geometry_seed:#x}, case={case_index}, columns={columns_count}, shape={shape_index}, fill={fill_rule:?}, overlay={overlay_rule:?}"
+            );
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn assert_same_random_samples(
+        actual: &IntShapes<i32>,
+        expected: &IntShapes<i32>,
+        sample_seed: u64,
+        case_index: usize,
+        columns_count: usize,
+        fill_rule: FillRule,
+        overlay_rule: OverlayRule,
+    ) {
+        let mut rng = StdRng::seed_from_u64(sample_seed);
+        for sample_index in 0..128 {
+            // All generated boundary coordinates are even. Odd samples cannot
+            // land on an edge, so both solvers have an unambiguous answer.
+            let point = IntPoint::new(
+                2 * rng.random_range(-33..33) + 1,
+                2 * rng.random_range(-33..33) + 1,
+            );
+            assert_eq!(
+                shapes_contain(actual, point),
+                shapes_contain(expected, point),
+                "sample mismatch at {point:?}: sample_seed={sample_seed:#x}, case={case_index}, columns={columns_count}, sample={sample_index}, fill={fill_rule:?}, overlay={overlay_rule:?}, actual={actual:?}, expected={expected:?}"
+            );
+        }
+    }
+
+    fn shapes_contain(shapes: &IntShapes<i32>, point: IntPoint) -> bool {
+        shapes.iter().any(|shape| {
+            shape.first().is_some_and(|hull| hull.contains_point(point))
+                && !shape[1..].iter().any(|hole| hole.contains_point(point))
+        })
+    }
+
+    fn sub_graph(
+        min: i32,
+        max: i32,
+        contours: Vec<Vec<i_float::int::point::IntPoint>>,
+    ) -> SubGraph {
+        SubGraph {
+            range: LineRange::with_min_max(min, max),
+            contours,
+        }
     }
 }

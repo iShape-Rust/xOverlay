@@ -561,7 +561,7 @@ mod tests {
     use crate::deg_90::column::extract::SubPath;
     use crate::deg_90::column::graph::ColumnGraph;
     use crate::deg_90::column::join_holes::{
-        hole_anchors_by_y, prefer_sweep, ActiveAnchors, BottomAnchor, FirstBottom, ShapeEdge,
+        ActiveAnchors, BottomAnchor, FirstBottom, ShapeEdge, hole_anchors_by_y, prefer_sweep,
     };
     use crate::geom::range::LineRange;
     use alloc::vec;

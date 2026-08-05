@@ -7,8 +7,8 @@ use i_float::int::point::IntPoint;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 pub(crate) struct ExtResult {
-    shapes: IntShapes<i32>,
-    subpaths: Vec<SubPath>,
+    pub(super) shapes: IntShapes<i32>,
+    pub(super) subpaths: Vec<SubPath>,
 }
 
 enum SubResult {

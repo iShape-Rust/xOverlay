@@ -3,12 +3,14 @@ use crate::definition::segment::SegmentFill;
 use alloc::vec::Vec;
 use core::ops::Range;
 use i_float::int::point::IntPoint;
+use i_shape::int::shape::IntShapes;
 
 pub struct OverlayGraph {
     pub(crate) options: IntOverlayOptions,
     pub(crate) nodes: Vec<OverlayNode>,
     pub(crate) links: Vec<OverlayLink>,
     pub(crate) fills: Vec<SegmentFill>,
+    pub(crate) shapes: IntShapes<i32>,
 }
 
 pub(crate) struct OverlayNode {
