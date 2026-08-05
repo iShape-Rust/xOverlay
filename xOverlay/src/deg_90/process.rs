@@ -4,6 +4,8 @@ use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use crate::deg_90::config::ColumnConfig90;
 use crate::deg_90::merge::Merge;
+#[cfg(feature = "allow_multithreading")]
+use crate::deg_90::merge::ParallelMerge;
 use crate::deg_90::sub_graph::SubGraph;
 use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;
@@ -45,7 +47,7 @@ impl Overlay {
             .map(|c| c.process(fill_rule, overlay_rule, self.options.columns_config))
             .collect();
 
-        OverlayGraph::with_sub_graphs(sub_graphs, self.options)
+        OverlayGraph::with_sub_graph(sub_graphs.parallel_merge(), self.options)
     }
 }
 
@@ -76,13 +78,25 @@ impl Column {
 }
 #[cfg(test)]
 mod tests {
+    use crate::core::fill_rule::FillRule;
+    use crate::core::overlay_rule::OverlayRule;
     use crate::deg_90::column_map::Column;
     use crate::deg_90::config::ColumnConfig90;
+    use crate::deg_90::sub_graph::SubGraph;
 
     impl Column {
         pub(crate) fn test_partition(&mut self, config: ColumnConfig90) {
             let result = self.partition(config);
             debug_assert!(result.is_none());
+        }
+
+        pub(in crate::deg_90) fn test_process(
+            self,
+            fill_rule: FillRule,
+            overlay_rule: OverlayRule,
+            config: ColumnConfig90,
+        ) -> SubGraph {
+            self.process(fill_rule, overlay_rule, config)
         }
     }
 }

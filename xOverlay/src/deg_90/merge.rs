@@ -6,9 +6,16 @@ use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key::OneKeySort;
 use i_key_sort::sort::two_keys::TwoKeysSort;
 use i_shape::int::shape::IntContour;
+#[cfg(feature = "allow_multithreading")]
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
 pub(super) trait Merge {
     fn merge(self) -> SubGraph;
+}
+
+#[cfg(feature = "allow_multithreading")]
+pub(super) trait ParallelMerge {
+    fn parallel_merge(self) -> SubGraph;
 }
 
 impl Merge for Vec<SubGraph> {
@@ -26,6 +33,19 @@ impl Merge for Vec<SubGraph> {
         }
 
         result
+    }
+}
+
+#[cfg(feature = "allow_multithreading")]
+impl ParallelMerge for Vec<SubGraph> {
+    fn parallel_merge(self) -> SubGraph {
+        let mut groups = self;
+
+        while groups.len() > 1 {
+            groups = groups.into_par_iter().chunks(2).map(Merge::merge).collect();
+        }
+
+        groups.merge()
     }
 }
 
@@ -563,6 +583,8 @@ fn assert_unique_spans(edges: &[BorderEdge]) {
 mod tests {
     extern crate std;
 
+    #[cfg(feature = "allow_multithreading")]
+    use super::ParallelMerge;
     use super::{Merge, SubGraph};
     use crate::core::cpu_count::CPUCount;
     use crate::core::fill_rule::FillRule;
@@ -598,6 +620,28 @@ mod tests {
         assert_eq!(merged.contours.len(), 1);
         assert_eq!(merged.contours[0].len(), 4);
         assert_eq!(merged.contours[0].area_two(), 400);
+    }
+
+    #[cfg(feature = "allow_multithreading")]
+    #[test]
+    fn parallel_binary_merge_handles_odd_column_count() {
+        let make_parts = || {
+            (-2..3)
+                .map(|index| {
+                    let x = index * 10;
+                    sub_graph(x, x + 10, vec![rectangle(x, -5, 10, 10)])
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let serial = make_parts().merge();
+        let parallel = make_parts().parallel_merge();
+
+        assert_eq!(parallel.range, serial.range);
+        assert_eq!(parallel.contours, serial.contours);
+        assert_eq!(parallel.contours.len(), 1);
+        assert_eq!(parallel.contours[0].len(), 4);
+        assert_eq!(parallel.contours[0].area_two(), 1_000);
     }
 
     #[test]
@@ -853,6 +897,68 @@ mod tests {
         );
     }
 
+    #[test]
+    #[ignore = "single-thread profiling workload; run explicitly with --release --ignored --nocapture"]
+    fn profile_checkerboard_single_thread() {
+        const N: usize = 128;
+        const COLUMNS: usize = 60;
+        const PROFILE_TIME: Duration = Duration::from_secs(5);
+
+        let subject = many_squares(IntPoint::new(0, 0), 20, 30, N);
+        let clip = many_squares(IntPoint::new(15, 15), 20, 30, N - 1);
+        let fill_rule = FillRule::NonZero;
+        let overlay_rule = OverlayRule::Xor;
+        let options = multi_column_options(&subject, &clip, COLUMNS);
+
+        let mut map_time = Duration::ZERO;
+        let mut column_time = Duration::ZERO;
+        let mut merge_time = Duration::ZERO;
+        let mut rebuild_time = Duration::ZERO;
+        let profile_start = Instant::now();
+        let mut iterations = 0;
+
+        while iterations == 0 || profile_start.elapsed() < PROFILE_TIME {
+            let start = Instant::now();
+            let overlay = Overlay::with_contours_custom(&subject, &clip, options, CPUCount::Single);
+            map_time += start.elapsed();
+            assert_eq!(overlay.columns.len(), COLUMNS);
+
+            let start = Instant::now();
+            let sub_graphs = overlay
+                .columns
+                .into_iter()
+                .map(|column| column.test_process(fill_rule, overlay_rule, options.columns_config))
+                .collect::<Vec<_>>();
+            column_time += start.elapsed();
+
+            let start = Instant::now();
+            let merged = sub_graphs.merge();
+            merge_time += start.elapsed();
+
+            let start = Instant::now();
+            black_box(merged.into_shapes());
+            rebuild_time += start.elapsed();
+            iterations += 1;
+        }
+
+        let measured = map_time + column_time + merge_time + rebuild_time;
+        std::println!(
+            "single-thread checkerboard: n={N}, columns={COLUMNS}, iterations={iterations}, measured={measured:?}"
+        );
+        print_profile_stage("column map", map_time, measured, iterations);
+        print_profile_stage("column process", column_time, measured, iterations);
+        print_profile_stage("serial merge", merge_time, measured, iterations);
+        print_profile_stage("rebuild shapes", rebuild_time, measured, iterations);
+    }
+
+    fn print_profile_stage(label: &str, elapsed: Duration, total: Duration, iterations: usize) {
+        std::println!(
+            "{label:>18}: {:8.3} ms/iter, {:5.1}%",
+            elapsed.as_secs_f64() * 1_000.0 / iterations as f64,
+            100.0 * elapsed.as_secs_f64() / total.as_secs_f64(),
+        );
+    }
+
     #[derive(Clone, Copy)]
     struct Measurement {
         iterations: usize,
@@ -963,13 +1069,25 @@ mod tests {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> IntShapes<i32> {
+        let options = multi_column_options(subject, clip, columns_count);
+        let overlay =
+            Overlay::with_contours_custom(subject, clip, options, CPUCount::Fixed(columns_count));
+        assert_eq!(overlay.columns.len(), columns_count);
+        overlay.overlay(fill_rule, overlay_rule)
+    }
+
+    fn multi_column_options(
+        subject: &[IntContour<i32>],
+        clip: &[IntContour<i32>],
+        columns_count: usize,
+    ) -> IntOverlayOptions {
         let width = input_width(subject, clip);
         let min_column_width_power = (0..usize::BITS as usize)
             .find(|&power| ((width.saturating_sub(1) >> power) + 1) == columns_count)
             .unwrap_or_else(|| {
                 panic!("column count {columns_count} is not representable for input width {width}")
             });
-        let options = IntOverlayOptions {
+        IntOverlayOptions {
             columns_config: ColumnConfig90 {
                 min_columns_count: columns_count,
                 min_column_width_power,
@@ -978,11 +1096,7 @@ mod tests {
                 max_allowed_segments_per_line: 128,
             },
             ..Default::default()
-        };
-        let overlay =
-            Overlay::with_contours_custom(subject, clip, options, CPUCount::Fixed(columns_count));
-        assert_eq!(overlay.columns.len(), columns_count);
-        overlay.overlay(fill_rule, overlay_rule)
+        }
     }
 
     fn input_width(subject: &[IntContour<i32>], clip: &[IntContour<i32>]) -> usize {
