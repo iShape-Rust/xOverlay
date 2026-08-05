@@ -222,9 +222,11 @@ fn merge_border_contours(
 
         close_contour(&mut contour);
         debug_assert!(is_simple_contour(&contour));
-        if contour.len() >= 4 {
-            merged.push(contour);
-        }
+        debug_assert!(
+            contour.len() >= 4,
+            "a merged contour must have at least four points"
+        );
+        merged.push(contour);
     }
 }
 
