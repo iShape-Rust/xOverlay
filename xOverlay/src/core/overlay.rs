@@ -38,7 +38,6 @@ impl Overlay {
     #[inline]
     pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes<i32> {
         self.process_overlay(fill_rule, overlay_rule)
-            .extract_shapes(overlay_rule)
     }
 
     /// Executes the Boolean operation and returns its boundaries as a flat list of contours.

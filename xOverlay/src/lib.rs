@@ -8,7 +8,6 @@ pub mod core;
 mod definition;
 mod deg_90;
 mod geom;
-pub(crate) mod graph;
 mod partition;
 pub(crate) mod util;
 

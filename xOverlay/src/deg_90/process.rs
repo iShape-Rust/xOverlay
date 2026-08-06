@@ -8,10 +8,9 @@ use crate::deg_90::merge::Merge;
 #[cfg(feature = "allow_multithreading")]
 use crate::deg_90::merge::ParallelMerge;
 use crate::deg_90::sub_graph::SubGraph;
-use crate::graph::data::OverlayGraph;
 use crate::partition::solver::Partition;
 use alloc::vec::Vec;
-use i_shape::int::shape::IntContour;
+use i_shape::int::shape::{IntContour, IntShapes};
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -20,9 +19,9 @@ impl Overlay {
         self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-    ) -> OverlayGraph {
-        let options = self.options;
-        OverlayGraph::with_sub_graph(self.process_sub_graph(fill_rule, overlay_rule), options)
+    ) -> IntShapes<i32> {
+        self.process_sub_graph(fill_rule, overlay_rule)
+            .into_shapes()
     }
 
     pub(crate) fn process_overlay_contours(
