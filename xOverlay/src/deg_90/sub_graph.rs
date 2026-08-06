@@ -42,7 +42,7 @@ impl SubGraph {
         buffer: &mut SolverBuffer,
     ) -> Self {
         let range = column.range;
-        let contours = column::extract_contours(&column, fill_rule, overlay_rule, buffer);
+        let contours = column.extract_contours(fill_rule, overlay_rule, buffer);
 
         Self::with_contours(range, contours)
     }
