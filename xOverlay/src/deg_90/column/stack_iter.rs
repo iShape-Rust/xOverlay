@@ -28,18 +28,10 @@ pub(super) struct StackIter<'a> {
 impl<'a> StackIter<'a> {
     pub(super) fn new(segments: &'a [Segment], anchors: &'a [Anchor]) -> Self {
         let mut segments_iter = segments.split_point_iter();
-        let split = if let Some(split) = segments_iter.next() {
-            Some(split)
-        } else {
-            None
-        };
+        let split = segments_iter.next();
 
         let mut anchors_iter = anchors.iter();
-        let anchor = if let Some(anchor) = anchors_iter.next() {
-            Some(anchor)
-        } else {
-            None
-        };
+        let anchor = anchors_iter.next();
 
         StackIter {
             split_iter: segments_iter,

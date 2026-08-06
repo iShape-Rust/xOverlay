@@ -29,13 +29,15 @@ impl Default for IntOverlayOptions {
 
 impl IntOverlayOptions {
     pub fn keep_all_points() -> Self {
-        let mut options = Self::default();
-        options.preserve_output_collinear = true;
-        options
+        Self {
+            preserve_output_collinear: true,
+            ..Self::default()
+        }
     }
     pub fn keep_output_points() -> Self {
-        let mut options = Self::default();
-        options.preserve_output_collinear = true;
-        options
+        Self {
+            preserve_output_collinear: true,
+            ..Self::default()
+        }
     }
 }

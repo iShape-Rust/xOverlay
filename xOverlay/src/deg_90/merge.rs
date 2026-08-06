@@ -849,13 +849,15 @@ mod tests {
         const N: usize = 4096;
         let (subject, clip) = nested_square_contours(N);
 
-        let mut fixed_density = IntOverlayOptions::default();
-        fixed_density.columns_config = ColumnConfig90 {
-            min_columns_count: 1,
-            min_column_width_power: 8,
-            max_allow_segments_per_column: 1 << 20,
-            min_allowed_segments_per_column: 1 << 16,
-            max_allowed_segments_per_line: 7,
+        let fixed_density = IntOverlayOptions {
+            columns_config: ColumnConfig90 {
+                min_columns_count: 1,
+                min_column_width_power: 8,
+                max_allow_segments_per_column: 1 << 20,
+                min_allowed_segments_per_column: 1 << 16,
+                max_allowed_segments_per_line: 7,
+            },
+            ..IntOverlayOptions::default()
         };
         profile_workload_stages_with_options(
             "nested-squares/fixed-density",
@@ -920,13 +922,15 @@ mod tests {
         let (subject, clip) = window_contours(N);
 
         for max_allowed_segments_per_line in [7, 128] {
-            let mut options = IntOverlayOptions::default();
-            options.columns_config = ColumnConfig90 {
-                min_columns_count: 1,
-                min_column_width_power: 8,
-                max_allow_segments_per_column: 1 << 20,
-                min_allowed_segments_per_column: 1 << 16,
-                max_allowed_segments_per_line,
+            let options = IntOverlayOptions {
+                columns_config: ColumnConfig90 {
+                    min_columns_count: 1,
+                    min_column_width_power: 8,
+                    max_allow_segments_per_column: 1 << 20,
+                    min_allowed_segments_per_column: 1 << 16,
+                    max_allowed_segments_per_line,
+                },
+                ..IntOverlayOptions::default()
             };
             profile_workload_stages_with_options(
                 if max_allowed_segments_per_line == 7 {

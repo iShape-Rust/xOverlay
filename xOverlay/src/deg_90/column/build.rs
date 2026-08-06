@@ -775,9 +775,9 @@ mod tests {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
-            max_allow_segments_per_column: 1000_000_000,
+            max_allow_segments_per_column: 1_000_000_000,
             min_allowed_segments_per_column: 1_000_000,
-            max_allowed_segments_per_line: 1000_000,
+            max_allowed_segments_per_line: 1_000_000,
         };
 
         let mut buffer = ScanBuffer::with_capacity(0);
@@ -943,7 +943,7 @@ mod tests {
         buffer.clear();
         debug_assert!(map.columns.len() == 1);
         let column = &mut map.columns[0];
-        column.test_partition(config.clone());
+        column.test_partition(config);
         let fill_rule = FillRule::NonZero;
         let overlay_rule = OverlayRule::Subject;
 

@@ -29,7 +29,7 @@ impl ColumnConfig90 {
             min_columns_count,
             min_column_width_power: 1,
             min_allowed_segments_per_column: 1_000_000,
-            max_allow_segments_per_column: 1000_000_000,
+            max_allow_segments_per_column: 1_000_000_000,
             max_allowed_segments_per_line: 128,
         }
     }

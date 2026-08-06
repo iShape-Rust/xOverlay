@@ -704,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_edges_search_0() {
-        let mut edges = vec![
+        let mut edges = [
             ShapeEdge {
                 y: 0,
                 line_range: LineRange::with_min_max(0, 10),
@@ -756,7 +756,7 @@ mod tests {
 
     #[test]
     fn test_edges_search_1() {
-        let mut edges = vec![
+        let mut edges = [
             ShapeEdge {
                 y: 0,
                 line_range: LineRange::with_min_max(0, 3),

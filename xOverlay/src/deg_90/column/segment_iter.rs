@@ -105,11 +105,9 @@ mod tests {
     use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIterator};
     use crate::geom::range::LineRange;
     use crate::geom::segment::Segment;
-    use alloc::vec;
-
     #[test]
     fn test_0() {
-        let segments = vec![Segment {
+        let segments = [Segment {
             pos: 0,
             range: LineRange { min: 0, max: 2 },
             count: ShapeCountBoolean::new(1, 0),
@@ -138,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_1() {
-        let segments = vec![
+        let segments = [
             Segment {
                 pos: 0,
                 range: LineRange { min: 0, max: 2 },

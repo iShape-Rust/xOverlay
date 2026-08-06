@@ -20,14 +20,14 @@ impl CPUCount {
         #[cfg(feature = "allow_multithreading")]
         {
             extern crate std;
-            return match self {
+            match self {
                 CPUCount::Auto => match std::thread::available_parallelism() {
                     Ok(value) => value.get(),
                     Err(_) => 1,
                 },
                 CPUCount::Fixed(count) => (*count).max(1),
                 CPUCount::Single => 1,
-            };
+            }
         }
 
         #[cfg(not(feature = "allow_multithreading"))]

@@ -77,7 +77,7 @@ impl ColumnGraph {
     #[cfg(test)]
     #[inline(always)]
     pub(super) fn visitors(&self) -> Vec<NodeVisitor> {
-        self.nodes.iter().map(|n| NodeVisitor::new(n)).collect()
+        self.nodes.iter().map(NodeVisitor::new).collect()
     }
 
     pub(crate) fn extract(
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_random_rectangles_against_i_overlay() {
-        let mut rng = StdRng::seed_from_u64(0xA11C_E5E5_90);
+        let mut rng = StdRng::seed_from_u64(0x00A1_1CE5_E590);
 
         for case_index in 0..512 {
             let subj = random_rectangles(&mut rng, 6);
@@ -397,7 +397,7 @@ mod tests {
         ];
 
         for (profile_index, (rect_count, extent, max_size)) in profiles.into_iter().enumerate() {
-            let geometry_seed = 0x5EED_90_0000_u64 ^ profile_index as u64;
+            let geometry_seed = 0x005E_ED90_0000_u64 ^ profile_index as u64;
             let mut rng = StdRng::seed_from_u64(geometry_seed);
             let subj_count = rect_count / 2;
             let clip_count = rect_count - subj_count;
@@ -660,15 +660,15 @@ mod tests {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
-            max_allow_segments_per_column: 1000_000_000,
+            max_allow_segments_per_column: 1_000_000_000,
             min_allowed_segments_per_column: 1_000_000,
-            max_allowed_segments_per_line: 1000_000,
+            max_allowed_segments_per_line: 1_000_000,
         };
 
         let mut buffer = ScanBuffer::with_capacity(16);
 
         let mut map = ColumnMap::with_columns_count(contours, &[], columns_count);
-        debug_assert!(map.columns.len() >= 1);
+        debug_assert!(!map.columns.is_empty());
 
         let column = &mut map.columns[0];
         column.test_partition(config);

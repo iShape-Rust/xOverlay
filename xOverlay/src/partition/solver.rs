@@ -139,11 +139,13 @@ impl LineSolver {
     #[inline]
     fn add_head(&self, head: &Pos, max_x: i32, result: &mut Vec<Segment>) {
         if head.count.is_not_empty() {
-            if let Some(last) = result.last_mut() {
-                if last.count == head.count && last.pos == self.pos && head.x == last.range.max {
-                    last.range.max = max_x;
-                    return;
-                }
+            if let Some(last) = result.last_mut()
+                && last.count == head.count
+                && last.pos == self.pos
+                && head.x == last.range.max
+            {
+                last.range.max = max_x;
+                return;
             }
 
             result.push(Segment {
@@ -167,7 +169,7 @@ mod tests {
 
     impl LineSolver {
         fn test_split(&mut self, segments: &mut [Segment]) -> Vec<Segment> {
-            segments.sort_unstable_by(|s0, s1| s0.range.min.cmp(&s1.range.min));
+            segments.sort_unstable_by_key(|segment| segment.range.min);
             let mut result = Vec::new();
 
             self.split(segments, &mut result);
