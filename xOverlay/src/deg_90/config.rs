@@ -23,25 +23,13 @@ pub struct ColumnConfig90 {
 }
 
 impl ColumnConfig90 {
+    #[cfg(test)]
     pub(super) fn dev(min_columns_count: usize) -> Self {
         Self {
             min_columns_count,
             min_column_width_power: 1,
             min_allowed_segments_per_column: 1_000_000,
             max_allow_segments_per_column: 1000_000_000,
-            max_allowed_segments_per_line: 128,
-        }
-    }
-
-    pub(super) fn new(
-        avg_min_segments_in_column: usize,
-        avg_max_segments_in_column: usize,
-    ) -> Self {
-        Self {
-            min_columns_count: 1,
-            min_column_width_power: 8,
-            min_allowed_segments_per_column: avg_min_segments_in_column,
-            max_allow_segments_per_column: avg_max_segments_in_column,
             max_allowed_segments_per_line: 128,
         }
     }

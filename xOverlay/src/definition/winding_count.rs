@@ -35,6 +35,7 @@ impl WindingCount for ShapeCountBoolean {
         Self { subj, clip }
     }
 
+    #[cfg(test)]
     #[inline(always)]
     fn subj(subj: i16) -> Self {
         Self { subj, clip: 0 }

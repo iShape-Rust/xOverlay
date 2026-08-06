@@ -2,7 +2,6 @@ use crate::definition::segment::SegmentFill;
 use crate::definition::winding_count::ShapeCountBoolean;
 
 pub(crate) trait FillStrategy<C> {
-    fn add_and_fill(this: C, bot: C) -> (C, SegmentFill);
     fn fill(top: C, bot: C) -> SegmentFill;
 }
 
@@ -12,17 +11,6 @@ pub(crate) struct PositiveStrategy;
 pub(crate) struct NegativeStrategy;
 
 impl FillStrategy<ShapeCountBoolean> for EvenOddStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot + this;
-        let fill = Self::fill(top, bot);
-
-        (top, fill)
-    }
-
     #[inline(always)]
     fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = 1 & top.subj as SegmentFill;
@@ -36,17 +24,6 @@ impl FillStrategy<ShapeCountBoolean> for EvenOddStrategy {
 
 impl FillStrategy<ShapeCountBoolean> for NonZeroStrategy {
     #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot + this;
-        let fill = Self::fill(top, bot);
-
-        (top, fill)
-    }
-
-    #[inline(always)]
     fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj != 0) as SegmentFill;
         let subj_bot = (bot.subj != 0) as SegmentFill;
@@ -59,16 +36,6 @@ impl FillStrategy<ShapeCountBoolean> for NonZeroStrategy {
 
 impl FillStrategy<ShapeCountBoolean> for PositiveStrategy {
     #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot + this;
-        let fill = Self::fill(top, bot);
-        (top, fill)
-    }
-
-    #[inline(always)]
     fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj > 0) as SegmentFill;
         let subj_bot = (bot.subj > 0) as SegmentFill;
@@ -80,16 +47,6 @@ impl FillStrategy<ShapeCountBoolean> for PositiveStrategy {
 }
 
 impl FillStrategy<ShapeCountBoolean> for NegativeStrategy {
-    #[inline(always)]
-    fn add_and_fill(
-        this: ShapeCountBoolean,
-        bot: ShapeCountBoolean,
-    ) -> (ShapeCountBoolean, SegmentFill) {
-        let top = bot + this;
-        let fill = Self::fill(top, bot);
-        (top, fill)
-    }
-
     #[inline(always)]
     fn fill(top: ShapeCountBoolean, bot: ShapeCountBoolean) -> SegmentFill {
         let subj_top = (top.subj < 0) as SegmentFill;

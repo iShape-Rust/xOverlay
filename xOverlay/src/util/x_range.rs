@@ -7,13 +7,13 @@ pub(crate) trait XRangeAndCount {
 }
 
 impl XRangeAndCount for [IntContour<i32>] {
-    fn x_range_and_count(&self, cpu: CPUCount) -> (LineRange, usize) {
+    fn x_range_and_count(&self, _cpu: CPUCount) -> (LineRange, usize) {
         #[cfg(feature = "allow_multithreading")]
         {
             use rayon::iter::IntoParallelRefIterator;
             use rayon::iter::ParallelIterator;
 
-            if cpu.count() > 1 {
+            if _cpu.count() > 1 {
                 let (min_x, max_x, count) = self
                     .par_iter()
                     .map(|contour| {

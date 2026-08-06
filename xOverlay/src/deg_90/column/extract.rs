@@ -5,50 +5,6 @@ use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 use i_shape::int::area::Area;
 use i_shape::int::shape::IntContour;
-#[cfg(test)]
-use i_shape::int::shape::IntShapes;
-
-pub(crate) struct ExtResult {
-    contours: Vec<IntContour<i32>>,
-    pub(super) subpaths: Vec<SubPath>,
-}
-
-impl ExtResult {
-    pub(super) fn into_contours(self) -> Vec<IntContour<i32>> {
-        self.contours
-    }
-
-    #[cfg(test)]
-    fn into_shapes(self) -> IntShapes<i32> {
-        let mut shapes = Vec::new();
-        let mut holes = Vec::new();
-        for contour in self.contours {
-            let area = contour.area_two();
-            if area > 0 {
-                shapes.push(alloc::vec![contour]);
-            } else if area < 0 {
-                holes.push(contour);
-            }
-        }
-        let mut subpaths = self.subpaths;
-        ColumnGraph::join_holes(holes, &mut shapes, &mut subpaths);
-        shapes
-    }
-}
-
-enum SubResult {
-    Hull(IntContour<i32>),
-    Hole(IntContour<i32>),
-    Path(SubPath),
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct SubPath {
-    pub(crate) start: IntPoint,
-    pub(crate) end: IntPoint,
-    pub(crate) path: IntContour<i32>,
-    pub(crate) holes: Vec<IntContour<i32>>,
-}
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct NodeVisitor {
@@ -91,11 +47,6 @@ impl NodeVisitor {
     }
 
     #[inline(always)]
-    pub(super) fn is_visited(&self, order: usize) -> bool {
-        self.data & (1 << order) == 0
-    }
-
-    #[inline(always)]
     fn visit_right_if_not_yet(&mut self) -> bool {
         let val = self.data & LinkIndex::Right.bit();
         self.data &= !val;
@@ -123,6 +74,7 @@ impl NodeVisitor {
 }
 
 impl ColumnGraph {
+    #[cfg(test)]
     #[inline(always)]
     pub(super) fn visitors(&self) -> Vec<NodeVisitor> {
         self.nodes.iter().map(|n| NodeVisitor::new(n)).collect()
@@ -133,7 +85,7 @@ impl ColumnGraph {
         overlay_rule: OverlayRule,
         visited: &mut Vec<NodeVisitor>,
         points: &mut Vec<IntPoint>,
-    ) -> ExtResult {
+    ) -> Vec<IntContour<i32>> {
         visited.clear();
         visited.reserve(self.nodes.len());
         for (slot, node) in visited
@@ -151,40 +103,25 @@ impl ColumnGraph {
         // Column merging only needs oriented contours. Hole attachment is deferred until the
         // merged graph is rebuilt into shapes, so avoid allocating one-element shapes here.
         let mut contours = Vec::new();
-        let mut subpaths = Vec::new();
-
         for i in 0..self.nodes.len() {
             if !visited[i].visit_right_if_not_yet() {
                 continue;
             }
 
-            let result = self.find_sub_result(i, true, overlay_rule, visited, points);
-            match result {
-                SubResult::Hull(contour) => {
-                    debug_assert!(contour.area_two() > 0, "hull must be counterclockwise");
-                    contours.push(contour);
-                }
-                SubResult::Hole(contour) => {
-                    debug_assert!(contour.area_two() < 0, "hole must be clockwise");
-                    contours.push(contour);
-                }
-                SubResult::Path(subpath) => {
-                    subpaths.push(subpath);
-                }
-            }
+            contours.push(self.find_contour(i, true, overlay_rule, visited, points));
         }
 
-        ExtResult { contours, subpaths }
+        contours
     }
 
-    fn find_sub_result(
+    fn find_contour(
         &self,
         start: usize,
         dir: bool,
         overlay_rule: OverlayRule,
-        visited: &mut Vec<NodeVisitor>,
+        visited: &mut [NodeVisitor],
         points: &mut Vec<IntPoint>,
-    ) -> SubResult {
+    ) -> IntContour<i32> {
         points.clear();
 
         let start_node = &self.nodes[start];
@@ -209,12 +146,12 @@ impl ColumnGraph {
 
         // a closed contour
         let mut contour = points.to_vec();
-        if overlay_rule.is_fill_top(start_link.fill()) {
-            SubResult::Hull(contour)
-        } else {
+        let is_hull = overlay_rule.is_fill_top(start_link.fill());
+        if !is_hull {
             contour[1..].reverse();
-            SubResult::Hole(contour)
         }
+        debug_assert_eq!(contour.area_two() > 0, is_hull);
+        contour
     }
 }
 trait VerticalMiddleFilter {
@@ -299,7 +236,7 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        let shapes = result.into_shapes();
+        let shapes = crate::deg_90::column::rebuild_shapes(result);
         debug_assert_eq!(shapes.len(), 1);
         debug_assert_eq!(shapes[0].len(), 1);
         debug_assert_eq!(shapes[0][0].len(), 4);
@@ -319,7 +256,7 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        let shapes = result.into_shapes();
+        let shapes = crate::deg_90::column::rebuild_shapes(result);
         debug_assert_eq!(shapes.len(), 1);
         debug_assert_eq!(shapes[0].len(), 1);
         debug_assert_eq!(shapes[0][0].len(), 4);
@@ -347,7 +284,7 @@ mod tests {
         let mut points = Vec::new();
         let result = graph.extract(OverlayRule::Subject, &mut visited, &mut points);
 
-        let shapes = result.into_shapes();
+        let shapes = crate::deg_90::column::rebuild_shapes(result);
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 2);
         assert_eq!(shapes[0][0].len(), 4);
@@ -641,8 +578,7 @@ mod tests {
         let mut buffer = ScanBuffer::with_capacity(32);
         let graph = ColumnGraph::new(column, fill_rule, overlay_rule, &mut buffer);
         let result = graph.extract(overlay_rule, &mut Vec::new(), &mut Vec::new());
-        assert!(result.subpaths.is_empty());
-        result.into_shapes()
+        crate::deg_90::column::rebuild_shapes(result)
     }
 
     fn i_overlay_shapes(

@@ -36,15 +36,8 @@ pub(super) fn extract_contours(
     buffer.scan.reserve(column.segments.len());
     let nodes = core::mem::take(&mut buffer.nodes);
     let graph = ColumnGraph::with_nodes(column, fill_rule, overlay_rule, &mut buffer.scan, nodes);
-    let result = graph.extract(overlay_rule, &mut buffer.visited, &mut buffer.points);
+    let mut contours = graph.extract(overlay_rule, &mut buffer.visited, &mut buffer.points);
     buffer.nodes = graph.nodes;
-
-    debug_assert!(
-        result.subpaths.is_empty(),
-        "a closed column graph must not produce open subpaths"
-    );
-
-    let mut contours = result.into_contours();
 
     normalize_contour_directions(&mut contours, column.range);
     contours
@@ -207,7 +200,7 @@ pub(super) fn rebuild_shapes(contours: Vec<IntContour<i32>>) -> IntShapes<i32> {
         }
     }
 
-    ColumnGraph::join_holes(holes, &mut shapes, &mut Vec::new());
+    ColumnGraph::join_holes(holes, &mut shapes);
     shapes
 }
 

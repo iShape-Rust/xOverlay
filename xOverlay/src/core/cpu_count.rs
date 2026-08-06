@@ -36,6 +36,7 @@ impl CPUCount {
         }
     }
 
+    #[cfg(feature = "allow_multithreading")]
     #[inline]
     pub(crate) fn is_parallel(&self) -> bool {
         self.count() > 1

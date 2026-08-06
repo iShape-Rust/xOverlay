@@ -97,33 +97,8 @@ impl Node {
     }
 
     #[inline(always)]
-    fn with_point_and_link(point: IntPoint, link: Link, index: LinkIndex) -> Self {
-        let mut node = Self {
-            point,
-            links: [Link::empty(); 4],
-        };
-        node.set_link(link, index);
-        node
-    }
-
-    #[inline(always)]
-    fn with_link(link: Link, index: LinkIndex) -> Self {
-        let mut node = Self {
-            point: IntPoint::EMPTY,
-            links: [Link::empty(); 4],
-        };
-        node.set_link(link, index);
-        node
-    }
-
-    #[inline(always)]
     fn set_link(&mut self, link: Link, index: LinkIndex) {
         self.links[index as usize] = link;
-    }
-
-    #[inline(always)]
-    fn link(&self, index: LinkIndex) -> Link {
-        self.links[index as usize]
     }
 }
 

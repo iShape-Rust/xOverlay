@@ -34,6 +34,7 @@ impl LinkIndex {
         unsafe { core::mem::transmute::<u8, LinkIndex>(order as u8) }
     }
 
+    #[cfg(test)]
     #[inline(always)]
     pub(super) fn opposite_order(order: usize) -> usize {
         debug_assert!(order < 4);
@@ -58,6 +59,7 @@ impl Link {
         self.fill
     }
 
+    #[cfg(test)]
     #[inline(always)]
     pub(super) fn is_empty(&self) -> bool {
         self.index == 0 && self.fill == 0
@@ -93,6 +95,7 @@ impl Link {
         (self.data >> Self::INDEX_BITS) as SegmentFill
     }
 
+    #[cfg(test)]
     #[inline(always)]
     pub(super) fn is_empty(&self) -> bool {
         self.data == 0
