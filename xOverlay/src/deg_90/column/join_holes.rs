@@ -11,6 +11,208 @@ use i_shape::int::shape::{IntContour, IntShapes};
 
 const SWEEP_MIN_ANCHORS_PER_Y: usize = 256;
 
+pub(in crate::deg_90) struct BaseShapesInfo {
+    edges: Vec<BaseShapeEdge>,
+}
+
+impl BaseShapesInfo {
+    fn with_shapes(shapes: &IntShapes<i32>) -> Self {
+        let mut result = Self { edges: Vec::new() };
+        for (local_index, shape) in shapes.iter().enumerate() {
+            for contour in shape {
+                append_base_shape_edges(contour, local_index, &mut result.edges);
+            }
+        }
+        result
+    }
+}
+
+pub(in crate::deg_90) struct BaseHole {
+    pub(in crate::deg_90) contour: IntContour<i32>,
+    pub(in crate::deg_90) shape_index: usize,
+}
+
+#[derive(Clone, Copy)]
+struct BaseShapeEdge {
+    y: i32,
+    line_range: LineRange,
+    shape_index: usize,
+}
+
+#[derive(Clone, Copy)]
+enum HoleParent {
+    Local(usize),
+    Base(usize),
+}
+
+#[derive(Clone, Copy)]
+enum LocalEdgeTarget {
+    Shape(usize),
+    Hole(usize),
+    Base(usize),
+}
+
+#[derive(Clone, Copy)]
+struct LocalEdge {
+    y: i32,
+    line_range: LineRange,
+    target: LocalEdgeTarget,
+}
+
+pub(in crate::deg_90) fn build_base_shapes(
+    contours: Vec<IntContour<i32>>,
+) -> (IntShapes<i32>, BaseShapesInfo) {
+    let shapes = super::contour::rebuild_shapes(contours);
+    let info = BaseShapesInfo::with_shapes(&shapes);
+
+    (shapes, info)
+}
+
+pub(in crate::deg_90) fn build_shapes(
+    contours: Vec<IntContour<i32>>,
+    x_range: LineRange,
+    base: &BaseShapesInfo,
+) -> (IntShapes<i32>, Vec<BaseHole>) {
+    let mut shapes = Vec::new();
+    let mut holes = Vec::new();
+
+    for contour in contours {
+        let area = contour.area_two();
+        if area > 0 {
+            shapes.push(vec![contour]);
+        } else if area < 0 {
+            holes.push(contour);
+        }
+    }
+
+    if holes.is_empty() {
+        return (shapes, Vec::new());
+    }
+
+    let anchors = hole_anchors_by_y(&holes);
+    let local_capacity = shapes.iter().map(|shape| shape[0].len() / 4).sum::<usize>()
+        + holes.iter().map(|hole| hole.len() / 4).sum::<usize>();
+    let mut edges = Vec::with_capacity(local_capacity);
+
+    for edge in &base.edges {
+        if ranges_overlap(edge.line_range, x_range) {
+            edges.push(LocalEdge {
+                y: edge.y,
+                line_range: edge.line_range,
+                target: LocalEdgeTarget::Base(edge.shape_index),
+            });
+        }
+    }
+    for (shape_index, shape) in shapes.iter().enumerate() {
+        append_local_edges(&shape[0], LocalEdgeTarget::Shape(shape_index), &mut edges);
+    }
+    for (hole_index, hole) in holes.iter().enumerate() {
+        append_local_edges(hole, LocalEdgeTarget::Hole(hole_index), &mut edges);
+    }
+    edges.sort_by_one_key(false, |edge| edge.y);
+
+    let mut parents = vec![None; holes.len()];
+    for anchor in anchors {
+        let edge = edges.first_under(anchor.point);
+        let parent = match edge.target {
+            LocalEdgeTarget::Shape(shape_index) => HoleParent::Local(shape_index),
+            LocalEdgeTarget::Hole(hole_index) => {
+                parents[hole_index].expect("target hole parent must already be resolved")
+            }
+            LocalEdgeTarget::Base(shape_index) => HoleParent::Base(shape_index),
+        };
+        parents[anchor.hole_index] = Some(parent);
+    }
+
+    let mut base_holes = Vec::new();
+    for (hole, parent) in holes.into_iter().zip(parents) {
+        match parent.expect("hole parent must be resolved") {
+            HoleParent::Local(shape_index) => shapes[shape_index].push(hole),
+            HoleParent::Base(shape_index) => base_holes.push(BaseHole {
+                contour: hole,
+                shape_index,
+            }),
+        }
+    }
+
+    (shapes, base_holes)
+}
+
+#[inline]
+fn ranges_overlap(a: LineRange, b: LineRange) -> bool {
+    a.min <= b.max && b.min <= a.max
+}
+
+fn append_base_shape_edges(
+    contour: &IntContour<i32>,
+    shape_index: usize,
+    edges: &mut Vec<BaseShapeEdge>,
+) {
+    let mut a = contour[contour.len() - 1];
+    for &b in contour {
+        if a.x < b.x {
+            edges.push(BaseShapeEdge {
+                y: a.y,
+                line_range: LineRange::with_min_max(a.x, b.x),
+                shape_index,
+            });
+        }
+        a = b;
+    }
+}
+
+fn append_local_edges(
+    contour: &IntContour<i32>,
+    target: LocalEdgeTarget,
+    edges: &mut Vec<LocalEdge>,
+) {
+    let mut a = contour[contour.len() - 1];
+    for &b in contour {
+        if a.x < b.x {
+            edges.push(LocalEdge {
+                y: a.y,
+                line_range: LineRange::with_min_max(a.x, b.x),
+                target,
+            });
+        }
+        a = b;
+    }
+}
+
+trait FirstLocalBottom {
+    fn first_under(&self, point: IntPoint) -> &LocalEdge;
+}
+
+impl FirstLocalBottom for [LocalEdge] {
+    fn first_under(&self, point: IntPoint) -> &LocalEdge {
+        let start = match self.binary_search_by_key(&point.y, |edge| edge.y) {
+            Ok(mut index) => {
+                while index + 1 < self.len() && self[index + 1].y == point.y {
+                    index += 1;
+                }
+                index
+            }
+            Err(index) => {
+                assert!(
+                    index > 0,
+                    "edge under hole anchor not found: point={point:?}, edges={}, first_y={:?}",
+                    self.len(),
+                    self.first().map(|edge| edge.y),
+                );
+                index - 1
+            }
+        };
+
+        self[..=start]
+            .iter()
+            .rev()
+            .find(|edge| {
+                edge.y <= point.y && point.x >= edge.line_range.min && point.x < edge.line_range.max
+            })
+            .expect("edge under hole anchor not found")
+    }
+}
+
 impl ColumnGraph {
     pub(super) fn join_holes(holes: Vec<IntContour<i32>>, shapes: &mut IntShapes<i32>) {
         if holes.is_empty() {

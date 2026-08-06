@@ -368,6 +368,7 @@ mod tests {
     use crate::deg_90::column::SolverBuffer;
     use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
+    use crate::deg_90::sub_graph::{ContourChunk, ContourChunks};
     use crate::geom::range::LineRange;
     use alloc::vec;
     use alloc::vec::Vec;
@@ -400,7 +401,78 @@ mod tests {
         assert_eq!(graph.chunks.right.len(), 1);
         assert_eq!(graph.chunks.both.len(), 1);
         assert_eq!(graph.chunks.middle.len(), 1);
-        assert_eq!(graph.chunks.middle[0].len(), 1);
+        assert_eq!(graph.chunks.middle[0].contours.len(), 1);
+        assert!(graph.chunks.middle[0].is_leaf);
+        assert_eq!(
+            graph.chunks.middle[0].x_range,
+            LineRange::with_min_max(0, 10),
+        );
+    }
+
+    #[test]
+    fn into_shapes_joins_a_middle_hole_to_an_overlapping_left_chunk() {
+        let mut hole = rectangle(10, 10, 20, 20);
+        hole.reverse();
+        let graph = sub_graph(0, 100, vec![rectangle(0, 0, 60, 60), hole]);
+
+        assert_eq!(graph.chunks.left.len(), 1);
+        assert_eq!(graph.chunks.middle.len(), 1);
+        assert!(graph.chunks.both.is_empty());
+
+        let shapes = graph.into_shapes();
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 6_400);
+    }
+
+    #[test]
+    fn into_shapes_joins_local_holes_to_a_both_shape() {
+        let mut left_hole = rectangle(10, 10, 20, 20);
+        let mut right_hole = rectangle(70, 70, 20, 20);
+        left_hole.reverse();
+        right_hole.reverse();
+        let graph = sub_graph(
+            0,
+            100,
+            vec![rectangle(0, 0, 100, 100), left_hole, right_hole],
+        );
+
+        assert_eq!(graph.chunks.both.len(), 1);
+        assert_eq!(graph.chunks.middle.len(), 1);
+
+        let shapes = graph.into_shapes();
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 3);
+        assert_eq!(shapes.area_two(), 18_400);
+    }
+
+    #[test]
+    fn into_shapes_builds_non_leaf_middle_before_leaf_middle() {
+        let mut hole = rectangle(20, 20, 20, 20);
+        hole.reverse();
+        let graph = SubGraph {
+            range: LineRange::with_min_max(0, 100),
+            chunks: ContourChunks {
+                middle: vec![
+                    ContourChunk {
+                        x_range: LineRange::with_min_max(20, 40),
+                        contours: vec![hole],
+                        is_leaf: true,
+                    },
+                    ContourChunk {
+                        x_range: LineRange::with_min_max(10, 50),
+                        contours: vec![rectangle(10, 10, 40, 40)],
+                        is_leaf: false,
+                    },
+                ],
+                ..Default::default()
+            },
+        };
+
+        let shapes = graph.into_shapes();
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 2_400);
     }
 
     #[test]
@@ -971,6 +1043,13 @@ mod tests {
                 merge_time += start.elapsed();
 
                 let start = Instant::now();
+                #[cfg(feature = "allow_multithreading")]
+                if cpu_count.is_parallel() {
+                    black_box(merged.parallel_into_shapes());
+                } else {
+                    black_box(merged.into_shapes());
+                }
+                #[cfg(not(feature = "allow_multithreading"))]
                 black_box(merged.into_shapes());
                 rebuild_time += start.elapsed();
                 iterations += 1;

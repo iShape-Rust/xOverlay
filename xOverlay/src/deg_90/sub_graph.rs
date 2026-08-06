@@ -6,11 +6,19 @@ use crate::deg_90::column_map::Column;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
 use i_shape::int::shape::{IntContour, IntShapes};
+#[cfg(feature = "allow_multithreading")]
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
+pub(super) struct ContourChunk {
+    pub(super) x_range: LineRange,
+    pub(super) contours: Vec<IntContour<i32>>,
+    pub(super) is_leaf: bool,
+}
 
 #[derive(Default)]
 pub(super) struct ContourChunks {
     pub(super) left: Vec<IntContour<i32>>,
-    pub(super) middle: Vec<Vec<IntContour<i32>>>,
+    pub(super) middle: Vec<ContourChunk>,
     pub(super) right: Vec<IntContour<i32>>,
     pub(super) both: Vec<IntContour<i32>>,
 }
@@ -74,7 +82,12 @@ impl SubGraph {
         }
 
         if !middle.is_empty() {
-            self.chunks.middle.push(middle);
+            let is_leaf = self.chunks.middle.is_empty();
+            self.chunks.middle.push(ContourChunk {
+                x_range: self.range,
+                contours: middle,
+                is_leaf,
+            });
         }
         self.chunks.both = contours;
     }
@@ -87,11 +100,16 @@ impl SubGraph {
             mut both,
         } = self.chunks;
 
-        let count =
-            middle.iter().map(Vec::len).sum::<usize>() + left.len() + right.len() + both.len();
+        let count = middle
+            .iter()
+            .map(|chunk| chunk.contours.len())
+            .sum::<usize>()
+            + left.len()
+            + right.len()
+            + both.len();
         let mut contours = Vec::with_capacity(count);
         for chunk in middle {
-            contours.extend(chunk);
+            contours.extend(chunk.contours);
         }
         contours.append(&mut left);
         contours.append(&mut right);
@@ -100,7 +118,71 @@ impl SubGraph {
     }
 
     pub(super) fn into_shapes(self) -> IntShapes<i32> {
-        column::rebuild_shapes(self.into_contours())
+        self.build_shapes(false)
+    }
+
+    #[cfg(feature = "allow_multithreading")]
+    pub(super) fn parallel_into_shapes(self) -> IntShapes<i32> {
+        self.build_shapes(true)
+    }
+
+    fn build_shapes(self, parallel: bool) -> IntShapes<i32> {
+        let ContourChunks {
+            mut left,
+            middle,
+            mut right,
+            mut both,
+        } = self.chunks;
+
+        let count = both.len()
+            + left.len()
+            + right.len()
+            + middle
+                .iter()
+                .filter(|chunk| !chunk.is_leaf)
+                .map(|chunk| chunk.contours.len())
+                .sum::<usize>();
+        let mut base_contours = Vec::with_capacity(count);
+        base_contours.append(&mut both);
+        base_contours.append(&mut left);
+        base_contours.append(&mut right);
+        let mut leaf_chunks = Vec::new();
+        for mut chunk in middle {
+            if chunk.is_leaf {
+                leaf_chunks.push(chunk);
+            } else {
+                base_contours.append(&mut chunk.contours);
+            }
+        }
+
+        let (mut shapes, base_info) = column::build_base_shapes(base_contours);
+
+        #[cfg(feature = "allow_multithreading")]
+        if parallel && leaf_chunks.len() > 1 {
+            let chunk_results: Vec<_> = leaf_chunks
+                .into_par_iter()
+                .map(|chunk| column::build_shapes(chunk.contours, chunk.x_range, &base_info))
+                .collect();
+            for (mut chunk_shapes, base_holes) in chunk_results {
+                for hole in base_holes {
+                    shapes[hole.shape_index].push(hole.contour);
+                }
+                shapes.append(&mut chunk_shapes);
+            }
+            return shapes;
+        }
+        #[cfg(not(feature = "allow_multithreading"))]
+        let _ = parallel;
+
+        for chunk in leaf_chunks {
+            let (mut chunk_shapes, base_holes) =
+                column::build_shapes(chunk.contours, chunk.x_range, &base_info);
+            for hole in base_holes {
+                shapes[hole.shape_index].push(hole.contour);
+            }
+            shapes.append(&mut chunk_shapes);
+        }
+        shapes
     }
 }
 

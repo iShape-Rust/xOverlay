@@ -20,8 +20,16 @@ impl Overlay {
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> IntShapes<i32> {
-        self.process_sub_graph(fill_rule, overlay_rule)
-            .into_shapes()
+        #[cfg(feature = "allow_multithreading")]
+        {
+            if self.cpu_count.is_parallel() {
+                return self
+                    .parallel_process(fill_rule, overlay_rule)
+                    .parallel_into_shapes();
+            }
+        }
+
+        self.serial_process(fill_rule, overlay_rule).into_shapes()
     }
 
     pub(crate) fn process_overlay_contours(
