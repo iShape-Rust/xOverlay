@@ -704,8 +704,8 @@ mod tests {
 
         // Matches iOverlay's official CheckerboardTest workload:
         // https://ishape-rust.github.io/iShape-js/overlay/performance/performance.html
-        let subject = many_squares(IntPoint::new(0, 0), 20, 30, N);
-        let clip = many_squares(IntPoint::new(15, 15), 20, 30, N - 1);
+        let subject = many_squares(IntPoint::new(0, 0), 20, 30, 1, N);
+        let clip = many_squares(IntPoint::new(15, 15), 20, 30, 1, N - 1);
         let fill_rule = FillRule::NonZero;
         let overlay_rule = OverlayRule::Xor;
 
@@ -714,14 +714,14 @@ mod tests {
         let two_columns = extract_multi_column(&subject, &clip, 2, fill_rule, overlay_rule);
         let four_columns = extract_multi_column(&subject, &clip, 4, fill_rule, overlay_rule);
         let eight_columns = extract_multi_column(&subject, &clip, 8, fill_rule, overlay_rule);
-        let thirty_columns = extract_multi_column(&subject, &clip, 30, fill_rule, overlay_rule);
-        let sixty_columns = extract_multi_column(&subject, &clip, 60, fill_rule, overlay_rule);
+        let thirty_one_columns = extract_multi_column(&subject, &clip, 31, fill_rule, overlay_rule);
+        let sixty_two_columns = extract_multi_column(&subject, &clip, 62, fill_rule, overlay_rule);
         assert_eq!(one_column.area_two(), expected.area_two());
         assert_eq!(two_columns.area_two(), expected.area_two());
         assert_eq!(four_columns.area_two(), expected.area_two());
         assert_eq!(eight_columns.area_two(), expected.area_two());
-        assert_eq!(thirty_columns.area_two(), expected.area_two());
-        assert_eq!(sixty_columns.area_two(), expected.area_two());
+        assert_eq!(thirty_one_columns.area_two(), expected.area_two());
+        assert_eq!(sixty_two_columns.area_two(), expected.area_two());
 
         let x_one = measure_for(BENCH_TIME, || {
             extract_multi_column(&subject, &clip, 1, fill_rule, overlay_rule)
@@ -735,11 +735,11 @@ mod tests {
         let x_eight = measure_for(BENCH_TIME, || {
             extract_multi_column(&subject, &clip, 8, fill_rule, overlay_rule)
         });
-        let x_thirty = measure_for(BENCH_TIME, || {
-            extract_multi_column(&subject, &clip, 30, fill_rule, overlay_rule)
+        let x_thirty_one = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 31, fill_rule, overlay_rule)
         });
-        let x_sixty = measure_for(BENCH_TIME, || {
-            extract_multi_column(&subject, &clip, 60, fill_rule, overlay_rule)
+        let x_sixty_two = measure_for(BENCH_TIME, || {
+            extract_multi_column(&subject, &clip, 62, fill_rule, overlay_rule)
         });
         let i_overlay = measure_for(BENCH_TIME, || {
             i_overlay_shapes(&subject, &clip, fill_rule, overlay_rule)
@@ -753,17 +753,17 @@ mod tests {
         print_measurement("xOverlay columns=2", x_two);
         print_measurement("xOverlay columns=4", x_four);
         print_measurement("xOverlay columns=8", x_eight);
-        print_measurement("xOverlay columns=30", x_thirty);
-        print_measurement("xOverlay columns=60", x_sixty);
+        print_measurement("xOverlay columns=31", x_thirty_one);
+        print_measurement("xOverlay columns=62", x_sixty_two);
         print_measurement("iOverlay", i_overlay);
         std::println!(
-            "vs iOverlay: columns(1)={:.2}x, columns(2)={:.2}x, columns(4)={:.2}x, columns(8)={:.2}x, columns(30)={:.2}x, columns(60)={:.2}x",
+            "vs iOverlay: columns(1)={:.2}x, columns(2)={:.2}x, columns(4)={:.2}x, columns(8)={:.2}x, columns(31)={:.2}x, columns(62)={:.2}x",
             i_overlay.ns_per_iteration() / x_one.ns_per_iteration(),
             i_overlay.ns_per_iteration() / x_two.ns_per_iteration(),
             i_overlay.ns_per_iteration() / x_four.ns_per_iteration(),
             i_overlay.ns_per_iteration() / x_eight.ns_per_iteration(),
-            i_overlay.ns_per_iteration() / x_thirty.ns_per_iteration(),
-            i_overlay.ns_per_iteration() / x_sixty.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_thirty_one.ns_per_iteration(),
+            i_overlay.ns_per_iteration() / x_sixty_two.ns_per_iteration(),
         );
     }
 
@@ -771,11 +771,11 @@ mod tests {
     #[ignore = "single-thread profiling workload; run explicitly with --release --ignored --nocapture"]
     fn profile_checkerboard_single_thread() {
         const N: usize = 128;
-        const COLUMNS: usize = 60;
+        const COLUMNS: usize = 62;
         const PROFILE_TIME: Duration = Duration::from_secs(5);
 
-        let subject = many_squares(IntPoint::new(0, 0), 20, 30, N);
-        let clip = many_squares(IntPoint::new(15, 15), 20, 30, N - 1);
+        let subject = many_squares(IntPoint::new(0, 0), 20, 30, 1, N);
+        let clip = many_squares(IntPoint::new(15, 15), 20, 30, 1, N - 1);
         let fill_rule = FillRule::NonZero;
         let overlay_rule = OverlayRule::Xor;
         let options = multi_column_options(&subject, &clip, COLUMNS);
@@ -1177,11 +1177,17 @@ mod tests {
         contours
     }
 
-    fn many_squares(start: IntPoint, size: i32, offset: i32, n: usize) -> IntShape<i32> {
+    fn many_squares(
+        start: IntPoint,
+        size: i32,
+        offset: i32,
+        row_shift: i32,
+        n: usize,
+    ) -> IntShape<i32> {
         let mut contours = Vec::with_capacity(n * n);
         let mut y = start.y;
-        for _ in 0..n {
-            let mut x = start.x;
+        for row in 0..n {
+            let mut x = start.x + row as i32 * row_shift;
             for _ in 0..n {
                 contours.push(vec![
                     IntPoint::new(x, y),

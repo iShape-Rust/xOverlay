@@ -174,8 +174,8 @@ fn checkerboard(n: usize) -> Workload {
         name: "Checkerboard / XOR",
         n,
         rule: OverlayRule::Xor,
-        subject: many_squares(IntPoint::new(0, 0), 20, 30, n),
-        clip: many_squares(IntPoint::new(15, 15), 20, 30, n - 1),
+        subject: many_squares(IntPoint::new(0, 0), 20, 30, 1, n),
+        clip: many_squares(IntPoint::new(15, 15), 20, 30, 1, n - 1),
         expected_area: 400 * count * count + 200 * clip_count * clip_count,
     }
 }
@@ -187,18 +187,18 @@ fn not_overlap(n: usize) -> Workload {
         name: "Not Overlap / Union",
         n,
         rule: OverlayRule::Union,
-        subject: many_squares(IntPoint::new(0, 0), 10, 30, n),
-        clip: many_squares(IntPoint::new(15, 15), 10, 30, n - 1),
+        subject: many_squares(IntPoint::new(0, 0), 10, 30, 0, n),
+        clip: many_squares(IntPoint::new(15, 15), 10, 30, 0, n - 1),
         expected_area: 100 * (count * count + clip_count * clip_count),
     }
 }
 
-fn many_squares(start: IntPoint, size: i32, step: i32, n: usize) -> IntShape<i32> {
+fn many_squares(start: IntPoint, size: i32, step: i32, row_shift: i32, n: usize) -> IntShape<i32> {
     let mut result = Vec::with_capacity(n * n);
     for row in 0..n {
         let y = start.y + row as i32 * step;
         for column in 0..n {
-            let x = start.x + column as i32 * step;
+            let x = start.x + column as i32 * step + row as i32 * row_shift;
             result.push(rectangle(x, y, size, size));
         }
     }

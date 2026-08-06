@@ -46,8 +46,8 @@ multithreading off
 // A grid of overlapping squares forming a simple checkerboard pattern.
 impl CheckerboardTest {
     pub(crate) fn run(n: usize, rule: OverlayRule, scale: f64, multithreading: bool) { // 1000
-        let subj_paths = Self::many_squares(IntPoint::new(0, 0), 20, 30, n);
-        let clip_paths = Self::many_squares(IntPoint::new(15, 15), 20, 30, n - 1);
+        let subj_paths = Self::many_squares(IntPoint::new(0, 0), 20, 30, 1, n);
+        let clip_paths = Self::many_squares(IntPoint::new(15, 15), 20, 30, 1, n - 1);
 
         let it_count = ((scale / (n as f64)) as usize).max(1);
         let sq_it_count= it_count * it_count;
@@ -69,11 +69,17 @@ impl CheckerboardTest {
         println!("{}({} {:.1})     - {:.6}({:.1})", n, polygons_count, count_log, time, time_log);
     }
 
-    fn many_squares(start: IntPoint, size: i32, offset: i32, n: usize) -> Vec<IntPath<i32>> {
+    fn many_squares(
+        start: IntPoint,
+        size: i32,
+        offset: i32,
+        row_shift: i32,
+        n: usize,
+    ) -> Vec<IntPath<i32>> {
         let mut result = Vec::with_capacity(n * n);
         let mut y = start.y;
-        for _ in 0..n {
-            let mut x = start.x;
+        for row in 0..n {
+            let mut x = start.x + row as i32 * row_shift;
             for _ in 0..n {
                 let path: IntPath<i32> = vec![
                     IntPoint::new(x, y),

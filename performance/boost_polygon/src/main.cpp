@@ -110,6 +110,7 @@ static volatile std::size_t output_sink = 0;
     Coordinate origin_y,
     Coordinate size,
     Coordinate step,
+    Coordinate row_shift,
     std::size_t n
 ) {
     std::vector<Rectangle> result;
@@ -117,7 +118,8 @@ static volatile std::size_t output_sink = 0;
     for (std::size_t row = 0; row < n; ++row) {
         const auto y = origin_y + static_cast<Coordinate>(row) * step;
         for (std::size_t column = 0; column < n; ++column) {
-            const auto x = origin_x + static_cast<Coordinate>(column) * step;
+            const auto x = origin_x + static_cast<Coordinate>(column) * step +
+                           static_cast<Coordinate>(row) * row_shift;
             result.emplace_back(x, y, x + size, y + size);
         }
     }
@@ -131,9 +133,9 @@ static volatile std::size_t output_sink = 0;
         .name = "Checkerboard / XOR",
         .n = n,
         .operation = Operation::xor_,
-        .subject = many_squares(0, 0, 20, 30, n),
-        .clip = many_squares(15, 15, 20, 30, n - 1),
-        // Every clip square overlaps four subject squares by 5x5.
+        .subject = many_squares(0, 0, 20, 30, 1, n),
+        .clip = many_squares(15, 15, 20, 30, 1, n - 1),
+        // Every clip square keeps the same total overlap after the per-row shift.
         .expected_area = 400 * count * count + 200 * clip_count * clip_count,
     };
 }
@@ -145,8 +147,8 @@ static volatile std::size_t output_sink = 0;
         .name = "Not Overlap / Union",
         .n = n,
         .operation = Operation::union_,
-        .subject = many_squares(0, 0, 10, 30, n),
-        .clip = many_squares(15, 15, 10, 30, n - 1),
+        .subject = many_squares(0, 0, 10, 30, 0, n),
+        .clip = many_squares(15, 15, 10, 30, 0, n - 1),
         .expected_area = 100 * (count * count + clip_count * clip_count),
     };
 }
