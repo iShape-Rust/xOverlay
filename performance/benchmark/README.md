@@ -55,9 +55,9 @@ seconds. Benchmark runs use these fixed values and do not recalibrate them:
 | Windows | 2048 |
 | Nested squares | 16384 |
 
-Each scenario benchmarks the ascending series `N/1024`, `N/256`, `N/64`,
-`N/16`, `N/4`, `N`. The same series is used for both coordinate widths and
-both output forms, and is stored in JSON as `metadata.scenario_sizes`.
+Each scenario benchmarks the ascending series `N/64`, `N/16`, `N/4`, `N`.
+The same series is used for both coordinate widths and both output forms, and
+is stored in JSON as `metadata.scenario_sizes`.
 
 The command writes:
 
@@ -84,7 +84,7 @@ The defaults can be adjusted through these environment variables:
 | Variable | Default | Meaning |
 |---|---:|---|
 | `BENCH_MACHINE` | auto | Overrides the machine label in the report. |
-| `BENCH_SOLVER_TIMEOUT_SECONDS` | `30` | Per-call timeout for the external Boost runner. |
+| `BENCH_SOLVER_TIMEOUT_SECONDS` | `60` | Per-measurement timeout for every solver. |
 | `BENCH_BUDGET_MS` | `700` | Timing budget per benchmark measurement. |
 | `BENCH_SAMPLES` | `9` | Number of timing samples. |
 
@@ -93,9 +93,11 @@ Machine detection uses `sysctl` first and falls back to the safe `Model Name`,
 manual label. JSON records its origin in `metadata.machine_source` as
 `user_set`, `sysctl`, `system_profiler`, or `unknown`.
 
-If Boost reaches its timeout, that point and all larger `N` values for the
-same scenario, coordinate width, and output form are skipped. Other series
-continue and remain in the report.
+If any solver reaches its timeout, the report records the point as `timed_out`
+and shows it as greater than the configured limit. Remaining runs for that
+solver and scenario are skipped; other solvers and subsequent scenarios
+continue. Rust measurements run in isolated child processes so timed-out work
+is terminated rather than left running in the background.
 
 Run one scenario by forwarding benchmark arguments:
 

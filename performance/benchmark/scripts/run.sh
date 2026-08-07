@@ -6,7 +6,7 @@ crate_dir="$(cd "${script_dir}/.." && pwd)"
 profile="${BENCH_PROFILE:-full}"
 budget_ms="${BENCH_BUDGET_MS:-700}"
 samples="${BENCH_SAMPLES:-9}"
-solver_timeout_seconds="${BENCH_SOLVER_TIMEOUT_SECONDS:-30}"
+solver_timeout_seconds="${BENCH_SOLVER_TIMEOUT_SECONDS:-60}"
 
 "${script_dir}/build.sh"
 "${crate_dir}/target/release/overlay-benchmark" \

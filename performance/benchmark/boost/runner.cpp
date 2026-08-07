@@ -146,7 +146,9 @@ Result run(const Case<Coordinate>& workload, OutputKind output_kind, const Confi
     };
 
     Result result;
+    std::chrono::nanoseconds calibration{1};
     {
+        const auto start = std::chrono::steady_clock::now();
         const auto subject = make_set(workload.subject);
         const auto clip = make_set(workload.clip);
         PolygonSet validation = apply_operation(subject, clip, workload.operation);
@@ -154,6 +156,11 @@ Result run(const Case<Coordinate>& workload, OutputKind output_kind, const Confi
         if (output_kind == OutputKind::Shapes) {
             std::vector<Polygon> output;
             validation.get(output);
+            calibration = std::max(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start),
+                std::chrono::nanoseconds{1}
+            );
+            output_sink ^= output.size();
             result.shapes = output.size();
             for (const auto& polygon : output) {
                 ++result.contours;
@@ -166,6 +173,11 @@ Result run(const Case<Coordinate>& workload, OutputKind output_kind, const Confi
         } else {
             std::vector<Contour> output;
             validation.get(output);
+            calibration = std::max(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start),
+                std::chrono::nanoseconds{1}
+            );
+            output_sink ^= output.size();
             result.contours = output.size();
             for (const auto& contour : output) {
                 result.points += point_count(contour);
@@ -174,23 +186,10 @@ Result run(const Case<Coordinate>& workload, OutputKind output_kind, const Confi
     }
 
     const auto target = config.budget / static_cast<std::int64_t>(config.samples);
-    std::chrono::nanoseconds calibration{1};
-    if (output_kind == OutputKind::Shapes) {
-        const auto start = std::chrono::steady_clock::now();
-        const auto output = solve_shapes();
-        output_sink ^= output.size();
-        calibration = std::max(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start),
-            std::chrono::nanoseconds{1}
-        );
-    } else {
-        const auto start = std::chrono::steady_clock::now();
-        const auto output = solve_contours();
-        output_sink ^= output.size();
-        calibration = std::max(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start),
-            std::chrono::nanoseconds{1}
-        );
+    if (calibration >= target) {
+        result.iterations_per_sample = 1;
+        result.samples_ns.push_back(static_cast<std::uint64_t>(calibration.count()));
+        return result;
     }
     const auto raw_iterations = std::max<std::int64_t>(1, target.count() * 1'000'000 / calibration.count());
     result.iterations_per_sample = static_cast<std::size_t>(std::min<std::int64_t>(1'000'000, raw_iterations));

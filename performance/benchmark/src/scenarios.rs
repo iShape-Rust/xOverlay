@@ -113,7 +113,7 @@ pub fn max_n(scenario: &str) -> usize {
 }
 
 fn sizes_from_max(max_n: usize) -> Vec<usize> {
-    let mut sizes = [1024, 256, 64, 16, 4, 1]
+    let mut sizes = [64, 16, 4, 1]
         .into_iter()
         .filter_map(|divisor| {
             let value = max_n / divisor;
@@ -403,14 +403,13 @@ mod tests {
     fn benchmark_sizes_are_quarter_steps_from_the_maximum() {
         for scenario in SCENARIOS {
             assert!(max_n(scenario).is_power_of_two());
+            assert_eq!(full_sizes(scenario).len(), 4);
+            assert_eq!(full_sizes(scenario).last(), Some(&max_n(scenario)));
         }
-        assert_eq!(full_sizes("checkerboard"), vec![2, 8, 32, 128, 512, 2048]);
-        assert_eq!(full_sizes("lines_net"), vec![4, 16, 64, 256, 1024, 4096]);
-        assert_eq!(full_sizes("wind_mill"), vec![1, 4, 16, 64, 256, 1024]);
-        assert_eq!(
-            full_sizes("nested_squares"),
-            vec![16, 64, 256, 1024, 4096, 16_384]
-        );
+        assert_eq!(full_sizes("checkerboard"), vec![32, 128, 512, 2048]);
+        assert_eq!(full_sizes("lines_net"), vec![64, 256, 1024, 4096]);
+        assert_eq!(full_sizes("wind_mill"), vec![16, 64, 256, 1024]);
+        assert_eq!(full_sizes("nested_squares"), vec![256, 1024, 4096, 16_384]);
     }
 
     #[test]

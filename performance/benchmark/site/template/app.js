@@ -19,7 +19,9 @@
     if (ns < 1_000) return `${ns.toFixed(0)} ns`;
     if (ns < 1_000_000) return `${(ns / 1_000).toFixed(ns < 10_000 ? 2 : 1)} µs`;
     if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(ns < 10_000_000 ? 2 : 1)} ms`;
-    return `${(ns / 1_000_000_000).toFixed(2)} s`;
+    if (ns < 60_000_000_000) return `${(ns / 1_000_000_000).toFixed(2)} s`;
+    const minutes = ns / 60_000_000_000;
+    return `${Number.isInteger(minutes) ? minutes.toFixed(0) : minutes.toFixed(1)} min`;
   };
 
   const escapeHtml = text => String(text).replace(/[&<>"]/g, char => ({
@@ -89,6 +91,9 @@
       const cells = names.map(name => {
         const item = measurements.find(candidate => candidate.n === n && seriesName(candidate) === name);
         if (!item) return "<td>—</td>";
+        if (item.timing.timed_out) {
+          return `<td title="Timed out before output was materialized">&gt; ${formatTime(item.timing.median_ns)}</td>`;
+        }
         const detail = `${item.output.contours.toLocaleString()} contours · ${item.output.points.toLocaleString()} points`;
         return `<td title="${escapeHtml(detail)}">${formatTime(item.timing.median_ns)}</td>`;
       }).join("");

@@ -131,6 +131,7 @@ pub struct TimingSummary {
     pub median_ns: u64,
     pub min_ns: u64,
     pub max_ns: u64,
+    pub timed_out: bool,
 }
 
 impl TimingSummary {
@@ -145,6 +146,18 @@ impl TimingSummary {
             median_ns,
             min_ns,
             max_ns,
+            timed_out: false,
+        }
+    }
+
+    pub fn timeout(limit_ns: u64) -> Self {
+        Self {
+            iterations_per_sample: 0,
+            samples_ns: Vec::new(),
+            median_ns: limit_ns,
+            min_ns: limit_ns,
+            max_ns: limit_ns,
+            timed_out: true,
         }
     }
 }
@@ -163,7 +176,7 @@ pub struct Measurement {
     pub output_semantics: String,
     pub warning: Option<String>,
     pub input: InputMetrics,
-    pub output: OutputMetrics,
+    pub output: Option<OutputMetrics>,
     pub timing: TimingSummary,
 }
 

@@ -3,7 +3,7 @@ use i_overlay::core::integer::OverlayInt as IOverlayInt;
 use i_overlay::core::overlay::Overlay as IOverlay;
 use i_overlay::core::overlay_rule::OverlayRule as IOverlayRule;
 use i_overlay::core::solver::{MultithreadOptions, Solver as ISolver};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fs::{self, File};
@@ -71,6 +71,9 @@ impl BenchCoordinate for i64 {
 }
 
 fn main() {
+    if run_rust_solver_child() {
+        return;
+    }
     let config = parse_config();
     let logical_cpus = std::thread::available_parallelism()
         .map(|value| value.get())
@@ -78,6 +81,7 @@ fn main() {
     let mut measurements = Vec::new();
     let mut boost_version = String::from("not-run");
     let mut boost_disabled = HashSet::new();
+    let mut rust_disabled = HashSet::new();
     let mut scenario_sizes = BTreeMap::new();
 
     for scenario in &config.scenarios {
@@ -95,6 +99,7 @@ fn main() {
                 logical_cpus,
                 &mut boost_version,
                 &mut boost_disabled,
+                &mut rust_disabled,
                 &mut measurements,
             );
             let case = scenarios::make_i64(scenario, n);
@@ -104,13 +109,14 @@ fn main() {
                 logical_cpus,
                 &mut boost_version,
                 &mut boost_disabled,
+                &mut rust_disabled,
                 &mut measurements,
             );
         }
     }
 
     let report = BenchmarkReport {
-        schema_version: 3,
+        schema_version: 4,
         metadata: metadata(&config, logical_cpus, boost_version, scenario_sizes),
         scenarios: scenarios::scenario_info(),
         measurements,
@@ -123,6 +129,105 @@ fn main() {
     println!("wrote {}", config.output.display());
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct RustChildResult {
+    output: OutputMetrics,
+    timing: TimingSummary,
+}
+
+fn run_rust_solver_child() -> bool {
+    let mut args = env::args().skip(1);
+    if args.next().as_deref() != Some("--rust-solver-child") {
+        return false;
+    }
+    let scenario = args.next().expect("child scenario is required");
+    let n = args
+        .next()
+        .expect("child N is required")
+        .parse::<usize>()
+        .expect("child N must be an integer");
+    let coordinate = args.next().expect("child coordinate is required");
+    let output_kind = match args.next().as_deref() {
+        Some("shapes") => OutputKind::Shapes,
+        Some("contours") => OutputKind::Contours,
+        _ => panic!("child output kind must be shapes or contours"),
+    };
+    let solver = RustSolver::from_id(&args.next().expect("child solver is required"));
+    let budget = Duration::from_millis(
+        args.next()
+            .expect("child budget is required")
+            .parse::<u64>()
+            .expect("child budget must be an integer"),
+    );
+    let samples = args
+        .next()
+        .expect("child sample count is required")
+        .parse::<usize>()
+        .expect("child sample count must be an integer");
+    let result = match coordinate.as_str() {
+        "i32" => measure_rust_child(
+            &scenarios::make_i32(&scenario, n),
+            output_kind,
+            solver,
+            budget,
+            samples,
+        ),
+        "i64" => measure_rust_child(
+            &scenarios::make_i64(&scenario, n),
+            output_kind,
+            solver,
+            budget,
+            samples,
+        ),
+        _ => panic!("child coordinate must be i32 or i64"),
+    };
+    println!(
+        "{}",
+        serde_json::to_string(&result).expect("unable to serialize Rust child result")
+    );
+    true
+}
+
+fn measure_rust_child<I: BenchCoordinate>(
+    case: &Case<I>,
+    output_kind: OutputKind,
+    solver: RustSolver,
+    budget: Duration,
+    samples: usize,
+) -> RustChildResult {
+    let first_start = Instant::now();
+    let first_output = solve_rust(case, output_kind, solver);
+    let first_elapsed = first_start.elapsed().max(Duration::from_nanos(1));
+    let output = metrics_from_result(&first_output);
+    let target = budget / samples as u32;
+    if first_elapsed >= target {
+        return RustChildResult {
+            output,
+            timing: TimingSummary::new(1, vec![duration_ns(first_elapsed)]),
+        };
+    }
+
+    let iterations =
+        ((target.as_nanos() / first_elapsed.as_nanos()).max(1) as usize).min(1_000_000);
+    let mut sample_values = Vec::with_capacity(samples);
+    for _ in 0..samples {
+        let start = Instant::now();
+        for _ in 0..iterations {
+            black_box(solve_rust(case, output_kind, solver));
+        }
+        let elapsed = start.elapsed().as_nanos() / iterations as u128;
+        sample_values.push(elapsed.min(u64::MAX as u128) as u64);
+    }
+    RustChildResult {
+        output,
+        timing: TimingSummary::new(iterations, sample_values),
+    }
+}
+
+fn duration_ns(duration: Duration) -> u64 {
+    duration.as_nanos().min(u64::MAX as u128) as u64
+}
+
 fn parse_config() -> Config {
     let mut profile = String::from("smoke");
     let mut selected = String::from("all");
@@ -130,7 +235,7 @@ fn parse_config() -> Config {
     let mut samples = 7_usize;
     let mut output = PathBuf::from("results/latest.json");
     let mut boost_bin = None;
-    let mut solver_timeout_seconds = 30.0_f64;
+    let mut solver_timeout_seconds = 60.0_f64;
     let mut machine_override = None;
     let mut args = env::args().skip(1);
     while let Some(option) = args.next() {
@@ -211,6 +316,7 @@ fn run_case<I: BenchCoordinate>(
     logical_cpus: usize,
     boost_version: &mut String,
     boost_disabled: &mut HashSet<String>,
+    rust_disabled: &mut HashSet<String>,
     measurements: &mut Vec<Measurement>,
 ) {
     println!(
@@ -246,8 +352,42 @@ fn run_case<I: BenchCoordinate>(
                 RustSolver::XOverlay(CPUCount::Auto),
             ),
         ] {
-            let validation = solve_rust(case, output_kind, solver);
-            let output = metrics_from_result(&validation);
+            let solver_key = format!("{}:{implementation}:{execution}", case.scenario);
+            if rust_disabled.contains(&solver_key) {
+                continue;
+            }
+            let Some(result) = run_rust_solver(case, output_kind, solver, config) else {
+                let timeout_ns = duration_ns(config.solver_timeout);
+                let timeout_seconds = config.solver_timeout.as_secs_f64();
+                eprintln!(
+                    "{implementation} {execution} timed out for {} n={} {} {}; remaining runs for this solver and scenario will be skipped",
+                    case.scenario,
+                    case.n,
+                    I::TYPE,
+                    output_kind
+                );
+                measurements.push(Measurement {
+                    scenario: case.scenario.to_string(),
+                    label: case.label.to_string(),
+                    operation: case.operation,
+                    n: case.n,
+                    coordinate_type: I::TYPE,
+                    output_kind,
+                    implementation: implementation.to_string(),
+                    execution: execution.to_string(),
+                    threads,
+                    output_semantics: "not_materialized_timeout".to_string(),
+                    warning: Some(format!(
+                        "{implementation} {execution} exceeded the {timeout_seconds:.0}-second limit. Its actual time is greater than the recorded limit; remaining runs for this solver and scenario were skipped."
+                    )),
+                    input: case.input_metrics(),
+                    output: None,
+                    timing: TimingSummary::timeout(timeout_ns),
+                });
+                rust_disabled.insert(solver_key);
+                continue;
+            };
+            let output = result.output;
             assert_eq!(
                 output.area_two,
                 expected.area_two,
@@ -257,9 +397,6 @@ fn run_case<I: BenchCoordinate>(
                 I::TYPE,
                 output_kind
             );
-            let timing = measure(config.budget, config.samples, || {
-                solve_rust(case, output_kind, solver)
-            });
             measurements.push(Measurement {
                 scenario: case.scenario.to_string(),
                 label: case.label.to_string(),
@@ -273,12 +410,12 @@ fn run_case<I: BenchCoordinate>(
                 output_semantics: output_kind.as_str().to_string(),
                 warning: None,
                 input: case.input_metrics(),
-                output,
-                timing,
+                output: Some(output),
+                timing: result.timing,
             });
         }
 
-        let boost_key = format!("{}:{}:{}", case.scenario, I::TYPE, output_kind);
+        let boost_key = case.scenario.to_string();
         if let (Some(boost_bin), Some(case_file)) = (&config.boost_bin, &case_file)
             && !boost_disabled.contains(&boost_key)
         {
@@ -314,22 +451,42 @@ fn run_case<I: BenchCoordinate>(
                         None
                     },
                     input: case.input_metrics(),
-                    output: OutputMetrics {
+                    output: Some(OutputMetrics {
                         shapes: result.shapes,
                         contours: result.contours,
                         points: result.points,
                         area_two: result.area_two,
-                    },
+                    }),
                     timing: TimingSummary::new(result.iterations_per_sample, result.samples_ns),
                 });
             } else {
+                let timeout_ns = config.solver_timeout.as_nanos().min(u64::MAX as u128) as u64;
+                let timeout_seconds = config.solver_timeout.as_secs_f64();
                 eprintln!(
-                    "Boost timed out for {} n={} {} {}; larger points in this series will be skipped",
+                    "Boost timed out for {} n={} {} {}; remaining Boost runs for this scenario will be skipped",
                     case.scenario,
                     case.n,
                     I::TYPE,
                     output_kind
                 );
+                measurements.push(Measurement {
+                    scenario: case.scenario.to_string(),
+                    label: case.label.to_string(),
+                    operation: case.operation,
+                    n: case.n,
+                    coordinate_type: I::TYPE,
+                    output_kind,
+                    implementation: "Boost Polygon 90".to_string(),
+                    execution: "single_thread".to_string(),
+                    threads: 1,
+                    output_semantics: "not_materialized_timeout".to_string(),
+                    warning: Some(format!(
+                        "Boost exceeded the {timeout_seconds:.0}-second limit. Its actual time is greater than the recorded limit; remaining Boost runs for this scenario were skipped."
+                    )),
+                    input: case.input_metrics(),
+                    output: None,
+                    timing: TimingSummary::timeout(timeout_ns),
+                });
                 boost_disabled.insert(boost_key);
             }
         }
@@ -343,6 +500,54 @@ fn run_case<I: BenchCoordinate>(
 enum RustSolver {
     IOverlay(bool),
     XOverlay(CPUCount),
+}
+
+impl RustSolver {
+    fn id(self) -> &'static str {
+        match self {
+            Self::IOverlay(false) => "i_single",
+            Self::IOverlay(true) => "i_multi",
+            Self::XOverlay(CPUCount::Single) => "x_single",
+            Self::XOverlay(_) => "x_multi",
+        }
+    }
+
+    fn from_id(id: &str) -> Self {
+        match id {
+            "i_single" => Self::IOverlay(false),
+            "i_multi" => Self::IOverlay(true),
+            "x_single" => Self::XOverlay(CPUCount::Single),
+            "x_multi" => Self::XOverlay(CPUCount::Auto),
+            _ => panic!("unknown Rust solver id: {id}"),
+        }
+    }
+}
+
+fn run_rust_solver<I: BenchCoordinate>(
+    case: &Case<I>,
+    output_kind: OutputKind,
+    solver: RustSolver,
+    config: &Config,
+) -> Option<RustChildResult> {
+    let executable = env::current_exe().expect("unable to locate benchmark executable");
+    let mut command = Command::new(executable);
+    command
+        .arg("--rust-solver-child")
+        .arg(case.scenario)
+        .arg(case.n.to_string())
+        .arg(I::TYPE.as_str())
+        .arg(output_kind.as_str())
+        .arg(solver.id())
+        .arg(config.budget.as_millis().to_string())
+        .arg(config.samples.to_string());
+    let output = run_command_with_timeout(&mut command, config.solver_timeout)?;
+    if !output.status.success() {
+        panic!(
+            "Rust solver child failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Some(serde_json::from_slice(&output.stdout).expect("Rust solver child returned invalid JSON"))
 }
 
 enum RustResult<I: BenchCoordinate> {
@@ -464,26 +669,6 @@ fn area_two<I: BenchCoordinate>(contour: &[x_overlay::i_float::int::point::IntPo
         area += a.x.to_i128() * b.y.to_i128() - b.x.to_i128() * a.y.to_i128();
     }
     area
-}
-
-fn measure<T>(budget: Duration, samples: usize, mut operation: impl FnMut() -> T) -> TimingSummary {
-    black_box(operation());
-    let calibration_start = Instant::now();
-    black_box(operation());
-    let one_iteration = calibration_start.elapsed().max(Duration::from_nanos(1));
-    let target = budget / samples as u32;
-    let iterations =
-        ((target.as_nanos() / one_iteration.as_nanos()).max(1) as usize).min(1_000_000);
-    let mut sample_values = Vec::with_capacity(samples);
-    for _ in 0..samples {
-        let start = Instant::now();
-        for _ in 0..iterations {
-            black_box(operation());
-        }
-        let elapsed = start.elapsed().as_nanos() / iterations as u128;
-        sample_values.push(elapsed.min(u64::MAX as u128) as u64);
-    }
-    TimingSummary::new(iterations, sample_values)
 }
 
 fn write_case_file<I: BenchCoordinate>(case: &Case<I>) -> PathBuf {
