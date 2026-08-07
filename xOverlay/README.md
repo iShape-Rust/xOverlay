@@ -154,15 +154,19 @@ For each shape:
 When shape-to-hole grouping is not needed, use `overlay_contours`:
 
 ```rust
-# use x_overlay::core::fill_rule::FillRule;
-# use x_overlay::core::overlay::Overlay;
-# use x_overlay::core::overlay_rule::OverlayRule;
-# use x_overlay::i_float::int::point::IntPoint;
-# let subject = vec![vec![
-#     IntPoint::new(0_i32, 0), IntPoint::new(8, 0),
-#     IntPoint::new(8, 6), IntPoint::new(0, 6),
-# ]];
-# let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
+use x_overlay::core::fill_rule::FillRule;
+use x_overlay::core::overlay::Overlay;
+use x_overlay::core::overlay_rule::OverlayRule;
+use x_overlay::i_float::int::point::IntPoint;
+
+let subject = vec![vec![
+    IntPoint::new(0_i32, 0),
+    IntPoint::new(8, 0),
+    IntPoint::new(8, 6),
+    IntPoint::new(0, 6),
+]];
+let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
+
 let contours = Overlay::<i32>::with_contours(&subject, &clip)
     .overlay_contours(FillRule::NonZero, OverlayRule::Subject);
 ```
@@ -199,12 +203,18 @@ assert_eq!(result.len(), 1);
 The `allow_multithreading` feature is enabled by default. `Overlay::with_contours` automatically chooses the available parallelism. Use the custom constructor when execution must be controlled explicitly:
 
 ```rust
-# use x_overlay::i_float::int::point::IntPoint;
 use x_overlay::core::cpu_count::CPUCount;
 use x_overlay::core::overlay::Overlay;
+use x_overlay::i_float::int::point::IntPoint;
 
-# let subject: Vec<Vec<IntPoint<i32>>> = Vec::new();
-# let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
+let subject = vec![vec![
+    IntPoint::new(0_i32, 0),
+    IntPoint::new(8, 0),
+    IntPoint::new(8, 6),
+    IntPoint::new(0, 6),
+]];
+let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
+
 let overlay = Overlay::<i32>::with_contours_custom(
     &subject,
     &clip,
@@ -217,7 +227,7 @@ Disable default features for a serial `no_std` build:
 
 ```toml
 [dependencies]
-x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "feature/optimisation", default-features = false }
+x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "main", default-features = false }
 ```
 
 Benchmark applications and workload descriptions are available in the repository's [`performance`](../performance) directory.
