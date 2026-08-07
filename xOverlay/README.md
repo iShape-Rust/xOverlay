@@ -230,7 +230,10 @@ Disable default features for a serial `no_std` build:
 x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "main", default-features = false }
 ```
 
-Benchmark applications and workload descriptions are available in the repository's [`performance`](../performance) directory.
+See the published [interactive performance report](https://ishape-rust.github.io/xOverlay/performance/)
+for deterministic iOverlay, xOverlay, and Boost Polygon 90 comparisons. The generators,
+raw JSON, scripts, and usage guide live in the repository's
+[`performance/benchmark`](../performance/benchmark) directory.
 
 &nbsp;
 ## xOverlay and iOverlay

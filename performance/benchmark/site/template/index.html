@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Reproducible iOverlay, xOverlay, and Boost Polygon 90 benchmarks for orthogonal geometry.">
+  <title>Orthogonal Overlay Benchmarks</title>
+  <style>__REPORT_CSS__</style>
+</head>
+<body>
+  <header class="page-title" id="top">
+    <div class="title-grid">
+      <div>
+        <h1>Orthogonal Overlay Benchmarks</h1>
+      </div>
+      <dl class="run-card" id="run-metadata" aria-label="Benchmark run metadata"></dl>
+    </div>
+  </header>
+
+  <main>
+    <section class="controls-wrap" aria-label="Result filters">
+      <div class="controls">
+        <div>
+          <span class="control-label">Coordinate</span>
+          <div class="segmented" id="coordinate-filter" role="group" aria-label="Coordinate type">
+            <button type="button" data-value="i32" aria-pressed="true">i32</button>
+            <button type="button" data-value="i64" aria-pressed="false">i64</button>
+          </div>
+        </div>
+        <div>
+          <span class="control-label">Output</span>
+          <div class="segmented" id="output-filter" role="group" aria-label="Output kind">
+            <button type="button" data-value="shapes" aria-pressed="true">Shapes</button>
+            <button type="button" data-value="contours" aria-pressed="false">Contours only</button>
+          </div>
+        </div>
+        <div class="metric-key" aria-label="Chart metric">
+          <span class="metric-dot"></span>
+          Median end-to-end time · log scale
+        </div>
+      </div>
+    </section>
+
+    <section class="suite" id="suite" aria-live="polite"></section>
+
+  </main>
+
+  <script id="benchmark-data" type="application/json">__RESULTS_JSON__</script>
+  <script>__REPORT_JS__</script>
+</body>
+</html>

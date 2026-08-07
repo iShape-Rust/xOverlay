@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="-47.200 -47.200 94.400 94.400" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+  <title id="title">Windows</title>
+  <desc id="desc">Symmetric preview of the Windows difference benchmark.</desc>
+  <rect x="-47.200" y="-47.200" width="94.400" height="94.400" fill="#fbfaf7"/>
+  <path class="subject" d="M -40 -40 L -20 -40 L -20 -20 L -40 -20 Z M -10 -40 L 10 -40 L 10 -20 L -10 -20 Z M 20 -40 L 40 -40 L 40 -20 L 20 -20 Z M -40 -10 L -20 -10 L -20 10 L -40 10 Z M -10 -10 L 10 -10 L 10 10 L -10 10 Z M 20 -10 L 40 -10 L 40 10 L 20 10 Z M -40 20 L -20 20 L -20 40 L -40 40 Z M -10 20 L 10 20 L 10 40 L -10 40 Z M 20 20 L 40 20 L 40 40 L 20 40 Z " fill="#ef4444" fill-opacity="0.10" stroke="#ef4444" stroke-width="5.000" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+  <path class="clip" d="M -35 -35 L -25 -35 L -25 -25 L -35 -25 Z M -5 -35 L 5 -35 L 5 -25 L -5 -25 Z M 25 -35 L 35 -35 L 35 -25 L 25 -25 Z M -35 -5 L -25 -5 L -25 5 L -35 5 Z M -5 -5 L 5 -5 L 5 5 L -5 5 Z M 25 -5 L 35 -5 L 35 5 L 25 5 Z M -35 25 L -25 25 L -25 35 L -35 35 Z M -5 25 L 5 25 L 5 35 L -5 35 Z M 25 25 L 35 25 L 35 35 L 25 35 Z " fill="#3b82f6" fill-opacity="0.10" stroke="#3b82f6" stroke-width="5.000" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+</svg>
