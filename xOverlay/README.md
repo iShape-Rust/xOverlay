@@ -129,7 +129,8 @@ Each subject and clip is a slice of contours. A contour is a `Vec<IntPoint<I>>` 
 
 - Every edge, including the closing edge, must be horizontal or vertical: consecutive points must have the same `x` or the same `y` coordinate.
 - A contour must contain at least four points.
-- The first point does not need to be repeated at the end.
+- Adjacent points should be distinct; duplicates are accepted with a validation warning.
+- The contour is closed automatically; the first point does not need to be repeated at the end.
 - Coordinates must use one supported integer type consistently.
 
 xOverlay's core solver assumes valid orthogonal input. It does not validate contour length,
@@ -138,14 +139,32 @@ validation errors. Supplying invalid contours may produce invalid geometry.
 
 ### Validation and Custom Contours
 
-Input validation can be provided as a separate checked wrapper around the core solver. This keeps
-validation policy out of the performance-oriented path while allowing applications that receive
-untrusted or externally generated geometry to validate it before constructing an `Overlay`.
+Import the `Contour` trait to validate input before constructing an `Overlay`:
 
-A contour trait can also be added as an adapter layer for custom contour representations. Such a
-trait could expose point iteration and reusable orthogonal validation without coupling the solver
-to a particular container type. The checked wrapper and contour trait are possible extensions;
-they are not part of the current API.
+```rust
+use x_overlay::core::validation::Contour;
+use x_overlay::i_float::int::point::IntPoint;
+
+let contour = vec![
+    IntPoint::new(0_i32, 0),
+    IntPoint::new(10, 0),
+    IntPoint::new(10, 10),
+    IntPoint::new(0, 10),
+];
+
+let warnings = contour.validate().expect("invalid orthogonal contour");
+assert!(warnings.is_empty());
+```
+
+Validation rejects contours with fewer than four vertices or non-orthogonal edges, including the
+implicit closing edge. Zero-length edges and redundant collinear vertices are valid and are
+returned as `ContourWarning` values.
+Self-intersections, winding direction, nesting, and relationships between contours are not checked;
+these are handled according to the selected fill rule.
+
+Custom contour representations can implement `Contour` by providing their length and indexed point
+access. A higher-level checked wrapper can use the same trait to validate subject and clip contour
+collections while keeping validation out of the performance-oriented solver path.
 
 ### Output Structure
 

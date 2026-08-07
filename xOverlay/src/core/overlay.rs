@@ -25,7 +25,8 @@ impl<I: OverlayInt, W: WindingCount> Overlay<I, W> {
     ///
     /// This constructor assumes valid orthogonal contours and does not validate contour length,
     /// axis alignment, closing-edge alignment, or other structural invariants. Invalid input may
-    /// produce invalid geometry.
+    /// produce invalid geometry. Use [`Contour::validate`](crate::core::validation::Contour::validate)
+    /// before construction when input is not trusted.
     #[inline]
     pub fn with_contours(subj: &[IntContour<I>], clip: &[IntContour<I>]) -> Self {
         Self::with_contours_custom(subj, clip, Default::default(), CPUCount::Auto)
