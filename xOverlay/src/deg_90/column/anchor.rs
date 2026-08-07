@@ -1,18 +1,19 @@
+use crate::core::integer::OverlayInt;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::count::LRCount;
 use core::num::NonZeroU32;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct Anchor {
+pub(super) struct Anchor<I: OverlayInt> {
     pub(super) node: Option<NonZeroU32>,
-    pub(super) x: i32,
+    pub(super) x: I,
     pub(super) count: LRCount,
 }
 
-impl Anchor {
+impl<I: OverlayInt> Anchor<I> {
     #[inline(always)]
     pub(super) fn new(
-        x: i32,
+        x: I,
         node: Option<NonZeroU32>,
         c0: ShapeCountBoolean,
         c1: ShapeCountBoolean,

@@ -1,3 +1,4 @@
+use crate::core::integer::OverlayInt;
 use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
@@ -7,18 +8,18 @@ use crate::partition::pos::Pos;
 use alloc::vec::Vec;
 use i_key_sort::sort::two_keys::TwoKeysSort;
 
-pub(crate) trait Partition {
+pub(crate) trait Partition<I: OverlayInt> {
     fn partition(&mut self) -> usize;
 }
 
-impl Partition for Vec<Segment> {
+impl<I: OverlayInt> Partition<I> for Vec<Segment<I>> {
     fn partition(&mut self) -> usize {
         if self.is_empty() {
             return 0;
         }
 
         let mut line_solver = LineSolver {
-            pos: 0,
+            pos: I::ZERO,
             ends_heap: PosMinHeap::with_capacity(16),
         };
 
@@ -53,10 +54,10 @@ impl Partition for Vec<Segment> {
     }
 }
 
-fn fast_check(segments: &[Segment]) -> Option<usize> {
+fn fast_check<I: OverlayInt>(segments: &[Segment<I>]) -> Option<usize> {
     // check may be there is no overlap at all (often case)
 
-    let mut x0 = i32::MIN;
+    let mut x0 = I::MIN;
     for (i, s) in segments.iter().enumerate() {
         if x0 >= s.range.min {
             let i0 = i.saturating_sub(1);
@@ -68,13 +69,13 @@ fn fast_check(segments: &[Segment]) -> Option<usize> {
     None
 }
 
-struct LineSolver {
-    pos: i32,
-    ends_heap: PosMinHeap,
+struct LineSolver<I: OverlayInt> {
+    pos: I,
+    ends_heap: PosMinHeap<I>,
 }
 
-impl LineSolver {
-    fn split(&mut self, segments: &[Segment], result: &mut Vec<Segment>) {
+impl<I: OverlayInt> LineSolver<I> {
+    fn split(&mut self, segments: &[Segment<I>], result: &mut Vec<Segment<I>>) {
         let split = if let Some(split) = fast_check(segments) {
             split
         } else {
@@ -87,7 +88,7 @@ impl LineSolver {
         }
 
         let mut head = Pos {
-            x: i32::MIN,
+            x: I::MIN,
             count: ShapeCountBoolean::empty(),
         };
 
@@ -113,13 +114,13 @@ impl LineSolver {
             });
         }
 
-        self.scan_heap_until(i32::MAX, &mut head, result);
+        self.scan_heap_until(I::MAX, &mut head, result);
 
         debug_assert!(!head.count.is_not_empty());
     }
 
     #[inline]
-    fn scan_heap_until(&mut self, max_x: i32, head: &mut Pos, result: &mut Vec<Segment>) {
+    fn scan_heap_until(&mut self, max_x: I, head: &mut Pos<I>, result: &mut Vec<Segment<I>>) {
         while !self.ends_heap.is_empty() && self.ends_heap.min_x() <= max_x {
             let e0 = self.ends_heap.pop();
 
@@ -137,7 +138,7 @@ impl LineSolver {
     }
 
     #[inline]
-    fn add_head(&self, head: &Pos, max_x: i32, result: &mut Vec<Segment>) {
+    fn add_head(&self, head: &Pos<I>, max_x: I, result: &mut Vec<Segment<I>>) {
         if head.count.is_not_empty() {
             if let Some(last) = result.last_mut()
                 && last.count == head.count
@@ -167,8 +168,8 @@ mod tests {
     use crate::partition::solver::LineSolver;
     use alloc::vec::Vec;
 
-    impl LineSolver {
-        fn test_split(&mut self, segments: &mut [Segment]) -> Vec<Segment> {
+    impl LineSolver<i32> {
+        fn test_split(&mut self, segments: &mut [Segment<i32>]) -> Vec<Segment<i32>> {
             segments.sort_unstable_by_key(|segment| segment.range.min);
             let mut result = Vec::new();
 

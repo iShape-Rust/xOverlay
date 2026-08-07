@@ -1,9 +1,10 @@
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::geom::range::LineRange;
+use i_float::int::number::int::IntNumber;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub(crate) struct Segment {
-    pub(crate) pos: i32,
-    pub(crate) range: LineRange,
+pub(crate) struct Segment<I: IntNumber> {
+    pub(crate) pos: I,
+    pub(crate) range: LineRange<I>,
     pub(crate) count: ShapeCountBoolean,
 }

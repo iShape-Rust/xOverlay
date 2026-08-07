@@ -1,11 +1,12 @@
 use crate::partition::pos::Pos;
 use alloc::vec::Vec;
+use i_float::int::number::int::IntNumber;
 
-pub(super) struct PosMinHeap {
-    data: Vec<Pos>,
+pub(super) struct PosMinHeap<I: IntNumber> {
+    data: Vec<Pos<I>>,
 }
 
-impl PosMinHeap {
+impl<I: IntNumber> PosMinHeap<I> {
     #[inline]
     pub(super) fn with_capacity(cap: usize) -> Self {
         Self {
@@ -24,11 +25,11 @@ impl PosMinHeap {
     }
 
     #[inline]
-    pub(super) fn min_x(&self) -> i32 {
+    pub(super) fn min_x(&self) -> I {
         self.data.first().unwrap().x
     }
 
-    pub(super) fn push(&mut self, item: Pos) {
+    pub(super) fn push(&mut self, item: Pos<I>) {
         let x = item.x;
         let last = self.data.len();
         self.data.push(item);
@@ -36,7 +37,7 @@ impl PosMinHeap {
     }
 
     /// Pops the smallest-x `Pos`
-    pub(super) fn pop(&mut self) -> Pos {
+    pub(super) fn pop(&mut self) -> Pos<I> {
         let n = self.data.len();
         debug_assert!(n != 0);
 
@@ -50,7 +51,7 @@ impl PosMinHeap {
     }
 
     #[inline]
-    fn sift_up(&mut self, mut i: usize, x: i32) {
+    fn sift_up(&mut self, mut i: usize, x: I) {
         while i > 0 {
             let j = (i - 1) / 2;
             let xp = unsafe { self.data.get_unchecked(j) }.x;
@@ -104,7 +105,7 @@ mod tests {
     use crate::definition::winding_count::ShapeCountBoolean;
     use alloc::vec;
 
-    fn make_pos(x: i32) -> Pos {
+    fn make_pos(x: i32) -> Pos<i32> {
         Pos {
             x,
             count: ShapeCountBoolean::default(),
@@ -113,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_0() {
-        let mut h = PosMinHeap::with_capacity(0);
+        let mut h = PosMinHeap::<i32>::with_capacity(0);
         assert!(h.is_empty());
 
         h.clear(); // should be no-op

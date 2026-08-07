@@ -1,3 +1,4 @@
+use crate::core::integer::OverlayInt;
 use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
 use crate::deg_90::column::anchor::Anchor;
@@ -10,23 +11,23 @@ use core::num::NonZeroU32;
 use core::slice::Iter;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct StackPoint {
-    pub(super) x: i32,
+pub(super) struct StackPoint<I: OverlayInt> {
+    pub(super) x: I,
     pub(super) node: Option<NonZeroU32>,
     pub(super) c0: ShapeCountBoolean,
     pub(super) c1: ShapeCountBoolean,
     pub(super) cb: ShapeCountBoolean,
 }
 
-pub(super) struct StackIter<'a> {
-    split_iter: SegmentSplitPointIter<'a>,
-    anchors_iter: Iter<'a, Anchor>,
-    split: Option<SegmentEnd>,
-    anchor: Option<&'a Anchor>,
+pub(super) struct StackIter<'a, I: OverlayInt> {
+    split_iter: SegmentSplitPointIter<'a, I>,
+    anchors_iter: Iter<'a, Anchor<I>>,
+    split: Option<SegmentEnd<I>>,
+    anchor: Option<&'a Anchor<I>>,
 }
 
-impl<'a> StackIter<'a> {
-    pub(super) fn new(segments: &'a [Segment], anchors: &'a [Anchor]) -> Self {
+impl<'a, I: OverlayInt> StackIter<'a, I> {
+    pub(super) fn new(segments: &'a [Segment<I>], anchors: &'a [Anchor<I>]) -> Self {
         let mut segments_iter = segments.split_point_iter();
         let split = segments_iter.next();
 
@@ -42,8 +43,8 @@ impl<'a> StackIter<'a> {
     }
 }
 
-impl<'a> Iterator for StackIter<'a> {
-    type Item = StackPoint;
+impl<I: OverlayInt> Iterator for StackIter<'_, I> {
+    type Item = StackPoint<I>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {

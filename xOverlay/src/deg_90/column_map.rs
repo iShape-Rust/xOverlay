@@ -1,4 +1,5 @@
 use crate::core::cpu_count::CPUCount;
+use crate::core::integer::OverlayInt;
 use crate::core::shape_type::ShapeType;
 use crate::core::winding::WindingCount;
 use crate::definition::winding_count::ShapeCountBoolean;
@@ -11,24 +12,24 @@ use alloc::vec;
 use alloc::vec::Vec;
 use i_shape::int::shape::IntContour;
 
-struct Mapper {
-    layout: ColumnLayout,
+struct Mapper<I: OverlayInt> {
+    layout: ColumnLayout<I>,
     parts: Vec<usize>,
 }
 
-pub(crate) struct Column {
-    pub(super) range: LineRange,
-    pub(super) segments: Vec<Segment>,
+pub(crate) struct Column<I: OverlayInt> {
+    pub(super) range: LineRange<I>,
+    pub(super) segments: Vec<Segment<I>>,
 }
 
-pub(crate) struct ColumnMap {
-    pub(crate) columns: Vec<Column>,
+pub(crate) struct ColumnMap<I: OverlayInt> {
+    pub(crate) columns: Vec<Column<I>>,
 }
 
-impl ColumnMap {
+impl<I: OverlayInt> ColumnMap<I> {
     pub(crate) fn with_subj_and_clip(
-        subj: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
+        subj: &[IntContour<I>],
+        clip: &[IntContour<I>],
         cpu_count: CPUCount,
         config: ColumnConfig90,
     ) -> Self {
@@ -50,27 +51,35 @@ impl ColumnMap {
     }
 
     fn calculate_layout(
-        subj: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
+        subj: &[IntContour<I>],
+        clip: &[IntContour<I>],
         cpu_count: CPUCount,
         config: ColumnConfig90,
-    ) -> ColumnLayout {
+    ) -> ColumnLayout<I> {
         let (subj_range, subj_count) = subj.x_range_and_count(cpu_count);
         let (clip_range, clip_count) = clip.x_range_and_count(cpu_count);
+
+        let segments_count = subj_count + clip_count;
+        if segments_count == 0 {
+            return ColumnLayout::with_segments_count(
+                0,
+                LineRange::with_min_max(I::ZERO, I::ZERO),
+                cpu_count,
+                config,
+            );
+        }
 
         let range = LineRange::with_min_max(
             subj_range.min.min(clip_range.min),
             subj_range.max.max(clip_range.max),
         );
-        let segments_count = subj_count + clip_count;
-
         ColumnLayout::with_segments_count(segments_count, range, cpu_count, config)
     }
 
     pub(super) fn with_segments(
-        segments: &[Segment],
+        segments: &[Segment<I>],
         max_segments_in_line: usize,
-        range: LineRange,
+        range: LineRange<I>,
         config: ColumnConfig90,
     ) -> Option<Self> {
         let layout = ColumnLayout::with_max_segments_in_line(max_segments_in_line, range, config)?;
@@ -89,14 +98,17 @@ impl ColumnMap {
     }
 
     #[inline]
-    fn pre_init_columns(&mut self, mapper: &Mapper) {
+    fn pre_init_columns(&mut self, mapper: &Mapper<I>) {
         let mut x0 = mapper.layout.range.min;
-        let s = mapper.layout.step() as i32;
 
         self.columns.reserve(mapper.parts.len());
 
-        for &hz in mapper.parts.iter() {
-            let x1 = x0 + s;
+        for (index, &hz) in mapper.parts.iter().enumerate() {
+            let x1 = if index + 1 == mapper.parts.len() {
+                mapper.layout.capped_left_border(index + 1)
+            } else {
+                mapper.layout.left_border(index + 1)
+            };
             let range = LineRange::with_min_max(x0, x1);
             x0 = x1;
             self.columns.push(Column {
@@ -108,9 +120,9 @@ impl ColumnMap {
 
     fn add_contours(
         &mut self,
-        contours: &[IntContour<i32>],
+        contours: &[IntContour<I>],
         shape_type: ShapeType,
-        layout: &ColumnLayout,
+        layout: &ColumnLayout<I>,
     ) {
         let (direct, invert) = ShapeCountBoolean::with_shape_type(shape_type);
 
@@ -170,7 +182,7 @@ impl ColumnMap {
         }
     }
 
-    fn add_segments(&mut self, segments: &[Segment], layout: &ColumnLayout) {
+    fn add_segments(&mut self, segments: &[Segment<I>], layout: &ColumnLayout<I>) {
         for s in segments.iter() {
             let i0 = layout.index(s.range.min);
             let i1 = layout.index_round_down(s.range.max);
@@ -203,8 +215,8 @@ impl ColumnMap {
 
     #[cfg(test)]
     pub(crate) fn with_columns_count(
-        subj: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
+        subj: &[IntContour<I>],
+        clip: &[IntContour<I>],
         count: usize,
     ) -> Self {
         assert!(count > 0, "column count must be greater than zero");
@@ -235,9 +247,9 @@ impl ColumnMap {
     }
 }
 
-impl Mapper {
+impl<I: OverlayInt> Mapper<I> {
     #[inline]
-    pub(super) fn new(layout: ColumnLayout) -> Self {
+    pub(super) fn new(layout: ColumnLayout<I>) -> Self {
         let n = layout.count;
         Self {
             layout,
@@ -245,7 +257,7 @@ impl Mapper {
         }
     }
 
-    fn add_contours(&mut self, contours: &[IntContour<i32>]) {
+    fn add_contours(&mut self, contours: &[IntContour<I>]) {
         for contour in contours {
             if contour.len() >= 4 {
                 self.add_contour(contour);
@@ -254,7 +266,7 @@ impl Mapper {
     }
 
     #[inline]
-    fn add_contour(&mut self, contour: &IntContour<i32>) {
+    fn add_contour(&mut self, contour: &IntContour<I>) {
         let mut p0 = *contour.last().unwrap();
         for &pi in contour.iter() {
             if pi.x == p0.x {
@@ -279,7 +291,7 @@ impl Mapper {
         }
     }
 
-    pub(super) fn add_segments(&mut self, segments: &[Segment]) {
+    pub(super) fn add_segments(&mut self, segments: &[Segment<I>]) {
         for s in segments.iter() {
             let i0 = self.layout.index(s.range.min);
             let i1 = self.layout.index_round_down(s.range.max);

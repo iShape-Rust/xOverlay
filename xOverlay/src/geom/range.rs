@@ -1,12 +1,14 @@
+use i_float::int::number::int::IntNumber;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub(crate) struct LineRange {
-    pub(crate) min: i32,
-    pub(crate) max: i32,
+pub(crate) struct LineRange<I: IntNumber> {
+    pub(crate) min: I,
+    pub(crate) max: I,
 }
 
-impl LineRange {
+impl<I: IntNumber> LineRange<I> {
     #[inline(always)]
-    pub(crate) fn with_min_max(min: i32, max: i32) -> Self {
+    pub(crate) fn with_min_max(min: I, max: I) -> Self {
         Self { min, max }
     }
 }

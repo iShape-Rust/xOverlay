@@ -1,4 +1,5 @@
 use crate::core::fill_rule::FillRule;
+use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column::build::ScanBuffer;
 use crate::deg_90::column::extract::NodeVisitor;
@@ -6,26 +7,27 @@ use crate::deg_90::column::graph::{ColumnGraph, Node};
 use crate::deg_90::column_map::Column;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
+use i_float::int::number::wide_int::WideIntNumber;
 use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key_cmp::OneKeyAndCmpSort;
 use i_shape::int::area::Area;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 #[derive(Default)]
-pub(in crate::deg_90) struct SolverBuffer {
-    scan: ScanBuffer,
-    nodes: Vec<Node>,
+pub(in crate::deg_90) struct SolverBuffer<I: OverlayInt> {
+    scan: ScanBuffer<I>,
+    nodes: Vec<Node<I>>,
     visited: Vec<NodeVisitor>,
-    points: Vec<IntPoint>,
+    points: Vec<IntPoint<I>>,
 }
 
-impl Column {
+impl<I: OverlayInt> Column<I> {
     pub(in crate::deg_90) fn extract_contours(
         &self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-        buffer: &mut SolverBuffer,
-    ) -> Vec<IntContour<i32>> {
+        buffer: &mut SolverBuffer<I>,
+    ) -> Vec<IntContour<I>> {
         buffer.scan.reserve(self.segments.len());
         let nodes = core::mem::take(&mut buffer.nodes);
         let graph = ColumnGraph::with_nodes(self, fill_rule, overlay_rule, &mut buffer.scan, nodes);
@@ -37,7 +39,10 @@ impl Column {
     }
 }
 
-fn normalize_contour_directions(contours: &mut [IntContour<i32>], range: LineRange) {
+fn normalize_contour_directions<I: OverlayInt>(
+    contours: &mut [IntContour<I>],
+    range: LineRange<I>,
+) {
     let mut reverse = alloc::vec![None; contours.len()];
     collect_reversed_contours(contours, range.min, false, &mut reverse);
     collect_reversed_contours(contours, range.max, true, &mut reverse);
@@ -50,16 +55,16 @@ fn normalize_contour_directions(contours: &mut [IntContour<i32>], range: LineRan
 }
 
 #[derive(Clone, Copy, Debug)]
-struct BorderNode {
-    y: i32,
+struct BorderNode<I: OverlayInt> {
+    y: I,
     ccw_dir: bool,
     contour_index: usize,
     vertex_index_in_contour: usize,
 }
 
-fn collect_reversed_contours(
-    contours: &[IntContour<i32>],
-    border_x: i32,
+fn collect_reversed_contours<I: OverlayInt>(
+    contours: &[IntContour<I>],
+    border_x: I,
     outer_edge_up: bool,
     reverse: &mut [Option<bool>],
 ) {
@@ -109,13 +114,13 @@ fn collect_reversed_contours(
     }
 }
 
-struct BorderNodes {
-    entries: Vec<BorderNode>,
+struct BorderNodes<I: OverlayInt> {
+    entries: Vec<BorderNode<I>>,
     #[cfg(debug_assertions)]
-    exits: Vec<BorderNode>,
+    exits: Vec<BorderNode<I>>,
 }
 
-fn collect_border_nodes(contours: &[IntContour<i32>], border_x: i32) -> BorderNodes {
+fn collect_border_nodes<I: OverlayInt>(contours: &[IntContour<I>], border_x: I) -> BorderNodes<I> {
     let mut result = BorderNodes {
         entries: Vec::new(),
         #[cfg(debug_assertions)]
@@ -168,7 +173,7 @@ fn collect_border_nodes(contours: &[IntContour<i32>], border_x: i32) -> BorderNo
 }
 
 #[inline(always)]
-fn border_pair_y(contours: &[IntContour<i32>], node: BorderNode, border_x: i32) -> i32 {
+fn border_pair_y<I: OverlayInt>(contours: &[IntContour<I>], node: BorderNode<I>, border_x: I) -> I {
     let contour = &contours[node.contour_index];
     let n = contour.len();
     let prev = contour[(node.vertex_index_in_contour + n - 1) % n];
@@ -176,20 +181,22 @@ fn border_pair_y(contours: &[IntContour<i32>], node: BorderNode, border_x: i32) 
         prev.y
     } else {
         let next = contour[(node.vertex_index_in_contour + 1) % n];
-        debug_assert_eq!(next.x, border_x);
+        debug_assert!(next.x == border_x);
         next.y
     }
 }
 
-pub(in crate::deg_90) fn rebuild_shapes(contours: Vec<IntContour<i32>>) -> IntShapes<i32> {
+pub(in crate::deg_90) fn rebuild_shapes<I: OverlayInt>(
+    contours: Vec<IntContour<I>>,
+) -> IntShapes<I> {
     let mut shapes = Vec::new();
     let mut holes = Vec::new();
 
     for contour in contours {
         let area = contour.area_two();
-        if area > 0 {
+        if area > I::Wide::ZERO {
             shapes.push(alloc::vec![contour]);
-        } else if area < 0 {
+        } else if area < I::Wide::ZERO {
             holes.push(contour);
         }
     }

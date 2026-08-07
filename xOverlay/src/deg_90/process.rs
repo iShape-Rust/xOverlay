@@ -1,4 +1,5 @@
 use crate::core::fill_rule::FillRule;
+use crate::core::integer::OverlayInt;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column::SolverBuffer;
@@ -14,12 +15,12 @@ use i_shape::int::shape::{IntContour, IntShapes};
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-impl Overlay {
+impl<I: OverlayInt> Overlay<I> {
     pub(crate) fn process_overlay(
         self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-    ) -> IntShapes<i32> {
+    ) -> IntShapes<I> {
         #[cfg(feature = "allow_multithreading")]
         {
             if self.cpu_count.is_parallel() {
@@ -36,12 +37,12 @@ impl Overlay {
         self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-    ) -> Vec<IntContour<i32>> {
+    ) -> Vec<IntContour<I>> {
         self.process_sub_graph(fill_rule, overlay_rule)
             .into_contours()
     }
 
-    fn process_sub_graph(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
+    fn process_sub_graph(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph<I> {
         #[cfg(feature = "allow_multithreading")]
         {
             if self.cpu_count.is_parallel() {
@@ -52,7 +53,7 @@ impl Overlay {
         self.serial_process(fill_rule, overlay_rule)
     }
 
-    fn serial_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
+    fn serial_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph<I> {
         let config = self.options.columns_config;
         let mut buffer = SolverBuffer::default();
         let sub_graphs: Vec<_> = self
@@ -65,7 +66,7 @@ impl Overlay {
     }
 
     #[cfg(feature = "allow_multithreading")]
-    fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph {
+    fn parallel_process(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> SubGraph<I> {
         let config = self.options.columns_config;
         let sub_graphs: Vec<_> = self
             .columns
@@ -79,14 +80,14 @@ impl Overlay {
     }
 }
 
-impl Column {
+impl<I: OverlayInt> Column<I> {
     fn process(
         mut self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
         config: ColumnConfig90,
-        buffer: &mut SolverBuffer,
-    ) -> SubGraph {
+        buffer: &mut SolverBuffer<I>,
+    ) -> SubGraph<I> {
         if let Some(columns) = self.partition(config) {
             let sub_graphs: Vec<_> = columns
                 .into_iter()
@@ -98,7 +99,7 @@ impl Column {
         }
     }
 
-    fn partition(&mut self, config: ColumnConfig90) -> Option<Vec<Column>> {
+    fn partition(&mut self, config: ColumnConfig90) -> Option<Vec<Column<I>>> {
         let max_segments_in_line = self.segments.partition();
         let map =
             ColumnMap::with_segments(&self.segments, max_segments_in_line, self.range, config)?;
@@ -114,7 +115,7 @@ mod tests {
     use crate::deg_90::config::ColumnConfig90;
     use crate::deg_90::sub_graph::SubGraph;
 
-    impl Column {
+    impl Column<i32> {
         pub(crate) fn test_partition(&mut self, config: ColumnConfig90) {
             let result = self.partition(config);
             debug_assert!(result.is_none());
@@ -125,8 +126,8 @@ mod tests {
             fill_rule: FillRule,
             overlay_rule: OverlayRule,
             config: ColumnConfig90,
-            buffer: &mut SolverBuffer,
-        ) -> SubGraph {
+            buffer: &mut SolverBuffer<i32>,
+        ) -> SubGraph<i32> {
             self.process(fill_rule, overlay_rule, config, buffer)
         }
     }

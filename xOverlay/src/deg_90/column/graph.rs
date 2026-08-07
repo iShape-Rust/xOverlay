@@ -1,14 +1,15 @@
+use crate::core::integer::OverlayInt;
 use crate::deg_90::column::link::Link;
 use alloc::vec::Vec;
 use i_float::int::point::IntPoint;
 
-pub(super) struct Node {
-    pub(super) point: IntPoint,
+pub(super) struct Node<I: OverlayInt> {
+    pub(super) point: IntPoint<I>,
     pub(super) links: [Link; 4],
 }
 
-pub(super) struct ColumnGraph {
-    pub(super) nodes: Vec<Node>,
+pub(super) struct ColumnGraph<I: OverlayInt> {
+    pub(super) nodes: Vec<Node<I>>,
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
+use crate::core::integer::OverlayInt;
 use crate::deg_90::column::graph::ColumnGraph;
 use crate::geom::range::LineRange;
 use alloc::vec;
 use alloc::vec::Vec;
+use i_float::int::number::wide_int::WideIntNumber;
 use i_float::int::point::IntPoint;
 use i_key_sort::sort::one_key::OneKeySort;
 use i_key_sort::sort::two_keys::TwoKeysSort;
@@ -11,12 +13,12 @@ use i_shape::int::shape::{IntContour, IntShapes};
 
 const SWEEP_MIN_ANCHORS_PER_Y: usize = 256;
 
-pub(in crate::deg_90) struct BaseShapesInfo {
-    edges: Vec<BaseShapeEdge>,
+pub(in crate::deg_90) struct BaseShapesInfo<I: OverlayInt> {
+    edges: Vec<BaseShapeEdge<I>>,
 }
 
-impl BaseShapesInfo {
-    fn with_shapes(shapes: &IntShapes<i32>) -> Self {
+impl<I: OverlayInt> BaseShapesInfo<I> {
+    fn with_shapes(shapes: &IntShapes<I>) -> Self {
         let mut result = Self { edges: Vec::new() };
         for (local_index, shape) in shapes.iter().enumerate() {
             for contour in shape {
@@ -27,15 +29,15 @@ impl BaseShapesInfo {
     }
 }
 
-pub(in crate::deg_90) struct BaseHole {
-    pub(in crate::deg_90) contour: IntContour<i32>,
+pub(in crate::deg_90) struct BaseHole<I: OverlayInt> {
+    pub(in crate::deg_90) contour: IntContour<I>,
     pub(in crate::deg_90) shape_index: usize,
 }
 
 #[derive(Clone, Copy)]
-struct BaseShapeEdge {
-    y: i32,
-    line_range: LineRange,
+struct BaseShapeEdge<I: OverlayInt> {
+    y: I,
+    line_range: LineRange<I>,
     shape_index: usize,
 }
 
@@ -53,34 +55,34 @@ enum LocalEdgeTarget {
 }
 
 #[derive(Clone, Copy)]
-struct LocalEdge {
-    y: i32,
-    line_range: LineRange,
+struct LocalEdge<I: OverlayInt> {
+    y: I,
+    line_range: LineRange<I>,
     target: LocalEdgeTarget,
 }
 
-pub(in crate::deg_90) fn build_base_shapes(
-    contours: Vec<IntContour<i32>>,
-) -> (IntShapes<i32>, BaseShapesInfo) {
+pub(in crate::deg_90) fn build_base_shapes<I: OverlayInt>(
+    contours: Vec<IntContour<I>>,
+) -> (IntShapes<I>, BaseShapesInfo<I>) {
     let shapes = super::contour::rebuild_shapes(contours);
     let info = BaseShapesInfo::with_shapes(&shapes);
 
     (shapes, info)
 }
 
-pub(in crate::deg_90) fn build_shapes(
-    contours: Vec<IntContour<i32>>,
-    x_range: LineRange,
-    base: &BaseShapesInfo,
-) -> (IntShapes<i32>, Vec<BaseHole>) {
+pub(in crate::deg_90) fn build_shapes<I: OverlayInt>(
+    contours: Vec<IntContour<I>>,
+    x_range: LineRange<I>,
+    base: &BaseShapesInfo<I>,
+) -> (IntShapes<I>, Vec<BaseHole<I>>) {
     let mut shapes = Vec::new();
     let mut holes = Vec::new();
 
     for contour in contours {
         let area = contour.area_two();
-        if area > 0 {
+        if area > I::Wide::ZERO {
             shapes.push(vec![contour]);
-        } else if area < 0 {
+        } else if area < I::Wide::ZERO {
             holes.push(contour);
         }
     }
@@ -139,14 +141,14 @@ pub(in crate::deg_90) fn build_shapes(
 }
 
 #[inline]
-fn ranges_overlap(a: LineRange, b: LineRange) -> bool {
+fn ranges_overlap<I: OverlayInt>(a: LineRange<I>, b: LineRange<I>) -> bool {
     a.min <= b.max && b.min <= a.max
 }
 
-fn append_base_shape_edges(
-    contour: &IntContour<i32>,
+fn append_base_shape_edges<I: OverlayInt>(
+    contour: &IntContour<I>,
     shape_index: usize,
-    edges: &mut Vec<BaseShapeEdge>,
+    edges: &mut Vec<BaseShapeEdge<I>>,
 ) {
     let mut a = contour[contour.len() - 1];
     for &b in contour {
@@ -161,10 +163,10 @@ fn append_base_shape_edges(
     }
 }
 
-fn append_local_edges(
-    contour: &IntContour<i32>,
+fn append_local_edges<I: OverlayInt>(
+    contour: &IntContour<I>,
     target: LocalEdgeTarget,
-    edges: &mut Vec<LocalEdge>,
+    edges: &mut Vec<LocalEdge<I>>,
 ) {
     let mut a = contour[contour.len() - 1];
     for &b in contour {
@@ -179,12 +181,12 @@ fn append_local_edges(
     }
 }
 
-trait FirstLocalBottom {
-    fn first_under(&self, point: IntPoint) -> &LocalEdge;
+trait FirstLocalBottom<I: OverlayInt> {
+    fn first_under(&self, point: IntPoint<I>) -> &LocalEdge<I>;
 }
 
-impl FirstLocalBottom for [LocalEdge] {
-    fn first_under(&self, point: IntPoint) -> &LocalEdge {
+impl<I: OverlayInt> FirstLocalBottom<I> for [LocalEdge<I>] {
+    fn first_under(&self, point: IntPoint<I>) -> &LocalEdge<I> {
         let start = match self.binary_search_by_key(&point.y, |edge| edge.y) {
             Ok(mut index) => {
                 while index + 1 < self.len() && self[index + 1].y == point.y {
@@ -195,9 +197,10 @@ impl FirstLocalBottom for [LocalEdge] {
             Err(index) => {
                 assert!(
                     index > 0,
-                    "edge under hole anchor not found: point={point:?}, edges={}, first_y={:?}",
+                    "edge under hole anchor not found: point=({}, {}), edges={}",
+                    point.x,
+                    point.y,
                     self.len(),
-                    self.first().map(|edge| edge.y),
                 );
                 index - 1
             }
@@ -213,8 +216,8 @@ impl FirstLocalBottom for [LocalEdge] {
     }
 }
 
-impl ColumnGraph {
-    pub(super) fn join_holes(holes: Vec<IntContour<i32>>, shapes: &mut IntShapes<i32>) {
+impl<I: OverlayInt> ColumnGraph<I> {
+    pub(super) fn join_holes(holes: Vec<IntContour<I>>, shapes: &mut IntShapes<I>) {
         if holes.is_empty() {
             return;
         }
@@ -249,11 +252,11 @@ impl ColumnGraph {
         }
     }
 
-    fn direct_join_holes(holes: Vec<IntContour<i32>>, shapes: &mut IntShapes<i32>) {
+    fn direct_join_holes(holes: Vec<IntContour<I>>, shapes: &mut IntShapes<I>) {
         for hole in holes.into_iter() {
             let p = hole.bottom_anchor();
 
-            let mut best = i32::MIN;
+            let mut best = I::MIN;
             let mut best_shape_index = usize::MAX;
             for (index, shape) in shapes.iter_mut().enumerate() {
                 if shape[0].contains_point(p) && shape[0].best_edge(p, &mut best) {
@@ -266,16 +269,16 @@ impl ColumnGraph {
     }
 
     #[cfg(test)]
-    fn sweep_join_holes(capacity: usize, holes: Vec<IntContour<i32>>, shapes: &mut IntShapes<i32>) {
+    fn sweep_join_holes(capacity: usize, holes: Vec<IntContour<I>>, shapes: &mut IntShapes<I>) {
         let anchors_by_y = hole_anchors_by_y(&holes);
         Self::sweep_join_holes_with_anchors(capacity, holes, anchors_by_y, shapes);
     }
 
     fn sweep_join_holes_with_anchors(
         capacity: usize,
-        holes: Vec<IntContour<i32>>,
-        anchors_by_y: Vec<HoleAnchor>,
-        shapes: &mut IntShapes<i32>,
+        holes: Vec<IntContour<I>>,
+        anchors_by_y: Vec<HoleAnchor<I>>,
+        shapes: &mut IntShapes<I>,
     ) {
         let mut anchors_by_x = anchors_by_y.clone();
         anchors_by_x.sort_by_two_keys(false, |a| a.point.x, |a| a.point.y);
@@ -307,12 +310,12 @@ impl ColumnGraph {
             let edge_y = if edge_end > 0 {
                 edges[edge_end - 1].y
             } else {
-                i32::MIN
+                I::MIN
             };
             let anchor_y = if anchor_end > 0 {
                 anchors_by_y[anchor_end - 1].point.y
             } else {
-                i32::MIN
+                I::MIN
             };
             let y = edge_y.max(anchor_y);
 
@@ -357,16 +360,16 @@ impl ColumnGraph {
     }
 
     #[cfg(test)]
-    fn sort_join_holes(capacity: usize, holes: Vec<IntContour<i32>>, shapes: &mut IntShapes<i32>) {
+    fn sort_join_holes(capacity: usize, holes: Vec<IntContour<I>>, shapes: &mut IntShapes<I>) {
         let anchors_by_y = hole_anchors_by_y(&holes);
         Self::sort_join_holes_with_anchors(capacity, holes, anchors_by_y, shapes);
     }
 
     fn sort_join_holes_with_anchors(
         capacity: usize,
-        holes: Vec<IntContour<i32>>,
-        anchors_by_y: Vec<HoleAnchor>,
-        shapes: &mut IntShapes<i32>,
+        holes: Vec<IntContour<I>>,
+        anchors_by_y: Vec<HoleAnchor<I>>,
+        shapes: &mut IntShapes<I>,
     ) {
         let holes_capacity = holes.iter().map(|hole| hole.len() / 4).sum::<usize>();
         let mut edges = Vec::with_capacity(capacity + holes_capacity);
@@ -424,12 +427,12 @@ impl ColumnGraph {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct HoleAnchor {
-    point: IntPoint,
+struct HoleAnchor<I: OverlayInt> {
+    point: IntPoint<I>,
     hole_index: usize,
 }
 
-fn hole_anchors_by_y(holes: &[IntContour<i32>]) -> Vec<HoleAnchor> {
+fn hole_anchors_by_y<I: OverlayInt>(holes: &[IntContour<I>]) -> Vec<HoleAnchor<I>> {
     let mut anchors: Vec<_> = holes
         .iter()
         .enumerate()
@@ -442,7 +445,7 @@ fn hole_anchors_by_y(holes: &[IntContour<i32>]) -> Vec<HoleAnchor> {
     anchors
 }
 
-fn prefer_sweep(anchors_by_y: &[HoleAnchor]) -> bool {
+fn prefer_sweep<I: OverlayInt>(anchors_by_y: &[HoleAnchor<I>]) -> bool {
     let mut max_count = 0;
     let mut start = 0;
 
@@ -467,14 +470,18 @@ enum SweepTarget {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct SweepEdge {
-    y: i32,
-    x_min: i32,
-    x_max: i32,
+struct SweepEdge<I: OverlayInt> {
+    y: I,
+    x_min: I,
+    x_max: I,
     target: SweepTarget,
 }
 
-fn append_sweep_edges(path: &IntContour<i32>, target: SweepTarget, edges: &mut Vec<SweepEdge>) {
+fn append_sweep_edges<I: OverlayInt>(
+    path: &IntContour<I>,
+    target: SweepTarget,
+    edges: &mut Vec<SweepEdge<I>>,
+) {
     let mut a = path[path.len() - 1];
     for &b in path {
         if a.x < b.x {
@@ -575,13 +582,13 @@ impl ActiveAnchors {
     }
 }
 
-trait BottomAnchor {
-    fn bottom_anchor(&self) -> IntPoint;
+trait BottomAnchor<I: OverlayInt> {
+    fn bottom_anchor(&self) -> IntPoint<I>;
 }
 
-impl BottomAnchor for IntContour<i32> {
+impl<I: OverlayInt> BottomAnchor<I> for IntContour<I> {
     #[inline]
-    fn bottom_anchor(&self) -> IntPoint {
+    fn bottom_anchor(&self) -> IntPoint<I> {
         let mut anchor = self[0];
         for &p in self.iter().skip(1) {
             if p.y < anchor.y {
@@ -593,20 +600,20 @@ impl BottomAnchor for IntContour<i32> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ShapeEdge {
-    y: i32,
-    line_range: LineRange,
+struct ShapeEdge<I: OverlayInt> {
+    y: I,
+    line_range: LineRange<I>,
     index: u32,
     is_shape: bool,
 }
 
-trait BestEdge {
-    fn best_edge(&self, p: IntPoint, best: &mut i32) -> bool;
+trait BestEdge<I: OverlayInt> {
+    fn best_edge(&self, p: IntPoint<I>, best: &mut I) -> bool;
 }
 
-impl BestEdge for IntContour<i32> {
-    fn best_edge(&self, p: IntPoint, best: &mut i32) -> bool {
-        debug_assert!(self.area_two() > 0);
+impl<I: OverlayInt> BestEdge<I> for IntContour<I> {
+    fn best_edge(&self, p: IntPoint<I>, best: &mut I) -> bool {
+        debug_assert!(self.area_two() > I::Wide::ZERO);
         let mut result = false;
         let mut a = *self.last().unwrap();
         for &b in self.iter() {
@@ -625,13 +632,13 @@ impl BestEdge for IntContour<i32> {
     }
 }
 
-trait FirstBottom {
-    fn first_under(&self, p: IntPoint) -> &ShapeEdge;
+trait FirstBottom<I: OverlayInt> {
+    fn first_under(&self, p: IntPoint<I>) -> &ShapeEdge<I>;
 }
 
-impl FirstBottom for [ShapeEdge] {
+impl<I: OverlayInt> FirstBottom<I> for [ShapeEdge<I>] {
     #[inline]
-    fn first_under(&self, p: IntPoint) -> &ShapeEdge {
+    fn first_under(&self, p: IntPoint<I>) -> &ShapeEdge<I> {
         // edges must be sorted by e.y
 
         let start = match self.binary_search_by_key(&p.y, |e| e.y) {

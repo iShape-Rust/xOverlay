@@ -1,4 +1,5 @@
 use crate::core::fill_rule::FillRule;
+use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
 use crate::core::winding::WindingCount;
 use crate::definition::fill::{
@@ -21,15 +22,15 @@ use core::mem::swap;
 use core::num::NonZeroU32;
 use i_float::int::point::IntPoint;
 
-impl ColumnGraph {
+impl<I: OverlayInt> ColumnGraph<I> {
     #[cfg(test)]
     #[rustfmt::skip]
-    pub(crate) fn new(column: &Column, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer) -> Self {
+    pub(crate) fn new(column: &Column<I>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I>) -> Self {
         Self::with_nodes(column, fill_rule, overlay_rule, buffer, Vec::new())
     }
 
     #[rustfmt::skip]
-    pub(crate) fn with_nodes(column: &Column, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer, nodes: Vec<Node>) -> Self {
+    pub(crate) fn with_nodes(column: &Column<I>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I>, nodes: Vec<Node<I>>) -> Self {
         match fill_rule {
             FillRule::EvenOdd => Self::with_fill_strategy::<EvenOddStrategy>(column, overlay_rule, buffer, nodes),
             FillRule::NonZero => Self::with_fill_strategy::<NonZeroStrategy>(column, overlay_rule, buffer, nodes),
@@ -40,10 +41,10 @@ impl ColumnGraph {
 
     #[rustfmt::skip]
     fn with_fill_strategy<Fill: FillStrategy<ShapeCountBoolean>>(
-        column: &Column,
+        column: &Column<I>,
         overlay_rule: OverlayRule,
-        buffer: &mut ScanBuffer,
-        nodes: Vec<Node>,
+        buffer: &mut ScanBuffer<I>,
+        nodes: Vec<Node<I>>,
     ) -> Self {
         match overlay_rule {
             OverlayRule::Subject => Self::with_fill_and_filter_strategy::<Fill, SubjectFilter>(column, buffer, nodes),
@@ -57,9 +58,9 @@ impl ColumnGraph {
     }
 
     fn with_fill_and_filter_strategy<Fill, Filter>(
-        column: &Column,
-        buffer: &mut ScanBuffer,
-        mut nodes: Vec<Node>,
+        column: &Column<I>,
+        buffer: &mut ScanBuffer<I>,
+        mut nodes: Vec<Node<I>>,
     ) -> Self
     where
         Fill: FillStrategy<ShapeCountBoolean>,
@@ -87,9 +88,9 @@ impl ColumnGraph {
     }
 }
 
-impl Node {
+impl<I: OverlayInt> Node<I> {
     #[inline(always)]
-    fn new(point: IntPoint) -> Self {
+    fn new(point: IntPoint<I>) -> Self {
         Self {
             point,
             links: [Link::empty(); 4],
@@ -108,12 +109,12 @@ struct NodeCursor {
 }
 
 #[derive(Default)]
-pub(crate) struct ScanBuffer {
-    active: Vec<Anchor>,
-    buffer: Vec<Anchor>,
+pub(crate) struct ScanBuffer<I: OverlayInt> {
+    active: Vec<Anchor<I>>,
+    buffer: Vec<Anchor<I>>,
 }
 
-impl ScanBuffer {
+impl<I: OverlayInt> ScanBuffer<I> {
     #[cfg(test)]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -131,7 +132,7 @@ impl ScanBuffer {
         }
     }
 
-    fn add_segments<Fill, Filter>(&mut self, segments: &[Segment], nodes: &mut Vec<Node>)
+    fn add_segments<Fill, Filter>(&mut self, segments: &[Segment<I>], nodes: &mut Vec<Node<I>>)
     where
         Fill: FillStrategy<ShapeCountBoolean>,
         Filter: FilterStrategy,
@@ -230,15 +231,15 @@ impl ScanBuffer {
         self.buffer.clear();
     }
 }
-trait AnchorBuffer {
-    fn push_and_merge(&mut self, anchor: Anchor);
+trait AnchorBuffer<I: OverlayInt> {
+    fn push_and_merge(&mut self, anchor: Anchor<I>);
 
     fn remove_empty_anchor(&mut self);
 }
 
-impl AnchorBuffer for Vec<Anchor> {
+impl<I: OverlayInt> AnchorBuffer<I> for Vec<Anchor<I>> {
     #[inline(always)]
-    fn push_and_merge(&mut self, anchor: Anchor) {
+    fn push_and_merge(&mut self, anchor: Anchor<I>) {
         if let Some(last) = self.last_mut()
             && last.count.left == anchor.count.left
         {
@@ -937,7 +938,7 @@ mod tests {
     fn contour_to_subject_s_fills(
         contours: &IntShape<i32>,
         config: ColumnConfig90,
-        buffer: &mut ScanBuffer,
+        buffer: &mut ScanBuffer<i32>,
     ) -> Vec<SegFill> {
         let mut map = ColumnMap::with_subj_and_clip(contours, &[], CPUCount::Single, config);
         buffer.clear();
@@ -954,7 +955,7 @@ mod tests {
         s_fills
     }
 
-    impl ColumnGraph {
+    impl ColumnGraph<i32> {
         fn hz_edges(&self) -> Vec<SegFill> {
             let mut visitors = self.visitors();
             let mut edges = Vec::with_capacity(visitors.len());

@@ -1,3 +1,4 @@
+use crate::core::integer::OverlayInt;
 use crate::deg_90::sub_graph::SubGraph;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
@@ -8,17 +9,17 @@ use i_shape::int::shape::IntContour;
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
-pub(super) trait Merge {
-    fn merge(self) -> SubGraph;
+pub(super) trait Merge<I: OverlayInt> {
+    fn merge(self) -> SubGraph<I>;
 }
 
 #[cfg(feature = "allow_multithreading")]
-pub(super) trait ParallelMerge {
-    fn parallel_merge(self) -> SubGraph;
+pub(super) trait ParallelMerge<I: OverlayInt> {
+    fn parallel_merge(self) -> SubGraph<I>;
 }
 
-impl Merge for Vec<SubGraph> {
-    fn merge(self) -> SubGraph {
+impl<I: OverlayInt> Merge<I> for Vec<SubGraph<I>> {
+    fn merge(self) -> SubGraph<I> {
         let mut iter = self.into_iter();
         let Some(mut result) = iter.next() else {
             return SubGraph {
@@ -36,8 +37,8 @@ impl Merge for Vec<SubGraph> {
 }
 
 #[cfg(feature = "allow_multithreading")]
-impl ParallelMerge for Vec<SubGraph> {
-    fn parallel_merge(self) -> SubGraph {
+impl<I: OverlayInt> ParallelMerge<I> for Vec<SubGraph<I>> {
+    fn parallel_merge(self) -> SubGraph<I> {
         let mut groups = self;
 
         while groups.len() > 1 {
@@ -48,9 +49,9 @@ impl ParallelMerge for Vec<SubGraph> {
     }
 }
 
-fn merge_pair(left: &mut SubGraph, right: SubGraph) {
-    debug_assert_eq!(
-        left.range.max, right.range.min,
+fn merge_pair<I: OverlayInt>(left: &mut SubGraph<I>, right: SubGraph<I>) {
+    debug_assert!(
+        left.range.max == right.range.min,
         "only neighboring column groups can be merged"
     );
 
@@ -78,18 +79,18 @@ enum Side {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct BorderNode {
-    y: i32,
+struct BorderNode<I: OverlayInt> {
+    y: I,
     contour_index: usize,
     position: usize,
     side: Side,
 }
 
-fn merge_border_contours(
-    mut left: Vec<IntContour<i32>>,
-    mut right: Vec<IntContour<i32>>,
-    border_x: i32,
-    merged: &mut Vec<IntContour<i32>>,
+fn merge_border_contours<I: OverlayInt>(
+    mut left: Vec<IntContour<I>>,
+    mut right: Vec<IntContour<I>>,
+    border_x: I,
+    merged: &mut Vec<IntContour<I>>,
 ) {
     let left_count = left.len();
     left.append(&mut right);
@@ -231,17 +232,21 @@ fn merge_border_contours(
 }
 
 #[inline(always)]
-fn is_arc_start(node: &BorderNode, contours: &[IntContour<i32>], border_x: i32) -> bool {
+fn is_arc_start<I: OverlayInt>(
+    node: &BorderNode<I>,
+    contours: &[IntContour<I>],
+    border_x: I,
+) -> bool {
     let contour = &contours[node.contour_index];
     contour[(node.position + 1) % contour.len()].x != border_x
 }
 
 #[inline(always)]
-fn append_contour_arc(
-    contour: &IntContour<i32>,
+fn append_contour_arc<I: OverlayInt>(
+    contour: &IntContour<I>,
     start: usize,
     end: usize,
-    result: &mut IntContour<i32>,
+    result: &mut IntContour<I>,
 ) {
     debug_assert!(is_simple_arc(contour, start, end));
     debug_assert_ne!(start, end, "a contour arc must contain an edge");
@@ -267,7 +272,7 @@ fn append_contour_arc(
     }
 }
 
-fn close_contour(contour: &mut IntContour<i32>) {
+fn close_contour<I: OverlayInt>(contour: &mut IntContour<I>) {
     while contour.len() > 1 && contour.first() == contour.last() {
         contour.pop();
     }
@@ -288,7 +293,7 @@ fn close_contour(contour: &mut IntContour<i32>) {
 }
 
 #[cfg(debug_assertions)]
-fn is_simple_arc(contour: &[IntPoint], start: usize, end: usize) -> bool {
+fn is_simple_arc<I: OverlayInt>(contour: &[IntPoint<I>], start: usize, end: usize) -> bool {
     let count = contour.len();
     let arc_len = if start <= end {
         end - start + 1
@@ -318,12 +323,12 @@ fn is_simple_arc(contour: &[IntPoint], start: usize, end: usize) -> bool {
 
 #[cfg(not(debug_assertions))]
 #[inline(always)]
-fn is_simple_arc(_: &[IntPoint], _: usize, _: usize) -> bool {
+fn is_simple_arc<I: OverlayInt>(_: &[IntPoint<I>], _: usize, _: usize) -> bool {
     true
 }
 
 #[cfg(debug_assertions)]
-fn is_simple_contour(contour: &[IntPoint]) -> bool {
+fn is_simple_contour<I: OverlayInt>(contour: &[IntPoint<I>]) -> bool {
     let count = contour.len();
     if count < 3 {
         return true;
@@ -343,12 +348,12 @@ fn is_simple_contour(contour: &[IntPoint]) -> bool {
 
 #[cfg(not(debug_assertions))]
 #[inline(always)]
-fn is_simple_contour(_: &[IntPoint]) -> bool {
+fn is_simple_contour<I: OverlayInt>(_: &[IntPoint<I>]) -> bool {
     true
 }
 
 #[inline(always)]
-fn is_collinear(a: IntPoint, b: IntPoint, c: IntPoint) -> bool {
+fn is_collinear<I: OverlayInt>(a: IntPoint<I>, b: IntPoint<I>, c: IntPoint<I>) -> bool {
     (a.x == b.x && b.x == c.x) || (a.y == b.y && b.y == c.y)
 }
 
@@ -407,6 +412,36 @@ mod tests {
             graph.chunks.middle[0].x_range,
             LineRange::with_min_max(0, 10),
         );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn i64_multi_column_overlay_rebuilds_hole() {
+        const BASE: i64 = 5_000_000_000;
+        let subject = vec![vec![
+            IntPoint::new(BASE, BASE),
+            IntPoint::new(BASE + 100, BASE),
+            IntPoint::new(BASE + 100, BASE + 100),
+            IntPoint::new(BASE, BASE + 100),
+        ]];
+        let clip = vec![vec![
+            IntPoint::new(BASE + 20, BASE + 20),
+            IntPoint::new(BASE + 80, BASE + 20),
+            IntPoint::new(BASE + 80, BASE + 80),
+            IntPoint::new(BASE + 20, BASE + 80),
+        ]];
+        let options = IntOverlayOptions {
+            columns_config: ColumnConfig90::dev(4),
+            ..IntOverlayOptions::default()
+        };
+
+        let shapes =
+            Overlay::<i64>::with_contours_custom(&subject, &clip, options, CPUCount::Single)
+                .overlay(FillRule::NonZero, OverlayRule::Difference);
+
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(shapes.area_two(), 12_800i128);
     }
 
     #[test]
@@ -605,9 +640,9 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(shapes[0].len(), 2);
-        assert_eq!(shapes.area_two(), 1848);
-        assert!(shapes[0][0].area_two() > 0);
-        assert!(shapes[0][1].area_two() < 0);
+        assert_eq!(shapes.area_two(), 1848i64);
+        assert!(shapes[0][0].area_two() > 0i64);
+        assert!(shapes[0][1].area_two() < 0i64);
     }
 
     #[test]
@@ -628,9 +663,9 @@ mod tests {
 
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 2);
-        assert_eq!(shapes.area_two(), 6592);
-        assert!(shapes[0][0].area_two() > 0);
-        assert!(shapes[0][1].area_two() < 0);
+        assert_eq!(shapes.area_two(), 6592i64);
+        assert!(shapes[0][0].area_two() > 0i64);
+        assert!(shapes[0][1].area_two() < 0i64);
     }
 
     #[test]
@@ -1352,7 +1387,7 @@ mod tests {
         min: i32,
         max: i32,
         contours: Vec<Vec<i_float::int::point::IntPoint>>,
-    ) -> SubGraph {
+    ) -> SubGraph<i32> {
         SubGraph::with_contours(LineRange::with_min_max(min, max), contours)
     }
 }

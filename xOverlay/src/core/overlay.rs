@@ -1,5 +1,6 @@
 use crate::core::cpu_count::CPUCount;
 use crate::core::fill_rule::FillRule;
+use crate::core::integer::OverlayInt;
 use crate::core::options::IntOverlayOptions;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column_map::{Column, ColumnMap};
@@ -7,22 +8,22 @@ use alloc::vec::Vec;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 /// Input geometry prepared for an orthogonal Boolean operation.
-pub struct Overlay {
+pub struct Overlay<I: OverlayInt> {
     pub options: IntOverlayOptions,
     pub cpu_count: CPUCount,
-    pub(crate) columns: Vec<Column>,
+    pub(crate) columns: Vec<Column<I>>,
 }
 
-impl Overlay {
+impl<I: OverlayInt> Overlay<I> {
     #[inline]
-    pub fn with_contours(subj: &[IntContour<i32>], clip: &[IntContour<i32>]) -> Self {
+    pub fn with_contours(subj: &[IntContour<I>], clip: &[IntContour<I>]) -> Self {
         Self::with_contours_custom(subj, clip, Default::default(), CPUCount::Auto)
     }
 
     #[inline]
     pub fn with_contours_custom(
-        subj: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
+        subj: &[IntContour<I>],
+        clip: &[IntContour<I>],
         options: IntOverlayOptions,
         cpu_count: CPUCount,
     ) -> Self {
@@ -36,7 +37,7 @@ impl Overlay {
     }
 
     #[inline]
-    pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes<i32> {
+    pub fn overlay(self, fill_rule: FillRule, overlay_rule: OverlayRule) -> IntShapes<I> {
         self.process_overlay(fill_rule, overlay_rule)
     }
 
@@ -49,7 +50,7 @@ impl Overlay {
         self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-    ) -> Vec<IntContour<i32>> {
+    ) -> Vec<IntContour<I>> {
         self.process_overlay_contours(fill_rule, overlay_rule)
     }
 }
@@ -70,7 +71,7 @@ mod tests {
 
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 1);
-        assert_eq!(shapes.area_two(), 256);
+        assert_eq!(shapes.area_two(), 256i64);
     }
 
     #[test]
@@ -91,14 +92,14 @@ mod tests {
         assert_eq!(
             contours
                 .iter()
-                .filter(|contour| contour.area_two() > 0)
+                .filter(|contour| contour.area_two() > 0i64)
                 .count(),
             1
         );
         assert_eq!(
             contours
                 .iter()
-                .filter(|contour| contour.area_two() < 0)
+                .filter(|contour| contour.area_two() < 0i64)
                 .count(),
             1
         );

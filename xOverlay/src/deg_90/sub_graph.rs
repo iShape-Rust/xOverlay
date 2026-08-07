@@ -1,4 +1,5 @@
 use crate::core::fill_rule::FillRule;
+use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column;
 use crate::deg_90::column::SolverBuffer;
@@ -9,29 +10,29 @@ use i_shape::int::shape::{IntContour, IntShapes};
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-pub(super) struct ContourChunk {
-    pub(super) x_range: LineRange,
-    pub(super) contours: Vec<IntContour<i32>>,
+pub(super) struct ContourChunk<I: OverlayInt> {
+    pub(super) x_range: LineRange<I>,
+    pub(super) contours: Vec<IntContour<I>>,
     pub(super) is_leaf: bool,
 }
 
 #[derive(Default)]
-pub(super) struct ContourChunks {
-    pub(super) left: Vec<IntContour<i32>>,
-    pub(super) middle: Vec<ContourChunk>,
-    pub(super) right: Vec<IntContour<i32>>,
-    pub(super) both: Vec<IntContour<i32>>,
+pub(super) struct ContourChunks<I: OverlayInt> {
+    pub(super) left: Vec<IntContour<I>>,
+    pub(super) middle: Vec<ContourChunk<I>>,
+    pub(super) right: Vec<IntContour<I>>,
+    pub(super) both: Vec<IntContour<I>>,
 }
 
-pub(super) struct SubGraph {
-    pub(super) range: LineRange,
-    pub(super) chunks: ContourChunks,
+pub(super) struct SubGraph<I: OverlayInt> {
+    pub(super) range: LineRange<I>,
+    pub(super) chunks: ContourChunks<I>,
 }
 
-impl SubGraph {
+impl<I: OverlayInt> SubGraph<I> {
     #[cfg(test)]
     pub(super) fn with_column(
-        column: Column,
+        column: Column<I>,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> Self {
@@ -44,10 +45,10 @@ impl SubGraph {
     }
 
     pub(super) fn with_column_buffer(
-        column: Column,
+        column: Column<I>,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-        buffer: &mut SolverBuffer,
+        buffer: &mut SolverBuffer<I>,
     ) -> Self {
         let range = column.range;
         let contours = column.extract_contours(fill_rule, overlay_rule, buffer);
@@ -55,7 +56,7 @@ impl SubGraph {
         Self::with_contours(range, contours)
     }
 
-    pub(super) fn with_contours(range: LineRange, contours: Vec<IntContour<i32>>) -> Self {
+    pub(super) fn with_contours(range: LineRange<I>, contours: Vec<IntContour<I>>) -> Self {
         let mut result = Self {
             range,
             chunks: ContourChunks::default(),
@@ -64,7 +65,7 @@ impl SubGraph {
         result
     }
 
-    pub(super) fn append_classified(&mut self, mut contours: Vec<IntContour<i32>>) {
+    pub(super) fn append_classified(&mut self, mut contours: Vec<IntContour<I>>) {
         debug_assert!(self.chunks.both.is_empty());
 
         let mut middle = Vec::new();
@@ -92,7 +93,7 @@ impl SubGraph {
         self.chunks.both = contours;
     }
 
-    pub(super) fn into_contours(self) -> Vec<IntContour<i32>> {
+    pub(super) fn into_contours(self) -> Vec<IntContour<I>> {
         let ContourChunks {
             mut left,
             middle,
@@ -117,16 +118,16 @@ impl SubGraph {
         contours
     }
 
-    pub(super) fn into_shapes(self) -> IntShapes<i32> {
+    pub(super) fn into_shapes(self) -> IntShapes<I> {
         self.build_shapes(false)
     }
 
     #[cfg(feature = "allow_multithreading")]
-    pub(super) fn parallel_into_shapes(self) -> IntShapes<i32> {
+    pub(super) fn parallel_into_shapes(self) -> IntShapes<I> {
         self.build_shapes(true)
     }
 
-    fn build_shapes(self, parallel: bool) -> IntShapes<i32> {
+    fn build_shapes(self, parallel: bool) -> IntShapes<I> {
         let ContourChunks {
             mut left,
             middle,
@@ -186,7 +187,7 @@ impl SubGraph {
     }
 }
 
-fn border_sides(contour: &IntContour<i32>, range: LineRange) -> (bool, bool) {
+fn border_sides<I: OverlayInt>(contour: &IntContour<I>, range: LineRange<I>) -> (bool, bool) {
     let count = contour.len();
     if count < 2 {
         return (false, false);

@@ -1,7 +1,9 @@
+use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
 use crate::deg_90::column::graph::{ColumnGraph, Node};
 use crate::deg_90::column::link::LinkIndex;
 use alloc::vec::Vec;
+use i_float::int::number::wide_int::WideIntNumber;
 use i_float::int::point::IntPoint;
 use i_shape::int::area::Area;
 use i_shape::int::shape::IntContour;
@@ -29,7 +31,7 @@ impl LinkIndex {
 
 impl NodeVisitor {
     #[inline(always)]
-    pub(super) fn new(node: &Node) -> Self {
+    pub(super) fn new<I: OverlayInt>(node: &Node<I>) -> Self {
         let mut data = 0;
         for (order, link) in node.links.iter().enumerate() {
             let has_bit = link.is_not_empty() as u8;
@@ -73,7 +75,7 @@ impl NodeVisitor {
     }
 }
 
-impl ColumnGraph {
+impl<I: OverlayInt> ColumnGraph<I> {
     #[cfg(test)]
     #[inline(always)]
     pub(super) fn visitors(&self) -> Vec<NodeVisitor> {
@@ -84,8 +86,8 @@ impl ColumnGraph {
         &self,
         overlay_rule: OverlayRule,
         visited: &mut Vec<NodeVisitor>,
-        points: &mut Vec<IntPoint>,
-    ) -> Vec<IntContour<i32>> {
+        points: &mut Vec<IntPoint<I>>,
+    ) -> Vec<IntContour<I>> {
         visited.clear();
         visited.reserve(self.nodes.len());
         for (slot, node) in visited
@@ -120,8 +122,8 @@ impl ColumnGraph {
         dir: bool,
         overlay_rule: OverlayRule,
         visited: &mut [NodeVisitor],
-        points: &mut Vec<IntPoint>,
-    ) -> IntContour<i32> {
+        points: &mut Vec<IntPoint<I>>,
+    ) -> IntContour<I> {
         points.clear();
 
         let start_node = &self.nodes[start];
@@ -150,18 +152,18 @@ impl ColumnGraph {
         if !is_hull {
             contour[1..].reverse();
         }
-        debug_assert_eq!(contour.area_two() > 0, is_hull);
+        debug_assert_eq!(contour.area_two() > I::Wide::ZERO, is_hull);
         contour
     }
 }
-trait VerticalMiddleFilter {
-    fn add_skipping_vertical(&mut self, point: IntPoint);
+trait VerticalMiddleFilter<I: OverlayInt> {
+    fn add_skipping_vertical(&mut self, point: IntPoint<I>);
     fn remove_last_if_vertical(&mut self);
 }
 
-impl VerticalMiddleFilter for Vec<IntPoint> {
+impl<I: OverlayInt> VerticalMiddleFilter<I> for Vec<IntPoint<I>> {
     #[inline(always)]
-    fn add_skipping_vertical(&mut self, p: IntPoint) {
+    fn add_skipping_vertical(&mut self, p: IntPoint<I>) {
         let n = self.len();
         if n < 2 {
             self.push(p);
@@ -656,7 +658,7 @@ mod tests {
     fn first_column_graph_with_columns_count(
         contours: &IntShape<i32>,
         columns_count: usize,
-    ) -> ColumnGraph {
+    ) -> ColumnGraph<i32> {
         let config = ColumnConfig90 {
             min_columns_count: 1,
             min_column_width_power: 20,
