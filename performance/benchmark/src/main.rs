@@ -367,8 +367,12 @@ fn solve_x<I: BenchCoordinate>(
     output_kind: OutputKind,
     cpu_count: CPUCount,
 ) -> RustResult<I> {
-    let overlay =
-        XOverlay::with_contours_custom(&case.subject, &case.clip, Default::default(), cpu_count);
+    let overlay = XOverlay::<I>::with_contours_custom(
+        &case.subject,
+        &case.clip,
+        Default::default(),
+        cpu_count,
+    );
     match output_kind {
         OutputKind::Shapes => {
             RustResult::Shapes(overlay.overlay(FillRule::NonZero, x_rule(case.operation)))

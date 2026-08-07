@@ -56,3 +56,18 @@ fn overlay_accepts_empty_i64_input() {
 
     assert!(shapes.is_empty());
 }
+
+#[test]
+fn overlay_supports_i32_winding_counts() {
+    let subject = vec![vec![
+        IntPoint::new(0_i32, 0),
+        IntPoint::new(10, 0),
+        IntPoint::new(10, 10),
+        IntPoint::new(0, 10),
+    ]];
+
+    let shapes = Overlay::<i32, i32>::with_contours(&subject, &[])
+        .overlay(FillRule::NonZero, OverlayRule::Subject);
+
+    assert_eq!(shapes.area_two(), 200i64);
+}

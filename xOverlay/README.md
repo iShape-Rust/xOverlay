@@ -18,9 +18,11 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
 - [Fill Rules](#fill-rules)
 - [Input and Output](#input-and-output)
   - [Input Requirements](#input-requirements)
+  - [Validation and Custom Contours](#validation-and-custom-contours)
   - [Output Structure](#output-structure)
   - [Flat Contour Output](#flat-contour-output)
 - [Integer Types](#integer-types)
+  - [Winding Count Type](#winding-count-type)
 - [Multithreading](#multithreading)
 - [xOverlay and iOverlay](#xoverlay-and-ioverlay)
 - [Project Status](#project-status)
@@ -42,6 +44,7 @@ Use xOverlay when all input edges are axis-aligned and integer coordinates fit y
 - **Multiple contours and holes**: output can be returned as shapes with their holes or as a flat contour list.
 - **Fill rules**: even-odd, non-zero, positive, and negative.
 - **Integer coordinates**: `i16`, `i32`, and `i64`, preserved from input to output.
+- **Configurable winding counts**: `i16` by default, with `i32` and `i64` available for deep overlap.
 - **Optional parallel execution**: enabled by default for large inputs.
 - **`no_std` core**: available when default features are disabled.
 
@@ -129,7 +132,20 @@ Each subject and clip is a slice of contours. A contour is a `Vec<IntPoint<I>>` 
 - The first point does not need to be repeated at the end.
 - Coordinates must use one supported integer type consistently.
 
-xOverlay assumes orthogonal input; it does not convert or validate arbitrary diagonal edges. Supplying non-orthogonal contours produces invalid geometry.
+xOverlay's core solver assumes valid orthogonal input. It does not validate contour length,
+axis alignment, closing-edge alignment, or other structural invariants, and it does not return
+validation errors. Supplying invalid contours may produce invalid geometry.
+
+### Validation and Custom Contours
+
+Input validation can be provided as a separate checked wrapper around the core solver. This keeps
+validation policy out of the performance-oriented path while allowing applications that receive
+untrusted or externally generated geometry to validate it before constructing an `Overlay`.
+
+A contour trait can also be added as an adapter layer for custom contour representations. Such a
+trait could expose point iteration and reusable orthogonal validation without coupling the solver
+to a particular container type. The checked wrapper and contour trait are possible extensions;
+they are not part of the current API.
 
 ### Output Structure
 
@@ -196,6 +212,36 @@ let result = Overlay::<i64>::with_contours(&subject, &[])
 
 assert_eq!(result.len(), 1);
 ```
+
+### Winding Count Type
+
+The coordinate type and winding-count type are independent:
+
+```rust
+use x_overlay::core::fill_rule::FillRule;
+use x_overlay::core::overlay::Overlay;
+use x_overlay::core::overlay_rule::OverlayRule;
+use x_overlay::i_float::int::point::IntPoint;
+
+let subject = vec![vec![
+    IntPoint::new(0_i64, 0),
+    IntPoint::new(10, 0),
+    IntPoint::new(10, 10),
+    IntPoint::new(0, 10),
+]];
+
+// i64 coordinates with i32 winding counts.
+let result = Overlay::<i64, i32>::with_contours(&subject, &[])
+    .overlay(FillRule::NonZero, OverlayRule::Subject);
+
+assert_eq!(result.len(), 1);
+```
+
+`Overlay<I>` uses `i16` winding counts by default. This is the most compact option and is
+appropriate when every intermediate subject and clip winding count remains within
+`-32768..=32767`. Choose `Overlay<I, i32>` or `Overlay<I, i64>` for inputs with deeper nesting or
+more overlapping contours. Winding arithmetic follows the overflow behavior of the selected Rust
+integer type.
 
 &nbsp;
 ## Multithreading

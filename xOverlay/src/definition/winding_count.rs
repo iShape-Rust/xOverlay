@@ -3,95 +3,104 @@ use crate::core::winding::WindingCount;
 use core::ops;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct ShapeCountBoolean {
-    pub subj: i16,
-    pub clip: i16,
+pub struct ShapeCountBoolean<W: WindingCount = i16> {
+    pub subj: W,
+    pub clip: W,
 }
 
-impl ShapeCountBoolean {
-    const SUBJ_DIRECT: ShapeCountBoolean = ShapeCountBoolean { subj: 1, clip: 0 };
-    const SUBJ_INVERT: ShapeCountBoolean = ShapeCountBoolean { subj: -1, clip: 0 };
-    const CLIP_DIRECT: ShapeCountBoolean = ShapeCountBoolean { subj: 0, clip: 1 };
-    const CLIP_INVERT: ShapeCountBoolean = ShapeCountBoolean { subj: 0, clip: -1 };
-}
-
-impl WindingCount for ShapeCountBoolean {
-    #[inline(always)]
-    fn is_empty(&self) -> bool {
-        self.subj == 0 && self.clip == 0
-    }
-    #[inline(always)]
-    fn is_not_empty(&self) -> bool {
-        self.subj != 0 || self.clip != 0
-    }
-
-    #[inline(always)]
-    fn empty() -> Self {
-        Self::new(0, 0)
-    }
+impl<W: WindingCount> ShapeCountBoolean<W> {
+    const SUBJ_DIRECT: Self = Self {
+        subj: W::ONE,
+        clip: W::ZERO,
+    };
+    const SUBJ_INVERT: Self = Self {
+        subj: W::NEG_ONE,
+        clip: W::ZERO,
+    };
+    const CLIP_DIRECT: Self = Self {
+        subj: W::ZERO,
+        clip: W::ONE,
+    };
+    const CLIP_INVERT: Self = Self {
+        subj: W::ZERO,
+        clip: W::NEG_ONE,
+    };
 
     #[inline(always)]
-    fn new(subj: i16, clip: i16) -> Self {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.subj == W::ZERO && self.clip == W::ZERO
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_not_empty(&self) -> bool {
+        !self.is_empty()
+    }
+
+    #[inline(always)]
+    pub(crate) fn empty() -> Self {
+        Self::new(W::ZERO, W::ZERO)
+    }
+
+    #[inline(always)]
+    pub(crate) fn new(subj: W, clip: W) -> Self {
         Self { subj, clip }
     }
 
     #[cfg(test)]
     #[inline(always)]
-    fn subj(subj: i16) -> Self {
-        Self { subj, clip: 0 }
-    }
-
-    #[inline(always)]
-    fn with_shape_type(shape_type: ShapeType) -> (Self, Self) {
-        match shape_type {
-            ShapeType::Subject => (
-                ShapeCountBoolean::SUBJ_DIRECT,
-                ShapeCountBoolean::SUBJ_INVERT,
-            ),
-            ShapeType::Clip => (
-                ShapeCountBoolean::CLIP_DIRECT,
-                ShapeCountBoolean::CLIP_INVERT,
-            ),
+    pub(crate) fn subj(subj: W) -> Self {
+        Self {
+            subj,
+            clip: W::ZERO,
         }
     }
 
     #[inline(always)]
-    fn add(self, count: Self) -> Self {
-        let subj = self.subj + count.subj;
-        let clip = self.clip + count.clip;
-
-        Self { subj, clip }
+    pub(crate) fn with_shape_type(shape_type: ShapeType) -> (Self, Self) {
+        match shape_type {
+            ShapeType::Subject => (Self::SUBJ_DIRECT, Self::SUBJ_INVERT),
+            ShapeType::Clip => (Self::CLIP_DIRECT, Self::CLIP_INVERT),
+        }
     }
 
     #[inline(always)]
-    fn sub(self, count: Self) -> Self {
-        let subj = self.subj - count.subj;
-        let clip = self.clip - count.clip;
-
-        Self { subj, clip }
+    pub(crate) fn add(self, count: Self) -> Self {
+        Self::new(self.subj + count.subj, self.clip + count.clip)
     }
-}
-
-impl ops::Add for ShapeCountBoolean {
-    type Output = ShapeCountBoolean;
 
     #[inline(always)]
-    fn add(self, other: ShapeCountBoolean) -> ShapeCountBoolean {
-        let subj = self.subj + other.subj;
-        let clip = self.clip + other.clip;
-
-        Self { subj, clip }
+    pub(crate) fn sub(self, count: Self) -> Self {
+        Self::new(self.subj - count.subj, self.clip - count.clip)
     }
 }
 
-impl ops::Sub for ShapeCountBoolean {
-    type Output = ShapeCountBoolean;
+impl<W: WindingCount> ops::Add for ShapeCountBoolean<W> {
+    type Output = Self;
 
     #[inline(always)]
-    fn sub(self, other: ShapeCountBoolean) -> ShapeCountBoolean {
-        let subj = self.subj - other.subj;
-        let clip = self.clip - other.clip;
+    fn add(self, other: Self) -> Self {
+        Self::new(self.subj + other.subj, self.clip + other.clip)
+    }
+}
 
-        Self { subj, clip }
+impl<W: WindingCount> ops::Sub for ShapeCountBoolean<W> {
+    type Output = Self;
+
+    #[inline(always)]
+    fn sub(self, other: Self) -> Self {
+        Self::new(self.subj - other.subj, self.clip - other.clip)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShapeCountBoolean;
+
+    #[test]
+    fn i32_winding_count_can_exceed_i16_range() {
+        let count =
+            ShapeCountBoolean::<i32>::new(i16::MAX as i32, 0).add(ShapeCountBoolean::new(1, 0));
+
+        assert_eq!(count.subj, i16::MAX as i32 + 1);
     }
 }

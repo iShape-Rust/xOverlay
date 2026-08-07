@@ -3,23 +3,39 @@ use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;
 use crate::core::options::IntOverlayOptions;
 use crate::core::overlay_rule::OverlayRule;
+use crate::core::winding::WindingCount;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use alloc::vec::Vec;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 /// Input geometry prepared for an orthogonal Boolean operation.
-pub struct Overlay<I: OverlayInt> {
+///
+/// `I` is the coordinate type. `W` stores intermediate subject and clip winding counts and
+/// defaults to [`i16`]. Use [`i32`] or [`i64`] when the winding depth may exceed the `i16` range.
+pub struct Overlay<I: OverlayInt, W: WindingCount = i16> {
     pub options: IntOverlayOptions,
     pub cpu_count: CPUCount,
-    pub(crate) columns: Vec<Column<I>>,
+    pub(crate) columns: Vec<Column<I, W>>,
 }
 
-impl<I: OverlayInt> Overlay<I> {
+impl<I: OverlayInt, W: WindingCount> Overlay<I, W> {
+    /// Prepares subject and clip contours for an orthogonal Boolean operation.
+    ///
+    /// # Input validity
+    ///
+    /// This constructor assumes valid orthogonal contours and does not validate contour length,
+    /// axis alignment, closing-edge alignment, or other structural invariants. Invalid input may
+    /// produce invalid geometry.
     #[inline]
     pub fn with_contours(subj: &[IntContour<I>], clip: &[IntContour<I>]) -> Self {
         Self::with_contours_custom(subj, clip, Default::default(), CPUCount::Auto)
     }
 
+    /// Prepares subject and clip contours with explicit solver and CPU configuration.
+    ///
+    /// # Input validity
+    ///
+    /// This constructor has the same unchecked input contract as [`Self::with_contours`].
     #[inline]
     pub fn with_contours_custom(
         subj: &[IntContour<I>],
@@ -66,8 +82,8 @@ mod tests {
     #[test]
     fn overlay_returns_shapes_from_the_column_solver() {
         let subject = int_shape![[[-8, -4], [8, -4], [8, 4], [-8, 4]]];
-        let shapes =
-            Overlay::with_contours(&subject, &[]).overlay(FillRule::NonZero, OverlayRule::Subject);
+        let shapes = Overlay::<i32>::with_contours(&subject, &[])
+            .overlay(FillRule::NonZero, OverlayRule::Subject);
 
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 1);
@@ -78,7 +94,7 @@ mod tests {
     fn overlay_contours_skips_hole_grouping() {
         let subject = int_shape![[[-8, -8], [8, -8], [8, 8], [-8, 8]]];
         let clip = int_shape![[[-4, -4], [4, -4], [4, 4], [-4, 4]]];
-        let contours = Overlay::with_contours(&subject, &clip)
+        let contours = Overlay::<i32>::with_contours(&subject, &clip)
             .overlay_contours(FillRule::NonZero, OverlayRule::Difference);
 
         assert_eq!(contours.len(), 2);

@@ -1,6 +1,6 @@
 //! # xOverlay
 //!
-//! The `xOverlay` provides Boolean Operations for 45 degrees geometry.
+//! `xOverlay` provides high-performance Boolean operations for orthogonal (Manhattan) polygons.
 #![no_std]
 extern crate alloc;
 

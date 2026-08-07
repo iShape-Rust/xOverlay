@@ -25,45 +25,50 @@ use i_float::int::point::IntPoint;
 impl<I: OverlayInt> ColumnGraph<I> {
     #[cfg(test)]
     #[rustfmt::skip]
-    pub(crate) fn new(column: &Column<I>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I>) -> Self {
+    pub(crate) fn new<W: WindingCount>(column: &Column<I, W>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I, W>) -> Self {
         Self::with_nodes(column, fill_rule, overlay_rule, buffer, Vec::new())
     }
 
     #[rustfmt::skip]
-    pub(crate) fn with_nodes(column: &Column<I>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I>, nodes: Vec<Node<I>>) -> Self {
+    pub(crate) fn with_nodes<W: WindingCount>(column: &Column<I, W>, fill_rule: FillRule, overlay_rule: OverlayRule, buffer: &mut ScanBuffer<I, W>, nodes: Vec<Node<I>>) -> Self {
         match fill_rule {
-            FillRule::EvenOdd => Self::with_fill_strategy::<EvenOddStrategy>(column, overlay_rule, buffer, nodes),
-            FillRule::NonZero => Self::with_fill_strategy::<NonZeroStrategy>(column, overlay_rule, buffer, nodes),
-            FillRule::Positive => Self::with_fill_strategy::<PositiveStrategy>(column, overlay_rule, buffer, nodes),
-            FillRule::Negative => Self::with_fill_strategy::<NegativeStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::EvenOdd => Self::with_fill_strategy::<W, EvenOddStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::NonZero => Self::with_fill_strategy::<W, NonZeroStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::Positive => Self::with_fill_strategy::<W, PositiveStrategy>(column, overlay_rule, buffer, nodes),
+            FillRule::Negative => Self::with_fill_strategy::<W, NegativeStrategy>(column, overlay_rule, buffer, nodes),
         }
     }
 
     #[rustfmt::skip]
-    fn with_fill_strategy<Fill: FillStrategy<ShapeCountBoolean>>(
-        column: &Column<I>,
+    fn with_fill_strategy<W, Fill>(
+        column: &Column<I, W>,
         overlay_rule: OverlayRule,
-        buffer: &mut ScanBuffer<I>,
+        buffer: &mut ScanBuffer<I, W>,
         nodes: Vec<Node<I>>,
-    ) -> Self {
+    ) -> Self
+    where
+        W: WindingCount,
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
+    {
         match overlay_rule {
-            OverlayRule::Subject => Self::with_fill_and_filter_strategy::<Fill, SubjectFilter>(column, buffer, nodes),
-            OverlayRule::Clip => Self::with_fill_and_filter_strategy::<Fill, ClipFilter>(column, buffer, nodes),
-            OverlayRule::Intersect => Self::with_fill_and_filter_strategy::<Fill, IntersectFilter>(column, buffer, nodes),
-            OverlayRule::Union => Self::with_fill_and_filter_strategy::<Fill, UnionFilter>(column, buffer, nodes),
-            OverlayRule::Difference => Self::with_fill_and_filter_strategy::<Fill, DifferenceFilter>(column, buffer, nodes),
-            OverlayRule::Xor => Self::with_fill_and_filter_strategy::<Fill, XorFilter>(column, buffer, nodes),
-            OverlayRule::InverseDifference => Self::with_fill_and_filter_strategy::<Fill, InverseDifferenceFilter>(column, buffer, nodes),
+            OverlayRule::Subject => Self::with_fill_and_filter_strategy::<W, Fill, SubjectFilter>(column, buffer, nodes),
+            OverlayRule::Clip => Self::with_fill_and_filter_strategy::<W, Fill, ClipFilter>(column, buffer, nodes),
+            OverlayRule::Intersect => Self::with_fill_and_filter_strategy::<W, Fill, IntersectFilter>(column, buffer, nodes),
+            OverlayRule::Union => Self::with_fill_and_filter_strategy::<W, Fill, UnionFilter>(column, buffer, nodes),
+            OverlayRule::Difference => Self::with_fill_and_filter_strategy::<W, Fill, DifferenceFilter>(column, buffer, nodes),
+            OverlayRule::Xor => Self::with_fill_and_filter_strategy::<W, Fill, XorFilter>(column, buffer, nodes),
+            OverlayRule::InverseDifference => Self::with_fill_and_filter_strategy::<W, Fill, InverseDifferenceFilter>(column, buffer, nodes),
         }
     }
 
-    fn with_fill_and_filter_strategy<Fill, Filter>(
-        column: &Column<I>,
-        buffer: &mut ScanBuffer<I>,
+    fn with_fill_and_filter_strategy<W, Fill, Filter>(
+        column: &Column<I, W>,
+        buffer: &mut ScanBuffer<I, W>,
         mut nodes: Vec<Node<I>>,
     ) -> Self
     where
-        Fill: FillStrategy<ShapeCountBoolean>,
+        W: WindingCount,
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
         Filter: FilterStrategy,
     {
         let n = column.segments.len();
@@ -109,12 +114,12 @@ struct NodeCursor {
 }
 
 #[derive(Default)]
-pub(crate) struct ScanBuffer<I: OverlayInt> {
-    active: Vec<Anchor<I>>,
-    buffer: Vec<Anchor<I>>,
+pub(crate) struct ScanBuffer<I: OverlayInt, W: WindingCount = i16> {
+    active: Vec<Anchor<I, W>>,
+    buffer: Vec<Anchor<I, W>>,
 }
 
-impl<I: OverlayInt> ScanBuffer<I> {
+impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
     #[cfg(test)]
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -132,9 +137,9 @@ impl<I: OverlayInt> ScanBuffer<I> {
         }
     }
 
-    fn add_segments<Fill, Filter>(&mut self, segments: &[Segment<I>], nodes: &mut Vec<Node<I>>)
+    fn add_segments<Fill, Filter>(&mut self, segments: &[Segment<I, W>], nodes: &mut Vec<Node<I>>)
     where
-        Fill: FillStrategy<ShapeCountBoolean>,
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
         Filter: FilterStrategy,
     {
         // segments are always sorted by range.min and not overlap each other
@@ -231,15 +236,15 @@ impl<I: OverlayInt> ScanBuffer<I> {
         self.buffer.clear();
     }
 }
-trait AnchorBuffer<I: OverlayInt> {
-    fn push_and_merge(&mut self, anchor: Anchor<I>);
+trait AnchorBuffer<I: OverlayInt, W: WindingCount> {
+    fn push_and_merge(&mut self, anchor: Anchor<I, W>);
 
     fn remove_empty_anchor(&mut self);
 }
 
-impl<I: OverlayInt> AnchorBuffer<I> for Vec<Anchor<I>> {
+impl<I: OverlayInt, W: WindingCount> AnchorBuffer<I, W> for Vec<Anchor<I, W>> {
     #[inline(always)]
-    fn push_and_merge(&mut self, anchor: Anchor<I>) {
+    fn push_and_merge(&mut self, anchor: Anchor<I, W>) {
         if let Some(last) = self.last_mut()
             && last.count.left == anchor.count.left
         {

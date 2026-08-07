@@ -2,6 +2,7 @@ use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;
 use crate::core::overlay::Overlay;
 use crate::core::overlay_rule::OverlayRule;
+use crate::core::winding::WindingCount;
 use crate::deg_90::column::SolverBuffer;
 use crate::deg_90::column_map::{Column, ColumnMap};
 use crate::deg_90::config::ColumnConfig90;
@@ -15,7 +16,7 @@ use i_shape::int::shape::{IntContour, IntShapes};
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-impl<I: OverlayInt> Overlay<I> {
+impl<I: OverlayInt, W: WindingCount> Overlay<I, W> {
     pub(crate) fn process_overlay(
         self,
         fill_rule: FillRule,
@@ -80,13 +81,13 @@ impl<I: OverlayInt> Overlay<I> {
     }
 }
 
-impl<I: OverlayInt> Column<I> {
+impl<I: OverlayInt, W: WindingCount> Column<I, W> {
     fn process(
         mut self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
         config: ColumnConfig90,
-        buffer: &mut SolverBuffer<I>,
+        buffer: &mut SolverBuffer<I, W>,
     ) -> SubGraph<I> {
         if let Some(columns) = self.partition(config) {
             let sub_graphs: Vec<_> = columns
@@ -99,7 +100,7 @@ impl<I: OverlayInt> Column<I> {
         }
     }
 
-    fn partition(&mut self, config: ColumnConfig90) -> Option<Vec<Column<I>>> {
+    fn partition(&mut self, config: ColumnConfig90) -> Option<Vec<Column<I, W>>> {
         let max_segments_in_line = self.segments.partition();
         let map =
             ColumnMap::with_segments(&self.segments, max_segments_in_line, self.range, config)?;

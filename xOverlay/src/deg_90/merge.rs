@@ -432,7 +432,6 @@ mod tests {
         ]];
         let options = IntOverlayOptions {
             columns_config: ColumnConfig90::dev(4),
-            ..IntOverlayOptions::default()
         };
 
         let shapes =
@@ -620,7 +619,7 @@ mod tests {
             [[-16, -16], [16, -16], [16, 16], [-16, 16]],
             [[-5, -5], [-5, 5], [5, 5], [5, -5]],
         ];
-        let map = ColumnMap::with_columns_count(&subject, &[], 2);
+        let map = ColumnMap::<i32>::with_columns_count(&subject, &[], 2);
         assert_eq!(map.columns.len(), 2);
 
         let parts: Vec<_> = map
@@ -651,7 +650,7 @@ mod tests {
             [[-32, -32], [32, -32], [32, 32], [-32, 32]],
             [[-20, -10], [-20, 10], [20, 10], [20, -10]],
         ];
-        let map = ColumnMap::with_columns_count(&subject, &[], 4);
+        let map = ColumnMap::<i32>::with_columns_count(&subject, &[], 4);
         assert_eq!(map.columns.len(), 4);
 
         let parts: Vec<_> = map
@@ -824,7 +823,8 @@ mod tests {
 
         while iterations == 0 || profile_start.elapsed() < PROFILE_TIME {
             let start = Instant::now();
-            let overlay = Overlay::with_contours_custom(&subject, &clip, options, CPUCount::Single);
+            let overlay =
+                Overlay::<i32>::with_contours_custom(&subject, &clip, options, CPUCount::Single);
             map_time += start.elapsed();
             assert_eq!(overlay.columns.len(), COLUMNS);
 
@@ -892,7 +892,6 @@ mod tests {
                 min_allowed_segments_per_column: 1 << 16,
                 max_allowed_segments_per_line: 7,
             },
-            ..IntOverlayOptions::default()
         };
         profile_workload_stages_with_options(
             "nested-squares/fixed-density",
@@ -925,7 +924,8 @@ mod tests {
             let options = multi_column_options(&subject, &clip, columns_count);
             for cpu_count in [CPUCount::Single, CPUCount::Auto] {
                 let start = Instant::now();
-                let overlay = Overlay::with_contours_custom(&subject, &clip, options, cpu_count);
+                let overlay =
+                    Overlay::<i32>::with_contours_custom(&subject, &clip, options, cpu_count);
                 let actual_columns = overlay.columns.len();
                 black_box(overlay.overlay(FillRule::NonZero, OverlayRule::Xor));
                 std::println!(
@@ -965,7 +965,6 @@ mod tests {
                     min_allowed_segments_per_column: 1 << 16,
                     max_allowed_segments_per_line,
                 },
-                ..IntOverlayOptions::default()
             };
             profile_workload_stages_with_options(
                 if max_allowed_segments_per_line == 7 {
@@ -1018,7 +1017,8 @@ mod tests {
 
             while iterations == 0 || profile_start.elapsed() < profile_time {
                 let start = Instant::now();
-                let overlay = Overlay::with_contours_custom(subject, clip, options, cpu_count);
+                let overlay =
+                    Overlay::<i32>::with_contours_custom(subject, clip, options, cpu_count);
                 map_time += start.elapsed();
                 columns_count = overlay.columns.len();
 
@@ -1259,8 +1259,12 @@ mod tests {
         overlay_rule: OverlayRule,
     ) -> IntShapes<i32> {
         let options = multi_column_options(subject, clip, columns_count);
-        let overlay =
-            Overlay::with_contours_custom(subject, clip, options, CPUCount::Fixed(columns_count));
+        let overlay = Overlay::<i32>::with_contours_custom(
+            subject,
+            clip,
+            options,
+            CPUCount::Fixed(columns_count),
+        );
         assert_eq!(overlay.columns.len(), columns_count);
         overlay.overlay(fill_rule, overlay_rule)
     }
@@ -1284,7 +1288,6 @@ mod tests {
                 max_allow_segments_per_column: 1_000_000_000,
                 max_allowed_segments_per_line: 128,
             },
-            ..Default::default()
         }
     }
 

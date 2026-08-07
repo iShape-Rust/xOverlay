@@ -1,12 +1,13 @@
+use crate::core::winding::WindingCount;
 use crate::partition::pos::Pos;
 use alloc::vec::Vec;
 use i_float::int::number::int::IntNumber;
 
-pub(super) struct PosMinHeap<I: IntNumber> {
-    data: Vec<Pos<I>>,
+pub(super) struct PosMinHeap<I: IntNumber, W: WindingCount = i16> {
+    data: Vec<Pos<I, W>>,
 }
 
-impl<I: IntNumber> PosMinHeap<I> {
+impl<I: IntNumber, W: WindingCount> PosMinHeap<I, W> {
     #[inline]
     pub(super) fn with_capacity(cap: usize) -> Self {
         Self {
@@ -29,7 +30,7 @@ impl<I: IntNumber> PosMinHeap<I> {
         self.data.first().unwrap().x
     }
 
-    pub(super) fn push(&mut self, item: Pos<I>) {
+    pub(super) fn push(&mut self, item: Pos<I, W>) {
         let x = item.x;
         let last = self.data.len();
         self.data.push(item);
@@ -37,7 +38,7 @@ impl<I: IntNumber> PosMinHeap<I> {
     }
 
     /// Pops the smallest-x `Pos`
-    pub(super) fn pop(&mut self) -> Pos<I> {
+    pub(super) fn pop(&mut self) -> Pos<I, W> {
         let n = self.data.len();
         debug_assert!(n != 0);
 

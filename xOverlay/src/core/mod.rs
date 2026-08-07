@@ -1,5 +1,4 @@
 pub mod cpu_count;
-pub mod direction;
 pub mod fill_rule;
 pub mod integer;
 pub mod options;

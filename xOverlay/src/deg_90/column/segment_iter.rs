@@ -5,9 +5,9 @@ use crate::deg_90::column::count::LRCount;
 use crate::geom::segment::Segment;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct SegmentEnd<I: OverlayInt> {
+pub(super) struct SegmentEnd<I: OverlayInt, W: WindingCount = i16> {
     pub(super) x: I,
-    pub(super) count: LRCount,
+    pub(super) count: LRCount<W>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -16,15 +16,15 @@ enum End {
     Min,
 }
 
-pub(super) struct SegmentSplitPointIter<'a, I: OverlayInt> {
-    segments: &'a [Segment<I>],
+pub(super) struct SegmentSplitPointIter<'a, I: OverlayInt, W: WindingCount = i16> {
+    segments: &'a [Segment<I, W>],
     index: usize,
     active_end: End,
-    last_next: ShapeCountBoolean,
+    last_next: ShapeCountBoolean<W>,
 }
 
-impl<'a, I: OverlayInt> SegmentSplitPointIter<'a, I> {
-    pub(super) fn new(segments: &'a [Segment<I>]) -> Self {
+impl<'a, I: OverlayInt, W: WindingCount> SegmentSplitPointIter<'a, I, W> {
+    pub(super) fn new(segments: &'a [Segment<I, W>]) -> Self {
         debug_assert!(!segments.is_empty());
         SegmentSplitPointIter {
             segments,
@@ -35,8 +35,8 @@ impl<'a, I: OverlayInt> SegmentSplitPointIter<'a, I> {
     }
 }
 
-impl<I: OverlayInt> Iterator for SegmentSplitPointIter<'_, I> {
-    type Item = SegmentEnd<I>;
+impl<I: OverlayInt, W: WindingCount> Iterator for SegmentSplitPointIter<'_, I, W> {
+    type Item = SegmentEnd<I, W>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.segments.len() {
@@ -88,19 +88,18 @@ impl<I: OverlayInt> Iterator for SegmentSplitPointIter<'_, I> {
     }
 }
 
-pub(super) trait SegmentSplitPointIterator<I: OverlayInt> {
-    fn split_point_iter(&'_ self) -> SegmentSplitPointIter<'_, I>;
+pub(super) trait SegmentSplitPointIterator<I: OverlayInt, W: WindingCount> {
+    fn split_point_iter(&'_ self) -> SegmentSplitPointIter<'_, I, W>;
 }
 
-impl<I: OverlayInt> SegmentSplitPointIterator<I> for [Segment<I>] {
-    fn split_point_iter(&'_ self) -> SegmentSplitPointIter<'_, I> {
+impl<I: OverlayInt, W: WindingCount> SegmentSplitPointIterator<I, W> for [Segment<I, W>] {
+    fn split_point_iter(&'_ self) -> SegmentSplitPointIter<'_, I, W> {
         SegmentSplitPointIter::new(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::winding::WindingCount;
     use crate::definition::winding_count::ShapeCountBoolean;
     use crate::deg_90::column::count::LRCount;
     use crate::deg_90::column::segment_iter::{SegmentEnd, SegmentSplitPointIterator};

@@ -11,23 +11,23 @@ use core::num::NonZeroU32;
 use core::slice::Iter;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct StackPoint<I: OverlayInt> {
+pub(super) struct StackPoint<I: OverlayInt, W: WindingCount = i16> {
     pub(super) x: I,
     pub(super) node: Option<NonZeroU32>,
-    pub(super) c0: ShapeCountBoolean,
-    pub(super) c1: ShapeCountBoolean,
-    pub(super) cb: ShapeCountBoolean,
+    pub(super) c0: ShapeCountBoolean<W>,
+    pub(super) c1: ShapeCountBoolean<W>,
+    pub(super) cb: ShapeCountBoolean<W>,
 }
 
-pub(super) struct StackIter<'a, I: OverlayInt> {
-    split_iter: SegmentSplitPointIter<'a, I>,
-    anchors_iter: Iter<'a, Anchor<I>>,
-    split: Option<SegmentEnd<I>>,
-    anchor: Option<&'a Anchor<I>>,
+pub(super) struct StackIter<'a, I: OverlayInt, W: WindingCount = i16> {
+    split_iter: SegmentSplitPointIter<'a, I, W>,
+    anchors_iter: Iter<'a, Anchor<I, W>>,
+    split: Option<SegmentEnd<I, W>>,
+    anchor: Option<&'a Anchor<I, W>>,
 }
 
-impl<'a, I: OverlayInt> StackIter<'a, I> {
-    pub(super) fn new(segments: &'a [Segment<I>], anchors: &'a [Anchor<I>]) -> Self {
+impl<'a, I: OverlayInt, W: WindingCount> StackIter<'a, I, W> {
+    pub(super) fn new(segments: &'a [Segment<I, W>], anchors: &'a [Anchor<I, W>]) -> Self {
         let mut segments_iter = segments.split_point_iter();
         let split = segments_iter.next();
 
@@ -43,8 +43,8 @@ impl<'a, I: OverlayInt> StackIter<'a, I> {
     }
 }
 
-impl<I: OverlayInt> Iterator for StackIter<'_, I> {
-    type Item = StackPoint<I>;
+impl<I: OverlayInt, W: WindingCount> Iterator for StackIter<'_, I, W> {
+    type Item = StackPoint<I, W>;
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -108,7 +108,7 @@ impl<I: OverlayInt> Iterator for StackIter<'_, I> {
 
                 let c0 = s.count.left;
                 let c1 = s.count.right;
-                let cb = ShapeCountBoolean::empty();
+                let cb = ShapeCountBoolean::<W>::empty();
 
                 Some(StackPoint {
                     x: s.x,

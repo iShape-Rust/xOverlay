@@ -1,6 +1,7 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
+use crate::core::winding::WindingCount;
 use crate::deg_90::column;
 use crate::deg_90::column::SolverBuffer;
 use crate::deg_90::column_map::Column;
@@ -31,8 +32,8 @@ pub(super) struct SubGraph<I: OverlayInt> {
 
 impl<I: OverlayInt> SubGraph<I> {
     #[cfg(test)]
-    pub(super) fn with_column(
-        column: Column<I>,
+    pub(super) fn with_column<W: WindingCount>(
+        column: Column<I, W>,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
     ) -> Self {
@@ -44,11 +45,11 @@ impl<I: OverlayInt> SubGraph<I> {
         )
     }
 
-    pub(super) fn with_column_buffer(
-        column: Column<I>,
+    pub(super) fn with_column_buffer<W: WindingCount>(
+        column: Column<I, W>,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-        buffer: &mut SolverBuffer<I>,
+        buffer: &mut SolverBuffer<I, W>,
     ) -> Self {
         let range = column.range;
         let contours = column.extract_contours(fill_rule, overlay_rule, buffer);

@@ -1,6 +1,7 @@
 use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;
 use crate::core::overlay_rule::OverlayRule;
+use crate::core::winding::WindingCount;
 use crate::deg_90::column::build::ScanBuffer;
 use crate::deg_90::column::extract::NodeVisitor;
 use crate::deg_90::column::graph::{ColumnGraph, Node};
@@ -14,19 +15,19 @@ use i_shape::int::area::Area;
 use i_shape::int::shape::{IntContour, IntShapes};
 
 #[derive(Default)]
-pub(in crate::deg_90) struct SolverBuffer<I: OverlayInt> {
-    scan: ScanBuffer<I>,
+pub(in crate::deg_90) struct SolverBuffer<I: OverlayInt, W: WindingCount = i16> {
+    scan: ScanBuffer<I, W>,
     nodes: Vec<Node<I>>,
     visited: Vec<NodeVisitor>,
     points: Vec<IntPoint<I>>,
 }
 
-impl<I: OverlayInt> Column<I> {
+impl<I: OverlayInt, W: WindingCount> Column<I, W> {
     pub(in crate::deg_90) fn extract_contours(
         &self,
         fill_rule: FillRule,
         overlay_rule: OverlayRule,
-        buffer: &mut SolverBuffer<I>,
+        buffer: &mut SolverBuffer<I, W>,
     ) -> Vec<IntContour<I>> {
         buffer.scan.reserve(self.segments.len());
         let nodes = core::mem::take(&mut buffer.nodes);

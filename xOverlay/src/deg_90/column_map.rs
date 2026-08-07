@@ -17,16 +17,16 @@ struct Mapper<I: OverlayInt> {
     parts: Vec<usize>,
 }
 
-pub(crate) struct Column<I: OverlayInt> {
+pub(crate) struct Column<I: OverlayInt, W: WindingCount = i16> {
     pub(super) range: LineRange<I>,
-    pub(super) segments: Vec<Segment<I>>,
+    pub(super) segments: Vec<Segment<I, W>>,
 }
 
-pub(crate) struct ColumnMap<I: OverlayInt> {
-    pub(crate) columns: Vec<Column<I>>,
+pub(crate) struct ColumnMap<I: OverlayInt, W: WindingCount = i16> {
+    pub(crate) columns: Vec<Column<I, W>>,
 }
 
-impl<I: OverlayInt> ColumnMap<I> {
+impl<I: OverlayInt, W: WindingCount> ColumnMap<I, W> {
     pub(crate) fn with_subj_and_clip(
         subj: &[IntContour<I>],
         clip: &[IntContour<I>],
@@ -77,7 +77,7 @@ impl<I: OverlayInt> ColumnMap<I> {
     }
 
     pub(super) fn with_segments(
-        segments: &[Segment<I>],
+        segments: &[Segment<I, W>],
         max_segments_in_line: usize,
         range: LineRange<I>,
         config: ColumnConfig90,
@@ -124,7 +124,7 @@ impl<I: OverlayInt> ColumnMap<I> {
         shape_type: ShapeType,
         layout: &ColumnLayout<I>,
     ) {
-        let (direct, invert) = ShapeCountBoolean::with_shape_type(shape_type);
+        let (direct, invert) = ShapeCountBoolean::<W>::with_shape_type(shape_type);
 
         for contour in contours.iter() {
             let mut a = if let Some(last) = contour.last()
@@ -182,7 +182,7 @@ impl<I: OverlayInt> ColumnMap<I> {
         }
     }
 
-    fn add_segments(&mut self, segments: &[Segment<I>], layout: &ColumnLayout<I>) {
+    fn add_segments(&mut self, segments: &[Segment<I, W>], layout: &ColumnLayout<I>) {
         for s in segments.iter() {
             let i0 = layout.index(s.range.min);
             let i1 = layout.index_round_down(s.range.max);
@@ -291,7 +291,7 @@ impl<I: OverlayInt> Mapper<I> {
         }
     }
 
-    pub(super) fn add_segments(&mut self, segments: &[Segment<I>]) {
+    pub(super) fn add_segments<W: WindingCount>(&mut self, segments: &[Segment<I, W>]) {
         for s in segments.iter() {
             let i0 = self.layout.index(s.range.min);
             let i1 = self.layout.index_round_down(s.range.max);
@@ -318,7 +318,7 @@ mod tests {
             [[4, 0], [8, 0], [8, 4], [4, 4]],
         ];
         let config = ColumnConfig90::dev(2);
-        let map = ColumnMap::with_subj_and_clip(&subj, &[], CPUCount::Single, config);
+        let map = ColumnMap::<i32>::with_subj_and_clip(&subj, &[], CPUCount::Single, config);
         assert_eq!(map.columns.len(), 2);
     }
 }
