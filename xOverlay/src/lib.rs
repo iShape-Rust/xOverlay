@@ -9,6 +9,8 @@ mod definition;
 mod deg_90;
 mod geom;
 mod partition;
+#[cfg(test)]
+mod test_utils;
 pub(crate) mod util;
 
 pub use i_float;

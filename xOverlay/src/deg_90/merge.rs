@@ -375,6 +375,7 @@ mod tests {
     use crate::deg_90::config::ColumnConfig90;
     use crate::deg_90::sub_graph::{ContourChunk, ContourChunks};
     use crate::geom::range::LineRange;
+    use crate::test_utils::i_overlay_shapes;
     use alloc::vec;
     use alloc::vec::Vec;
     use i_float::int::point::IntPoint;
@@ -727,6 +728,31 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn nested_squares_union_matches_i_overlay() {
+        const N: usize = 16;
+        let (subject, clip) = nested_square_contours(N);
+        let fill_rule = FillRule::NonZero;
+        let overlay_rule = OverlayRule::Union;
+        let expected = i_overlay_shapes(&subject, &clip, fill_rule, overlay_rule);
+
+        for columns_count in [1, 2, 4, 8, 16] {
+            let actual =
+                extract_multi_column(&subject, &clip, columns_count, fill_rule, overlay_rule);
+
+            assert_eq!(
+                actual.area_two(),
+                expected.area_two(),
+                "area mismatch for N={N}, columns={columns_count}"
+            );
+            assert_eq!(
+                actual.len(),
+                expected.len(),
+                "shape count mismatch for N={N}, columns={columns_count}"
+            );
         }
     }
 
@@ -1301,36 +1327,6 @@ mod tests {
             }
         }
         (max_x - min_x) as usize
-    }
-
-    fn i_overlay_shapes(
-        subject: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
-        fill_rule: FillRule,
-        overlay_rule: OverlayRule,
-    ) -> IntShapes<i32> {
-        use i_overlay::core::fill_rule::FillRule as IFillRule;
-        use i_overlay::core::overlay::Overlay as IOverlay;
-        use i_overlay::core::overlay_rule::OverlayRule as IOverlayRule;
-
-        let i_fill_rule = match fill_rule {
-            FillRule::EvenOdd => IFillRule::EvenOdd,
-            FillRule::NonZero => IFillRule::NonZero,
-            FillRule::Positive => IFillRule::Positive,
-            FillRule::Negative => IFillRule::Negative,
-        };
-        let i_overlay_rule = match overlay_rule {
-            OverlayRule::Subject => IOverlayRule::Subject,
-            OverlayRule::Clip => IOverlayRule::Clip,
-            OverlayRule::Intersect => IOverlayRule::Intersect,
-            OverlayRule::Union => IOverlayRule::Union,
-            OverlayRule::Difference => IOverlayRule::Difference,
-            OverlayRule::InverseDifference => IOverlayRule::InverseDifference,
-            OverlayRule::Xor => IOverlayRule::Xor,
-        };
-
-        let mut overlay = IOverlay::with_contours(subject, clip);
-        overlay.overlay(i_overlay_rule, i_fill_rule)
     }
 
     fn assert_valid_directions(

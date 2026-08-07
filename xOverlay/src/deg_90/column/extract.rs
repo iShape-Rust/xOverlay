@@ -201,6 +201,7 @@ mod tests {
     use crate::deg_90::column::link::LinkIndex;
     use crate::deg_90::column_map::ColumnMap;
     use crate::deg_90::config::ColumnConfig90;
+    use crate::test_utils::i_overlay_shapes;
     use alloc::vec;
     use alloc::vec::Vec;
     use i_float::int::point::IntPoint;
@@ -581,36 +582,6 @@ mod tests {
         let graph = ColumnGraph::new(column, fill_rule, overlay_rule, &mut buffer);
         let result = graph.extract(overlay_rule, &mut Vec::new(), &mut Vec::new());
         crate::deg_90::column::rebuild_shapes(result)
-    }
-
-    fn i_overlay_shapes(
-        subj: &[IntContour<i32>],
-        clip: &[IntContour<i32>],
-        fill_rule: FillRule,
-        overlay_rule: OverlayRule,
-    ) -> IntShapes<i32> {
-        use i_overlay::core::fill_rule::FillRule as IFillRule;
-        use i_overlay::core::overlay::Overlay as IOverlay;
-        use i_overlay::core::overlay_rule::OverlayRule as IOverlayRule;
-
-        let i_fill_rule = match fill_rule {
-            FillRule::EvenOdd => IFillRule::EvenOdd,
-            FillRule::NonZero => IFillRule::NonZero,
-            FillRule::Positive => IFillRule::Positive,
-            FillRule::Negative => IFillRule::Negative,
-        };
-        let i_overlay_rule = match overlay_rule {
-            OverlayRule::Subject => IOverlayRule::Subject,
-            OverlayRule::Clip => IOverlayRule::Clip,
-            OverlayRule::Intersect => IOverlayRule::Intersect,
-            OverlayRule::Union => IOverlayRule::Union,
-            OverlayRule::Difference => IOverlayRule::Difference,
-            OverlayRule::InverseDifference => IOverlayRule::InverseDifference,
-            OverlayRule::Xor => IOverlayRule::Xor,
-        };
-
-        let mut overlay = IOverlay::with_contours(subj, clip);
-        overlay.overlay(i_overlay_rule, i_fill_rule)
     }
 
     fn assert_same_raster(
