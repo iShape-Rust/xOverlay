@@ -52,7 +52,7 @@ While xOverlay is in the prototype stage, add it directly from the repository:
 
 ```toml
 [dependencies]
-x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "feature/optimisation" }
+x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "main" }
 ```
 
 ### Quick Start
