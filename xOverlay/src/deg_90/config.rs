@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy)]
-pub struct ColumnConfig90 {
+pub(crate) struct ColumnConfig90 {
     // minimal number of columns we allow to produce (for tests or very small inputs)
     // invariant: >= 1
     pub(super) min_columns_count: usize,

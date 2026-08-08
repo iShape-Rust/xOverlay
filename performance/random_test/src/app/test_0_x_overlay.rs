@@ -9,6 +9,6 @@ impl RandomTestX1 {
 
     pub fn run(subj: &[IntContour<i32>]) -> IntShapes<i32> {
         let overlay = Overlay::with_contours(subj, &[]);
-        overlay.overlay(FillRule::NonZero, OverlayRule::Subject)
+        overlay.overlay(OverlayRule::Subject, FillRule::NonZero)
     }
 }

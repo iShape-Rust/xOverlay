@@ -437,7 +437,7 @@ mod tests {
 
         let shapes =
             Overlay::<i64>::with_contours_custom(&subject, &clip, options, CPUCount::Single)
-                .overlay(FillRule::NonZero, OverlayRule::Difference);
+                .overlay(OverlayRule::Difference, FillRule::NonZero);
 
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 2);
@@ -968,7 +968,7 @@ mod tests {
                 let overlay =
                     Overlay::<i32>::with_contours_custom(&subject, &clip, options, cpu_count);
                 let actual_columns = overlay.columns.len();
-                black_box(overlay.overlay(FillRule::NonZero, OverlayRule::Xor));
+                black_box(overlay.overlay(OverlayRule::Xor, FillRule::NonZero));
                 std::println!(
                     "nested column sweep: requested={columns_count:>3}, actual={actual_columns:>3}, cpu={cpu_count:?}, elapsed={:?}",
                     start.elapsed(),
@@ -1310,7 +1310,7 @@ mod tests {
             CPUCount::Fixed(columns_count),
         );
         assert_eq!(overlay.columns.len(), columns_count);
-        overlay.overlay(fill_rule, overlay_rule)
+        overlay.overlay(overlay_rule, fill_rule)
     }
 
     fn multi_column_options(

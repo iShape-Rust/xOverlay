@@ -4,13 +4,22 @@ use core::fmt::Debug;
 use core::hash::Hash;
 use core::ops::{Add, BitAnd, Sub};
 
+mod private {
+    pub trait WindingCountSealed {}
+
+    impl WindingCountSealed for i16 {}
+    impl WindingCountSealed for i32 {}
+    impl WindingCountSealed for i64 {}
+}
+
 /// Signed integer storage for subject and clip winding counts.
 ///
 /// [`i16`] is the default used by [`Overlay`](crate::core::overlay::Overlay). Select [`i32`] or
 /// [`i64`] when the input can contain more overlapping or nested contours than fit in `i16`.
 /// Arithmetic follows the overflow behavior of the selected integer type.
 pub trait WindingCount:
-    Clone
+    private::WindingCountSealed
+    + Clone
     + Copy
     + Debug
     + Default

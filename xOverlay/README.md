@@ -82,7 +82,7 @@ let clip = vec![vec![
 ]];
 
 let result = Overlay::<i32>::with_contours(&subject, &clip)
-    .overlay(FillRule::NonZero, OverlayRule::Intersect);
+    .overlay(OverlayRule::Intersect, FillRule::NonZero);
 
 assert_eq!(result.len(), 1);
 assert_eq!(result[0].len(), 1);
@@ -204,7 +204,7 @@ let subject = vec![vec![
 let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
 
 let contours = Overlay::<i32>::with_contours(&subject, &clip)
-    .overlay_contours(FillRule::NonZero, OverlayRule::Subject);
+    .overlay_contours(OverlayRule::Subject, FillRule::NonZero);
 ```
 
 The returned `Vec<IntContour<I>>` keeps outer boundaries and holes separate; their winding direction distinguishes them.
@@ -228,7 +228,7 @@ let subject = vec![vec![
 ]];
 
 let result = Overlay::<i64>::with_contours(&subject, &[])
-    .overlay(FillRule::NonZero, OverlayRule::Subject);
+    .overlay(OverlayRule::Subject, FillRule::NonZero);
 
 assert_eq!(result.len(), 1);
 ```
@@ -252,7 +252,7 @@ let subject = vec![vec![
 
 // i64 coordinates with i32 winding counts.
 let result = Overlay::<i64, i32>::with_contours(&subject, &[])
-    .overlay(FillRule::NonZero, OverlayRule::Subject);
+    .overlay(OverlayRule::Subject, FillRule::NonZero);
 
 assert_eq!(result.len(), 1);
 ```
@@ -281,10 +281,9 @@ let subject = vec![vec![
 ]];
 let clip: Vec<Vec<IntPoint<i32>>> = Vec::new();
 
-let overlay = Overlay::<i32>::with_contours_custom(
+let overlay = Overlay::<i32>::with_cpu_count(
     &subject,
     &clip,
-    Default::default(),
     CPUCount::Single,
 );
 ```

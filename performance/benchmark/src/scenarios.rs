@@ -636,7 +636,7 @@ mod tests {
         assert!(matches!(case.operation, Operation::Difference));
 
         let shapes = Overlay::<i64>::with_contours(&case.subject, &case.clip)
-            .overlay(FillRule::NonZero, OverlayRule::Difference);
+            .overlay(OverlayRule::Difference, FillRule::NonZero);
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 6);
     }
@@ -649,7 +649,7 @@ mod tests {
         assert!(matches!(case.operation, Operation::Union));
 
         let shapes = Overlay::<i64>::with_contours(&case.subject, &case.clip)
-            .overlay(FillRule::NonZero, OverlayRule::Union);
+            .overlay(OverlayRule::Union, FillRule::NonZero);
         assert_eq!(shapes.len(), 1);
         assert_eq!(shapes[0].len(), 2);
         assert_eq!(

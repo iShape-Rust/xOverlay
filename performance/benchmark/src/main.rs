@@ -572,18 +572,13 @@ fn solve_x<I: BenchCoordinate>(
     output_kind: OutputKind,
     cpu_count: CPUCount,
 ) -> RustResult<I> {
-    let overlay = XOverlay::<I>::with_contours_custom(
-        &case.subject,
-        &case.clip,
-        Default::default(),
-        cpu_count,
-    );
+    let overlay = XOverlay::<I>::with_cpu_count(&case.subject, &case.clip, cpu_count);
     match output_kind {
         OutputKind::Shapes => {
-            RustResult::Shapes(overlay.overlay(FillRule::NonZero, x_rule(case.operation)))
+            RustResult::Shapes(overlay.overlay(x_rule(case.operation), FillRule::NonZero))
         }
         OutputKind::Contours => RustResult::Contours(
-            overlay.overlay_contours(FillRule::NonZero, x_rule(case.operation)),
+            overlay.overlay_contours(x_rule(case.operation), FillRule::NonZero),
         ),
     }
 }

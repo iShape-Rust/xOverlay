@@ -14,7 +14,7 @@ fn overlay_supports_i16_coordinates() {
     ]];
 
     let shapes = Overlay::<i16>::with_contours(&subject, &[])
-        .overlay(FillRule::NonZero, OverlayRule::Subject);
+        .overlay(OverlayRule::Subject, FillRule::NonZero);
 
     assert_eq!(shapes.area_two(), 256i32);
 }
@@ -36,7 +36,7 @@ fn overlay_preserves_i64_coordinates_outside_i32_range() {
     ]];
 
     let shapes = Overlay::<i64>::with_contours(&subject, &clip)
-        .overlay(FillRule::NonZero, OverlayRule::Intersect);
+        .overlay(OverlayRule::Intersect, FillRule::NonZero);
 
     assert_eq!(shapes.area_two(), 200i128);
     assert!(
@@ -52,7 +52,7 @@ fn overlay_preserves_i64_coordinates_outside_i32_range() {
 fn overlay_accepts_empty_i64_input() {
     let empty: [Vec<IntPoint<i64>>; 0] = [];
     let shapes = Overlay::<i64>::with_contours(&empty, &empty)
-        .overlay(FillRule::NonZero, OverlayRule::Union);
+        .overlay(OverlayRule::Union, FillRule::NonZero);
 
     assert!(shapes.is_empty());
 }
@@ -67,7 +67,7 @@ fn overlay_supports_i32_winding_counts() {
     ]];
 
     let shapes = Overlay::<i32, i32>::with_contours(&subject, &[])
-        .overlay(FillRule::NonZero, OverlayRule::Subject);
+        .overlay(OverlayRule::Subject, FillRule::NonZero);
 
     assert_eq!(shapes.area_two(), 200i64);
 }
