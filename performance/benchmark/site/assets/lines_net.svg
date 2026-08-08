@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="-59.000 -59.000 118.000 118.000" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-59.000 -59.000 118.000 118.000" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
   <title id="title">Lines net</title>
   <desc id="desc">Symmetric preview of the Lines net intersect benchmark.</desc>
   <rect x="-59.000" y="-59.000" width="118.000" height="118.000" fill="#fbfaf7"/>

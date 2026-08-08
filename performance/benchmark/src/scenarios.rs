@@ -2,13 +2,14 @@ use crate::model::{Case, Contour, Operation, ScenarioInfo};
 use x_overlay::i_float::int::number::int::IntNumber;
 use x_overlay::i_float::int::point::IntPoint;
 
-pub const SCENARIOS: [&str; 6] = [
+pub const SCENARIOS: [&str; 7] = [
     "checkerboard",
     "not_overlap",
     "lines_net",
     "wind_mill",
     "windows",
     "nested_squares",
+    "sieve",
 ];
 
 pub trait Coordinate: IntNumber + Copy {
@@ -65,6 +66,12 @@ pub fn scenario_info() -> Vec<ScenarioInfo> {
             "Union of concentric square rails with deep shape nesting.",
             Operation::Union,
         ),
+        info(
+            "sieve",
+            "Sieve",
+            "One large square perforated by a regular grid of square holes.",
+            Operation::Difference,
+        ),
     ]
 }
 
@@ -81,7 +88,7 @@ fn info(id: &str, label: &str, description: &str, operation: Operation) -> Scena
 pub fn preview_n(scenario: &str) -> usize {
     match scenario {
         "checkerboard" | "not_overlap" | "wind_mill" | "windows" => 3,
-        "lines_net" | "nested_squares" => 5,
+        "lines_net" | "nested_squares" | "sieve" => 5,
         _ => panic!("unknown scenario: {scenario}"),
     }
 }
@@ -89,7 +96,7 @@ pub fn preview_n(scenario: &str) -> usize {
 pub fn smoke_sizes(scenario: &str) -> Vec<usize> {
     match scenario {
         "wind_mill" => vec![1, 2],
-        "checkerboard" | "not_overlap" | "lines_net" | "windows" | "nested_squares" => {
+        "checkerboard" | "not_overlap" | "lines_net" | "windows" | "nested_squares" | "sieve" => {
             vec![2, 4]
         }
         _ => panic!("unknown scenario: {scenario}"),
@@ -108,6 +115,7 @@ pub fn max_n(scenario: &str) -> usize {
         "wind_mill" => 1024,
         "windows" => 2048,
         "nested_squares" => 16_384,
+        "sieve" => 1024,
         _ => panic!("unknown scenario: {scenario}"),
     }
 }
@@ -146,6 +154,7 @@ fn make_case<I: Coordinate>(scenario: &str, n: usize, translation: i64) -> Case<
         "wind_mill" => wind_mill(n),
         "windows" => windows(n),
         "nested_squares" => nested_squares(n),
+        "sieve" => sieve(n),
         _ => panic!("unknown scenario: {scenario}"),
     };
     if translation != 0 {
@@ -344,6 +353,40 @@ fn nested_squares(n: usize) -> Case<i64> {
     }
 }
 
+fn sieve(n: usize) -> Case<i64> {
+    let step = 16_i64;
+    let hole_size = 8_i64;
+    let padding = 8_i64;
+    let first_center = -((n as i64 - 1) * step) / 2;
+    let outer_half = ((n as i64 - 1) * step) / 2 + hole_size / 2 + padding;
+    let mut clip = Vec::with_capacity(n * n);
+    for row in 0..n {
+        for column in 0..n {
+            let center_x = first_center + column as i64 * step;
+            let center_y = first_center + row as i64 * step;
+            clip.push(rectangle(
+                center_x - hole_size / 2,
+                center_y - hole_size / 2,
+                hole_size,
+                hole_size,
+            ));
+        }
+    }
+    Case {
+        scenario: "sieve",
+        label: "Sieve",
+        operation: Operation::Difference,
+        n,
+        subject: vec![rectangle(
+            -outer_half,
+            -outer_half,
+            2 * outer_half,
+            2 * outer_half,
+        )],
+        clip,
+    }
+}
+
 fn rectangle(x: i64, y: i64, width: i64, height: i64) -> Contour<i64> {
     vec![
         IntPoint::new(x, y),
@@ -410,6 +453,7 @@ mod tests {
         assert_eq!(full_sizes("lines_net"), vec![64, 256, 1024, 4096]);
         assert_eq!(full_sizes("wind_mill"), vec![16, 64, 256, 1024]);
         assert_eq!(full_sizes("nested_squares"), vec![256, 1024, 4096, 16_384]);
+        assert_eq!(full_sizes("sieve"), vec![16, 64, 256, 1024]);
     }
 
     #[test]
@@ -418,5 +462,13 @@ mod tests {
             make_i64("nested_squares", 2).operation,
             Operation::Union
         ));
+    }
+
+    #[test]
+    fn sieve_is_one_shape_with_a_square_clip_grid() {
+        let case = make_i64("sieve", 4);
+        assert_eq!(case.subject.len(), 1);
+        assert_eq!(case.clip.len(), 16);
+        assert!(matches!(case.operation, Operation::Difference));
     }
 }

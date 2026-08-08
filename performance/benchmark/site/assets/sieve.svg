@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-51.920 -51.920 103.840 103.840" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+  <title id="title">Sieve</title>
+  <desc id="desc">Symmetric preview of the Sieve difference benchmark.</desc>
+  <rect x="-51.920" y="-51.920" width="103.840" height="103.840" fill="#fbfaf7"/>
+  <path class="subject" d="M -44 -44 L 44 -44 L 44 44 L -44 44 Z " fill="#ef4444" fill-opacity="0.10" stroke="#ef4444" stroke-width="5.000" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+  <path class="clip" d="M -36 -36 L -28 -36 L -28 -28 L -36 -28 Z M -20 -36 L -12 -36 L -12 -28 L -20 -28 Z M -4 -36 L 4 -36 L 4 -28 L -4 -28 Z M 12 -36 L 20 -36 L 20 -28 L 12 -28 Z M 28 -36 L 36 -36 L 36 -28 L 28 -28 Z M -36 -20 L -28 -20 L -28 -12 L -36 -12 Z M -20 -20 L -12 -20 L -12 -12 L -20 -12 Z M -4 -20 L 4 -20 L 4 -12 L -4 -12 Z M 12 -20 L 20 -20 L 20 -12 L 12 -12 Z M 28 -20 L 36 -20 L 36 -12 L 28 -12 Z M -36 -4 L -28 -4 L -28 4 L -36 4 Z M -20 -4 L -12 -4 L -12 4 L -20 4 Z M -4 -4 L 4 -4 L 4 4 L -4 4 Z M 12 -4 L 20 -4 L 20 4 L 12 4 Z M 28 -4 L 36 -4 L 36 4 L 28 4 Z M -36 12 L -28 12 L -28 20 L -36 20 Z M -20 12 L -12 12 L -12 20 L -20 20 Z M -4 12 L 4 12 L 4 20 L -4 20 Z M 12 12 L 20 12 L 20 20 L 12 20 Z M 28 12 L 36 12 L 36 20 L 28 20 Z M -36 28 L -28 28 L -28 36 L -36 36 Z M -20 28 L -12 28 L -12 36 L -20 36 Z M -4 28 L 4 28 L 4 36 L -4 36 Z M 12 28 L 20 28 L 20 36 L 12 36 Z M 28 28 L 36 28 L 36 36 L 28 36 Z " fill="#3b82f6" fill-opacity="0.10" stroke="#3b82f6" stroke-width="5.000" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+</svg>

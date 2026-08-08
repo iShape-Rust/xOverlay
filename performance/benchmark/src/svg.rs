@@ -17,7 +17,7 @@ pub fn render(case: &Case<i64>) -> String {
     writeln!(svg, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>").unwrap();
     writeln!(
         svg,
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"720\" viewBox=\"{view_x:.3} {view_y:.3} {view_width:.3} {view_height:.3}\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-labelledby=\"title desc\">"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" height=\"720\" viewBox=\"{view_x:.3} {view_y:.3} {view_width:.3} {view_height:.3}\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" aria-labelledby=\"title desc\">"
     )
     .unwrap();
     writeln!(svg, "  <title id=\"title\">{}</title>", case.label).unwrap();

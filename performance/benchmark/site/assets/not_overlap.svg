@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="-41.300 -41.300 82.600 82.600" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-41.300 -41.300 82.600 82.600" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
   <title id="title">Not overlap</title>
   <desc id="desc">Symmetric preview of the Not overlap union benchmark.</desc>
   <rect x="-41.300" y="-41.300" width="82.600" height="82.600" fill="#fbfaf7"/>

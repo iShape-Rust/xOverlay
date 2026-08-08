@@ -31,7 +31,7 @@ All user-facing scripts live together in [`scripts`](scripts):
 |---|---|
 | `build.sh` | Builds all Rust tools and the C++ Boost Polygon 90 runner. |
 | `run.sh` | Runs the benchmark, writes JSON, regenerates SVGs, and rebuilds the page. |
-| `generate-svgs.sh` | Recreates the six centered, uncropped scenario illustrations. |
+| `generate-svgs.sh` | Recreates the seven centered, uncropped scenario illustrations. |
 | `render.sh` | Rebuilds `site/index.html` from a result JSON file and the page template. |
 
 ## Quick start
@@ -54,6 +54,7 @@ seconds. Benchmark runs use these fixed values and do not recalibrate them:
 | Orthogonal wind mill | 1024 |
 | Windows | 2048 |
 | Nested squares | 16384 |
+| Sieve | 1024 |
 
 Each scenario benchmarks the ascending series `N/64`, `N/16`, `N/4`, `N`.
 The same series is used for both coordinate widths and both output forms, and
@@ -114,6 +115,7 @@ Available scenario names are:
 - `wind_mill`
 - `windows`
 - `nested_squares`
+- `sieve`
 
 ## Rebuild only the report
 
