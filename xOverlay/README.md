@@ -1,12 +1,13 @@
 # xOverlay
 
-[![status: prototype](https://img.shields.io/badge/status-prototype-orange.svg)](#project-status)
+[![status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#project-status)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 xOverlay is a high-performance polygon Boolean engine specialized for orthogonal (Manhattan) geometry. It processes contours made exclusively of horizontal and vertical edges using integer coordinates.
 
 > [!WARNING]
-> xOverlay is currently a prototype. Its API may change between revisions.
+> xOverlay is experimental. Until 1.0, breaking API changes may be released in new 0.x minor
+> versions.
 
 ## Table of Contents
 
@@ -52,11 +53,11 @@ Use xOverlay when all input edges are axis-aligned and integer coordinates fit y
 &nbsp;
 ## Getting Started
 
-While xOverlay is in the prototype stage, add it directly from the repository:
+xOverlay requires Rust 1.88 or later. Add version 0.1.0 from crates.io:
 
 ```toml
 [dependencies]
-x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "main" }
+x_overlay = "0.1.0"
 ```
 
 ### Quick Start
@@ -301,7 +302,7 @@ Disable default features for a serial `no_std` build:
 
 ```toml
 [dependencies]
-x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "main", default-features = false }
+x_overlay = { version = "0.1.0", default-features = false }
 ```
 
 See the published [interactive performance report](https://ishape-rust.github.io/xOverlay/performance/)
@@ -343,14 +344,16 @@ performance.
 | Edge directions | Horizontal and vertical only | Arbitrary |
 | Coordinate APIs | `i16`, `i32`, `i64` | Integer and floating point |
 | Primary goal | Maximum throughput on orthogonal geometry | General-purpose robust polygon overlays |
-| Project maturity | Prototype | Production-ready |
+| Project maturity | Experimental (0.1.x) | Production-ready |
 
 If geometry may contain diagonal edges, use iOverlay.
 
 &nbsp;
 ## Project Status
 
-xOverlay is under active development and is not yet API-stable. Before adopting it in production, pin a tested revision and validate the output against your workloads.
+xOverlay 0.1.x is under active development and is not API-stable. Before adopting it in
+production, pin an exact tested crate version (for example, `=0.1.0`) and validate the output
+against representative workloads.
 
 &nbsp;
 ## License
