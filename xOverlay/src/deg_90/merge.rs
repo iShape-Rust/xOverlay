@@ -891,13 +891,28 @@ mod tests {
     #[test]
     #[ignore = "stage profiling workload; run explicitly with --release --ignored --nocapture"]
     fn profile_nested_squares_stages() {
-        const N: usize = 4096;
+        const N: usize = 32;
         let (subject, clip) = nested_square_contours(N);
-        profile_workload_stages(
+        let options = multi_column_options(&subject, &clip, 1);
+        let shapes =
+            extract_multi_column(&subject, &clip, 1, FillRule::NonZero, OverlayRule::Union);
+        let contours_count = shapes.iter().map(Vec::len).sum::<usize>();
+        let vertices_count = shapes.iter().flatten().map(Vec::len).sum::<usize>();
+        std::println!(
+            "nested-squares input: contours={}, segments={}, output shapes={}, contours={}, vertices={}",
+            subject.len() + clip.len(),
+            4 * (subject.len() + clip.len()),
+            shapes.len(),
+            contours_count,
+            vertices_count,
+        );
+        profile_workload_stages_with_options(
             "nested-squares",
             &subject,
             &clip,
-            OverlayRule::Xor,
+            OverlayRule::Union,
+            options,
+            &[CPUCount::Single],
             Duration::from_secs(3),
         );
     }
@@ -923,6 +938,7 @@ mod tests {
             &clip,
             OverlayRule::Xor,
             fixed_density,
+            &[CPUCount::Single, CPUCount::Auto],
             Duration::from_secs(2),
         );
 
@@ -934,6 +950,7 @@ mod tests {
             &clip,
             OverlayRule::Xor,
             fixed_partition,
+            &[CPUCount::Single, CPUCount::Auto],
             Duration::from_secs(2),
         );
     }
@@ -1000,6 +1017,7 @@ mod tests {
                 &clip,
                 OverlayRule::Difference,
                 options,
+                &[CPUCount::Single, CPUCount::Auto],
                 Duration::from_secs(2),
             );
         }
@@ -1018,6 +1036,7 @@ mod tests {
             clip,
             overlay_rule,
             IntOverlayOptions::default(),
+            &[CPUCount::Single, CPUCount::Auto],
             profile_time,
         );
     }
@@ -1028,9 +1047,10 @@ mod tests {
         clip: &[IntContour<i32>],
         overlay_rule: OverlayRule,
         options: IntOverlayOptions,
+        cpu_counts: &[CPUCount],
         profile_time: Duration,
     ) {
-        for cpu_count in [CPUCount::Single, CPUCount::Auto] {
+        for &cpu_count in cpu_counts {
             let mut map_time = Duration::ZERO;
             let mut column_time = Duration::ZERO;
             let mut merge_time = Duration::ZERO;

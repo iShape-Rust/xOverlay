@@ -74,7 +74,7 @@
           </div>
           <div class="result-panel">
             ${warning ? `<p class="warning">${escapeHtml(warning)}</p>` : ""}
-            ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">No measurements for this selection.</div>`}
+            ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">Not measured in this run.</div>`}
           </div>
         </article>`;
     }).join("");

@@ -148,10 +148,24 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
         // the segments not more < 100..200 elements
         // the buffers in average much less than 1000 and close to segments.len
 
-        let y = segments.first().unwrap().pos;
+        let first_segment = segments.first().unwrap();
+        let y = first_segment.pos;
+        let first_x = first_segment.range.min;
+        let last_x = segments.last().unwrap().range.max;
+        let active_start = self.active.partition_point(|anchor| anchor.x < first_x);
+        let active_end = self.active.partition_point(|anchor| anchor.x <= last_x);
         let mut left_cursor: Option<NodeCursor> = None;
 
-        for sp in StackIter::new(segments, &self.active) {
+        // Skip unchanged topology outside the current line's segment range by carrying those
+        // active anchors directly to the next line.
+        self.buffer.extend_from_slice(&self.active[..active_start]);
+
+        for sp in StackIter::new(segments, &self.active[active_start..]) {
+            // The first anchor beyond last_x still supplies count.left to the iterator.
+            if sp.x > last_x {
+                break;
+            }
+
             let down_link = !sp.node.is_none();
 
             let up_fill = Fill::fill(sp.c0, sp.c1);
@@ -223,6 +237,11 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
                 self.buffer
                     .push_and_merge(Anchor::new(sp.x, None, sp.c0, sp.c1));
             }
+        }
+
+        if let Some((first, rest)) = self.active[active_end..].split_first() {
+            self.buffer.push_and_merge(*first);
+            self.buffer.extend_from_slice(rest);
         }
 
         self.buffer.remove_empty_anchor();

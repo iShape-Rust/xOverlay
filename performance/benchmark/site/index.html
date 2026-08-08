@@ -181,6 +181,12 @@ tbody tr:last-child td { border-bottom: 0; }
         512,
         2048
       ],
+      "sieve": [
+        16,
+        64,
+        256,
+        1024
+      ],
       "wind_mill": [
         16,
         64,
@@ -250,6 +256,13 @@ tbody tr:last-child td { border-bottom: 0; }
       "description": "Union of concentric square rails with deep shape nesting.",
       "operation": "union",
       "illustration": "assets/nested_squares.svg"
+    },
+    {
+      "id": "sieve",
+      "label": "Sieve",
+      "description": "One large square perforated by a regular grid of square holes.",
+      "operation": "difference",
+      "illustration": "assets/sieve.svg"
     }
   ],
   "measurements": [
@@ -19451,7 +19464,7 @@ tbody tr:last-child td { border-bottom: 0; }
           </div>
           <div class="result-panel">
             ${warning ? `<p class="warning">${escapeHtml(warning)}</p>` : ""}
-            ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">No measurements for this selection.</div>`}
+            ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">Not measured in this run.</div>`}
           </div>
         </article>`;
     }).join("");
