@@ -1,13 +1,8 @@
 use crate::definition::segment::SegmentFill;
 
-#[repr(u8)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum LinkIndex {
-    Left = 0,
-    Up = 1,
-    Right = 2,
-    Down = 3,
-}
+pub(super) struct LinkIndex(u8);
 
 #[cfg(debug_assertions)]
 #[derive(Debug, Clone, Copy)]
@@ -21,17 +16,16 @@ pub(super) struct Link {
     data: u32,
 }
 
+#[allow(non_upper_case_globals)]
 impl LinkIndex {
-    #[inline(always)]
-    pub(super) fn opposite(self) -> Self {
-        // safe because `self as u8 ^ 2` is still 0..=3
-        unsafe { core::mem::transmute::<u8, LinkIndex>(self as u8 ^ 0b10) }
-    }
+    pub(super) const Left: Self = Self(0);
+    pub(super) const Up: Self = Self(1);
+    pub(super) const Right: Self = Self(2);
+    pub(super) const Down: Self = Self(3);
 
     #[inline(always)]
-    pub(super) fn with_order(order: usize) -> Self {
-        debug_assert!(order < 4);
-        unsafe { core::mem::transmute::<u8, LinkIndex>(order as u8) }
+    pub(super) fn opposite(self) -> Self {
+        Self(self.0 ^ 0b10)
     }
 
     #[cfg(test)]
@@ -43,7 +37,7 @@ impl LinkIndex {
 
     #[inline(always)]
     pub(super) fn order(&self) -> usize {
-        *self as usize
+        self.0 as usize
     }
 }
 

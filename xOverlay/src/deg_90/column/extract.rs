@@ -16,7 +16,7 @@ pub(super) struct NodeVisitor {
 impl LinkIndex {
     #[inline(always)]
     fn bit(self) -> u8 {
-        1 << self as u8
+        1 << self.order()
     }
 
     #[inline(always)]
@@ -25,7 +25,13 @@ impl LinkIndex {
         let order = self.order();
         let next = order + step;
         let module = next & 0x03;
-        Self::with_order(module)
+        match module {
+            0 => Self::Left,
+            1 => Self::Up,
+            2 => Self::Right,
+            3 => Self::Down,
+            _ => unreachable!(),
+        }
     }
 }
 

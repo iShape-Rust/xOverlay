@@ -104,7 +104,7 @@ impl<I: OverlayInt> Node<I> {
 
     #[inline(always)]
     fn set_link(&mut self, link: Link, index: LinkIndex) {
-        self.links[index as usize] = link;
+        self.links[index.order()] = link;
     }
 }
 
