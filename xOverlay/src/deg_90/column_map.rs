@@ -156,26 +156,23 @@ impl<I: OverlayInt, W: WindingCount> ColumnMap<I, W> {
                 let y = a.y;
                 let mut x0 = range.min;
 
-                for i in i0..i1 {
+                for (offset, column) in self.columns[i0..i1].iter_mut().enumerate() {
+                    let i = i0 + offset;
                     let xi = layout.left_border(i + 1);
-                    unsafe {
-                        self.columns.get_unchecked_mut(i).segments.push(Segment {
-                            pos: y,
-                            range: LineRange::with_min_max(x0, xi),
-                            count: dir,
-                        });
-                    }
+                    column.segments.push(Segment {
+                        pos: y,
+                        range: LineRange::with_min_max(x0, xi),
+                        count: dir,
+                    });
                     x0 = xi
                 }
 
                 // add last
-                unsafe {
-                    self.columns.get_unchecked_mut(i1).segments.push(Segment {
-                        pos: y,
-                        range: LineRange::with_min_max(x0, range.max),
-                        count: dir,
-                    });
-                }
+                self.columns[i1].segments.push(Segment {
+                    pos: y,
+                    range: LineRange::with_min_max(x0, range.max),
+                    count: dir,
+                });
 
                 a = b;
             }
@@ -190,26 +187,23 @@ impl<I: OverlayInt, W: WindingCount> ColumnMap<I, W> {
             let y = s.pos;
             let mut x0 = s.range.min;
 
-            for i in i0..i1 {
+            for (offset, column) in self.columns[i0..i1].iter_mut().enumerate() {
+                let i = i0 + offset;
                 let xi = layout.left_border(i + 1);
-                unsafe {
-                    self.columns.get_unchecked_mut(i).segments.push(Segment {
-                        pos: y,
-                        range: LineRange::with_min_max(x0, xi),
-                        count: s.count,
-                    });
-                }
+                column.segments.push(Segment {
+                    pos: y,
+                    range: LineRange::with_min_max(x0, xi),
+                    count: s.count,
+                });
                 x0 = xi
             }
 
             // add last
-            unsafe {
-                self.columns.get_unchecked_mut(i1).segments.push(Segment {
-                    pos: y,
-                    range: LineRange::with_min_max(x0, s.range.max),
-                    count: s.count,
-                });
-            }
+            self.columns[i1].segments.push(Segment {
+                pos: y,
+                range: LineRange::with_min_max(x0, s.range.max),
+                count: s.count,
+            });
         }
     }
 
@@ -283,10 +277,8 @@ impl<I: OverlayInt> Mapper<I> {
             };
             let i0 = self.layout.index(x0);
             let i1 = self.layout.index_round_down(x1);
-            for index in i0..=i1 {
-                unsafe {
-                    *self.parts.get_unchecked_mut(index) += 1;
-                }
+            for part in &mut self.parts[i0..=i1] {
+                *part += 1;
             }
         }
     }
@@ -295,10 +287,8 @@ impl<I: OverlayInt> Mapper<I> {
         for s in segments.iter() {
             let i0 = self.layout.index(s.range.min);
             let i1 = self.layout.index_round_down(s.range.max);
-            for index in i0..=i1 {
-                unsafe {
-                    *self.parts.get_unchecked_mut(index) += 1;
-                }
+            for part in &mut self.parts[i0..=i1] {
+                *part += 1;
             }
         }
     }
