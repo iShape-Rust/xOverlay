@@ -1,7 +1,7 @@
 # xOverlay
 
 [![status: prototype](https://img.shields.io/badge/status-prototype-orange.svg)](#project-status)
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 xOverlay is a high-performance polygon Boolean engine specialized for orthogonal (Manhattan) geometry. It processes contours made exclusively of horizontal and vertical edges using integer coordinates.
 
@@ -307,7 +307,8 @@ x_overlay = { git = "https://github.com/iShape-Rust/xOverlay.git", branch = "mai
 See the published [interactive performance report](https://ishape-rust.github.io/xOverlay/performance/)
 for deterministic iOverlay, xOverlay, and Boost Polygon 90 comparisons. The generators,
 raw JSON, scripts, and usage guide live in the repository's
-[`performance/benchmark`](../performance/benchmark) directory.
+[`performance/benchmark`](https://github.com/iShape-Rust/xOverlay/tree/main/performance/benchmark)
+directory.
 
 &nbsp;
 ## Performance Characteristics
@@ -354,4 +355,4 @@ xOverlay is under active development and is not yet API-stable. Before adopting 
 &nbsp;
 ## License
 
-xOverlay is distributed under the [MIT License](../LICENSE).
+xOverlay is distributed under the [MIT License](LICENSE).
