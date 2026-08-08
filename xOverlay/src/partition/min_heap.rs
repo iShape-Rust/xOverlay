@@ -55,6 +55,8 @@ impl<I: IntNumber, W: WindingCount> PosMinHeap<I, W> {
     fn sift_up(&mut self, mut i: usize, x: I) {
         while i > 0 {
             let j = (i - 1) / 2;
+            // SAFETY: `sift_up` starts at the index just pushed into `data`, and every loop
+            // iteration replaces `i` with its strictly smaller parent `j`, so `j < data.len()`.
             let xp = unsafe { self.data.get_unchecked(j) }.x;
             if x < xp {
                 self.data.swap(i, j);
@@ -68,7 +70,7 @@ impl<I: IntNumber, W: WindingCount> PosMinHeap<I, W> {
     #[inline]
     fn sift_down(&mut self, mut i: usize) {
         let n = self.data.len();
-        let x = unsafe { self.data.get_unchecked(i) }.x;
+        let x = self.data[i].x;
         loop {
             let l = 2 * i + 1;
             let r = l + 1;
@@ -77,7 +79,7 @@ impl<I: IntNumber, W: WindingCount> PosMinHeap<I, W> {
                 break;
             }
 
-            let xl = unsafe { self.data.get_unchecked(l) }.x;
+            let xl = self.data[l].x;
 
             if r >= n {
                 if x > xl {
@@ -86,7 +88,7 @@ impl<I: IntNumber, W: WindingCount> PosMinHeap<I, W> {
                 break;
             }
 
-            let xr = unsafe { self.data.get_unchecked(r) }.x;
+            let xr = self.data[r].x;
 
             let (min, j) = if xl < xr { (xl, l) } else { (xr, r) };
 
