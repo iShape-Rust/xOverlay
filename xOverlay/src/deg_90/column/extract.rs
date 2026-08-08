@@ -103,7 +103,9 @@ impl<I: OverlayInt> ColumnGraph<I> {
         {
             slot.write(NodeVisitor::new(node));
         }
-        // Every slot in `0..self.nodes.len()` was initialized by the exact-length zip above.
+        // SAFETY: `clear` sets the length to zero, and `reserve(self.nodes.len())` makes the
+        // spare capacity at least `self.nodes.len()`. The zip therefore writes one initialized
+        // `NodeVisitor` into every slot in `0..self.nodes.len()` before the length is restored.
         unsafe {
             visited.set_len(self.nodes.len());
         }
