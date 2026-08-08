@@ -79,11 +79,69 @@ enum Side {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct BorderNode<I: OverlayInt> {
+struct BorderPortal<I: OverlayInt> {
     y: I,
-    contour_index: usize,
     position: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BorderArc {
+    contour_index: usize,
+    out_position: usize,
+    in_position: usize,
+    next: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BorderEvent<I: OverlayInt> {
+    y: I,
+    tagged_arc: usize,
+}
+
+impl<I: OverlayInt> BorderEvent<I> {
+    #[inline(always)]
+    fn new(y: I, arc_index: usize, side: Side, is_out: bool) -> Self {
+        let side_bit = (side == Side::Right) as usize;
+        Self {
+            y,
+            tagged_arc: (arc_index << 2) | (side_bit << 1) | is_out as usize,
+        }
+    }
+
+    #[inline(always)]
+    fn arc_index(self) -> usize {
+        self.tagged_arc >> 2
+    }
+
+    #[inline(always)]
+    fn side_order(self) -> usize {
+        (self.tagged_arc >> 1) & 1
+    }
+
+    #[inline(always)]
+    fn is_out(self) -> bool {
+        self.tagged_arc & 1 != 0
+    }
+}
+
+#[inline(always)]
+fn push_border_arc<I: OverlayInt>(
+    arcs: &mut Vec<BorderArc>,
+    events: &mut Vec<BorderEvent<I>>,
+    out: BorderPortal<I>,
+    input: BorderPortal<I>,
+    contour_index: usize,
     side: Side,
+) {
+    let arc_index = arcs.len();
+    arcs.push(BorderArc {
+        contour_index,
+        out_position: out.position,
+        in_position: input.position,
+        next: usize::MAX,
+    });
+    events.push(BorderEvent::new(out.y, arc_index, side, true));
+    events.push(BorderEvent::new(input.y, arc_index, side, false));
 }
 
 fn merge_border_contours<I: OverlayInt>(
@@ -96,8 +154,8 @@ fn merge_border_contours<I: OverlayInt>(
     left.append(&mut right);
     let contours = left;
 
-    let mut nodes = Vec::new();
-    let mut arc_end = Vec::new();
+    let mut arcs = Vec::new();
+    let mut border_events = Vec::new();
     for (contour_index, contour) in contours.iter().enumerate() {
         let count = contour.len();
         debug_assert!(
@@ -110,7 +168,8 @@ fn merge_border_contours<I: OverlayInt>(
         } else {
             Side::Right
         };
-        let group_start = nodes.len();
+        let mut first_in = None;
+        let mut pending_out = None;
         for position in 0..count {
             let point = contour[position];
             if point.x != border_x {
@@ -129,92 +188,95 @@ fn merge_border_contours<I: OverlayInt>(
                 "a border portal must have exactly one off-border edge"
             );
 
-            nodes.push(BorderNode {
+            let portal = BorderPortal {
                 y: point.y,
-                contour_index,
                 position,
-                side,
-            });
-            arc_end.push(usize::MAX);
+            };
+            let is_out = next.x != border_x;
+            if is_out {
+                debug_assert!(
+                    pending_out.is_none(),
+                    "contour portals must alternate between in and out"
+                );
+                pending_out = Some(portal);
+            } else if let Some(out) = pending_out.take() {
+                push_border_arc(
+                    &mut arcs,
+                    &mut border_events,
+                    out,
+                    portal,
+                    contour_index,
+                    side,
+                );
+            } else {
+                debug_assert!(
+                    first_in.is_none(),
+                    "contour portals must alternate between in and out"
+                );
+                first_in = Some(portal);
+            }
         }
 
-        let group = group_start..nodes.len();
-        debug_assert_eq!(group.len() & 1, 0, "a contour must have paired portals");
-        for offset in group.clone() {
-            if is_arc_start(&nodes[offset], &contours, border_x) {
-                let end_index = if offset + 1 < group.end {
-                    offset + 1
-                } else {
-                    group.start
-                };
-                debug_assert!(
-                    !is_arc_start(&nodes[end_index], &contours, border_x),
-                    "contour portals must alternate between start and end"
+        match (pending_out, first_in) {
+            (Some(out), Some(input)) => {
+                push_border_arc(
+                    &mut arcs,
+                    &mut border_events,
+                    out,
+                    input,
+                    contour_index,
+                    side,
                 );
-                arc_end[offset] = end_index;
             }
+            (None, None) => {}
+            _ => debug_assert!(false, "a contour must have paired in and out portals"),
         }
     }
 
-    if nodes.is_empty() {
+    if arcs.is_empty() {
         merged.extend(contours);
         return;
     }
-    debug_assert_eq!(nodes.len() & 1, 0, "border nodes must form pairs");
 
-    let mut border_order = (0..nodes.len()).collect::<Vec<_>>();
-    border_order.sort_by_two_keys(
-        false,
-        |index| nodes[*index].y,
-        |index| match nodes[*index].side {
-            Side::Left => 0,
-            Side::Right => 1,
-        },
-    );
+    debug_assert_eq!(border_events.len(), arcs.len() * 2);
+    border_events.sort_by_two_keys(false, |event| event.y, |event| event.side_order());
 
-    let mut border_next = Vec::<mem::MaybeUninit<usize>>::with_capacity(nodes.len());
-    // `MaybeUninit<usize>` is valid without initialization. Only end-portal slots are written
-    // below, and traversal only reads slots obtained from `arc_end`.
-    unsafe {
-        border_next.set_len(nodes.len());
-    }
-    for pair in border_order.chunks_exact(2) {
+    for pair in border_events.chunks_exact(2) {
         let a = pair[0];
         let b = pair[1];
-        let a_is_start = is_arc_start(&nodes[a], &contours, border_x);
-        let b_is_start = is_arc_start(&nodes[b], &contours, border_x);
+        let a_is_out = a.is_out();
+        let b_is_out = b.is_out();
         debug_assert_ne!(
-            a_is_start, b_is_start,
-            "each border pair must contain one contour start and one contour end"
+            a_is_out, b_is_out,
+            "each border pair must contain one in portal and one out portal"
         );
 
-        let (end, start) = if a_is_start { (b, a) } else { (a, b) };
-        border_next[end].write(start);
+        let (input, out) = if a_is_out { (b, a) } else { (a, b) };
+        arcs[input.arc_index()].next = out.arc_index();
     }
 
-    let mut visited = alloc::vec![false; nodes.len()];
+    let mut visited = alloc::vec![false; arcs.len()];
     let mut contour = Vec::new();
-    for start in 0..nodes.len() {
-        if !is_arc_start(&nodes[start], &contours, border_x) || visited[start] {
+    for start in 0..arcs.len() {
+        if visited[start] {
             continue;
         }
         contour.clear();
         let mut current = start;
-        for _ in 0..nodes.len() {
+        for _ in 0..arcs.len() {
             debug_assert!(!visited[current], "portal cycle closes at the wrong start");
             visited[current] = true;
 
-            let end = arc_end[current];
-            debug_assert_ne!(end, usize::MAX, "contour arc has no end portal");
+            let arc = arcs[current];
             append_contour_arc(
-                &contours[nodes[current].contour_index],
-                nodes[current].position,
-                nodes[end].position,
+                &contours[arc.contour_index],
+                arc.out_position,
+                arc.in_position,
                 &mut contour,
             );
 
-            // Every arc end belongs to exactly one border pair initialized above.
-            current = unsafe { border_next[end].assume_init() };
+            debug_assert_ne!(arc.next, usize::MAX, "contour arc has no next out portal");
+            current = arc.next;
             if current == start {
                 break;
             }
@@ -229,16 +291,6 @@ fn merge_border_contours<I: OverlayInt>(
         );
         merged.push(contour.to_vec());
     }
-}
-
-#[inline(always)]
-fn is_arc_start<I: OverlayInt>(
-    node: &BorderNode<I>,
-    contours: &[IntContour<I>],
-    border_x: I,
-) -> bool {
-    let contour = &contours[node.contour_index];
-    contour[(node.position + 1) % contour.len()].x != border_x
 }
 
 #[inline(always)]
