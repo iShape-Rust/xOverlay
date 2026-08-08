@@ -288,6 +288,11 @@ let overlay = Overlay::<i32>::with_cpu_count(
 );
 ```
 
+`CPUCount::Auto` uses the number of threads in the current Rayon thread pool. To use a specific
+thread count, create a Rayon pool and construct and execute the overlay inside
+`ThreadPool::install`. `CPUCount::Fixed` only supplies a solver layout hint and does not
+reconfigure the Rayon thread pool.
+
 Disable default features for a serial `no_std` build:
 
 ```toml
