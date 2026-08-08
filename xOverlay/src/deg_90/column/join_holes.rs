@@ -221,6 +221,10 @@ impl<I: OverlayInt> ColumnGraph<I> {
         if holes.is_empty() {
             return;
         }
+        if shapes.len() == 1 {
+            shapes[0].extend(holes);
+            return;
+        }
 
         let mut active_segments_count: usize = 0;
 

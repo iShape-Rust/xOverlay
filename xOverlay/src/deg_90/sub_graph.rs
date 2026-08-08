@@ -7,6 +7,8 @@ use crate::deg_90::column::SolverBuffer;
 use crate::deg_90::column_map::Column;
 use crate::geom::range::LineRange;
 use alloc::vec::Vec;
+use i_float::int::number::wide_int::WideIntNumber;
+use i_shape::int::area::Area;
 use i_shape::int::shape::{IntContour, IntShapes};
 #[cfg(feature = "allow_multithreading")]
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -157,6 +159,10 @@ impl<I: OverlayInt> SubGraph<I> {
             }
         }
 
+        if has_single_outer_contour(&base_contours, &leaf_chunks) {
+            return build_single_shape(base_contours, leaf_chunks);
+        }
+
         let (mut shapes, base_info) = column::build_base_shapes(base_contours);
 
         #[cfg(feature = "allow_multithreading")]
@@ -186,6 +192,56 @@ impl<I: OverlayInt> SubGraph<I> {
         }
         shapes
     }
+}
+
+fn has_single_outer_contour<I: OverlayInt>(
+    base_contours: &[IntContour<I>],
+    leaf_chunks: &[ContourChunk<I>],
+) -> bool {
+    let mut outer_count = 0;
+    let contours = base_contours
+        .iter()
+        .chain(leaf_chunks.iter().flat_map(|chunk| chunk.contours.iter()));
+
+    for contour in contours {
+        if contour.area_two() > I::Wide::ZERO {
+            outer_count += 1;
+            if outer_count > 1 {
+                return false;
+            }
+        }
+    }
+
+    outer_count == 1
+}
+
+fn build_single_shape<I: OverlayInt>(
+    base_contours: Vec<IntContour<I>>,
+    leaf_chunks: Vec<ContourChunk<I>>,
+) -> IntShapes<I> {
+    let contour_count = base_contours.len()
+        + leaf_chunks
+            .iter()
+            .map(|chunk| chunk.contours.len())
+            .sum::<usize>();
+    let mut shape = Vec::with_capacity(contour_count);
+    shape.push(IntContour::new());
+
+    let contours = base_contours
+        .into_iter()
+        .chain(leaf_chunks.into_iter().flat_map(|chunk| chunk.contours));
+    for contour in contours {
+        let area = contour.area_two();
+        if area > I::Wide::ZERO {
+            debug_assert!(shape[0].is_empty(), "only one outer contour is expected");
+            shape[0] = contour;
+        } else if area < I::Wide::ZERO {
+            shape.push(contour);
+        }
+    }
+
+    debug_assert!(!shape[0].is_empty(), "the outer contour must be present");
+    alloc::vec![shape]
 }
 
 fn border_sides<I: OverlayInt>(contour: &IntContour<I>, range: LineRange<I>) -> (bool, bool) {

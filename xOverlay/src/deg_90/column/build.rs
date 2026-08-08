@@ -113,6 +113,8 @@ struct NodeCursor {
     fill: SegmentFill,
 }
 
+const IN_PLACE_SEGMENTS_LIMIT: usize = 16;
+
 #[derive(Default)]
 pub(crate) struct ScanBuffer<I: OverlayInt, W: WindingCount = i16> {
     active: Vec<Anchor<I, W>>,
@@ -142,6 +144,21 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
         Fill: FillStrategy<ShapeCountBoolean<W>>,
         Filter: FilterStrategy,
     {
+        if segments.len() < IN_PLACE_SEGMENTS_LIMIT {
+            self.add_segments_in_place::<Fill, Filter>(segments, nodes);
+        } else {
+            self.add_segments_buffered::<Fill, Filter>(segments, nodes);
+        }
+    }
+
+    fn add_segments_buffered<Fill, Filter>(
+        &mut self,
+        segments: &[Segment<I, W>],
+        nodes: &mut Vec<Node<I>>,
+    ) where
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
+        Filter: FilterStrategy,
+    {
         // segments are always sorted by range.min and not overlap each other
         // s(i).range.max <= s(i+1).range.min
         // segment.count.is_not_empty() === true
@@ -154,13 +171,105 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
         let last_x = segments.last().unwrap().range.max;
         let active_start = self.active.partition_point(|anchor| anchor.x < first_x);
         let active_end = self.active.partition_point(|anchor| anchor.x <= last_x);
-        let mut left_cursor: Option<NodeCursor> = None;
 
         // Skip unchanged topology outside the current line's segment range by carrying those
         // active anchors directly to the next line.
-        self.buffer.extend_from_slice(&self.active[..active_start]);
+        self.buffer
+            .extend_copy_from_slice(&self.active[..active_start]);
 
-        for sp in StackIter::new(segments, &self.active[active_start..]) {
+        Self::append_changed_topology::<Fill, Filter>(
+            segments,
+            &self.active[active_start..],
+            last_x,
+            y,
+            nodes,
+            &mut self.buffer,
+        );
+
+        if let Some((first, rest)) = self.active[active_end..].split_first() {
+            self.buffer.push_and_merge(*first);
+            self.buffer.extend_copy_from_slice(rest);
+        }
+
+        self.buffer.remove_empty_anchor();
+        swap(&mut self.active, &mut self.buffer);
+        self.buffer.clear();
+    }
+
+    fn add_segments_in_place<Fill, Filter>(
+        &mut self,
+        segments: &[Segment<I, W>],
+        nodes: &mut Vec<Node<I>>,
+    ) where
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
+        Filter: FilterStrategy,
+    {
+        let first_segment = segments.first().unwrap();
+        let y = first_segment.pos;
+        let first_x = first_segment.range.min;
+        let last_x = segments.last().unwrap().range.max;
+        let active_start = self.active.partition_point(|anchor| anchor.x < first_x);
+        let active_end = self.active.partition_point(|anchor| anchor.x <= last_x);
+
+        debug_assert!(self.buffer.is_empty());
+        Self::append_changed_topology::<Fill, Filter>(
+            segments,
+            &self.active[active_start..],
+            last_x,
+            y,
+            nodes,
+            &mut self.buffer,
+        );
+
+        let mut replace_start = active_start;
+        if replace_start > 0
+            && self
+                .buffer
+                .first()
+                .is_some_and(|first| first.count.left == self.active[replace_start - 1].count.left)
+        {
+            replace_start -= 1;
+        }
+
+        if let Some(suffix) = self.active.get(active_end) {
+            if self
+                .buffer
+                .last()
+                .is_some_and(|last| last.count.left == suffix.count.left)
+            {
+                self.buffer.pop();
+            } else if self.buffer.is_empty()
+                && replace_start == active_start
+                && replace_start > 0
+                && self.active[replace_start - 1].count.left == suffix.count.left
+            {
+                replace_start -= 1;
+            }
+        }
+
+        // With only a few new segments, replace just the topology that can change and keep the
+        // unchanged active prefix and suffix in place.
+        drop(
+            self.active
+                .splice(replace_start..active_end, self.buffer.drain(..)),
+        );
+        self.active.remove_empty_anchor();
+    }
+
+    fn append_changed_topology<Fill, Filter>(
+        segments: &[Segment<I, W>],
+        active: &[Anchor<I, W>],
+        last_x: I,
+        y: I,
+        nodes: &mut Vec<Node<I>>,
+        buffer: &mut Vec<Anchor<I, W>>,
+    ) where
+        Fill: FillStrategy<ShapeCountBoolean<W>>,
+        Filter: FilterStrategy,
+    {
+        let mut left_cursor: Option<NodeCursor> = None;
+
+        for sp in StackIter::new(segments, active) {
             // The first anchor beyond last_x still supplies count.left to the iterator.
             if sp.x > last_x {
                 break;
@@ -231,22 +340,11 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
                     });
                 };
 
-                self.buffer
-                    .push_and_merge(Anchor::new(sp.x, up, sp.c0, sp.c1));
+                buffer.push_and_merge(Anchor::new(sp.x, up, sp.c0, sp.c1));
             } else {
-                self.buffer
-                    .push_and_merge(Anchor::new(sp.x, None, sp.c0, sp.c1));
+                buffer.push_and_merge(Anchor::new(sp.x, None, sp.c0, sp.c1));
             }
         }
-
-        if let Some((first, rest)) = self.active[active_end..].split_first() {
-            self.buffer.push_and_merge(*first);
-            self.buffer.extend_from_slice(rest);
-        }
-
-        self.buffer.remove_empty_anchor();
-        swap(&mut self.active, &mut self.buffer);
-        self.buffer.clear();
     }
 
     #[inline]
@@ -256,12 +354,31 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
     }
 }
 trait AnchorBuffer<I: OverlayInt, W: WindingCount> {
+    fn extend_copy_from_slice(&mut self, anchors: &[Anchor<I, W>]);
+
     fn push_and_merge(&mut self, anchor: Anchor<I, W>);
 
     fn remove_empty_anchor(&mut self);
 }
 
 impl<I: OverlayInt, W: WindingCount> AnchorBuffer<I, W> for Vec<Anchor<I, W>> {
+    #[inline(always)]
+    fn extend_copy_from_slice(&mut self, anchors: &[Anchor<I, W>]) {
+        let len = self.len();
+        self.reserve(anchors.len());
+
+        // SAFETY: reserve provides enough uninitialized space, and `&mut self` prevents an
+        // overlapping source slice in safe code.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                anchors.as_ptr(),
+                self.as_mut_ptr().add(len),
+                anchors.len(),
+            );
+            self.set_len(len + anchors.len());
+        }
+    }
+
     #[inline(always)]
     fn push_and_merge(&mut self, anchor: Anchor<I, W>) {
         if let Some(last) = self.last_mut()

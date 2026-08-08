@@ -24,6 +24,7 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
 - [Integer Types](#integer-types)
   - [Winding Count Type](#winding-count-type)
 - [Multithreading](#multithreading)
+- [Performance Characteristics](#performance-characteristics)
 - [xOverlay and iOverlay](#xoverlay-and-ioverlay)
 - [Project Status](#project-status)
 - [License](#license)
@@ -299,6 +300,31 @@ See the published [interactive performance report](https://ishape-rust.github.io
 for deterministic iOverlay, xOverlay, and Boost Polygon 90 comparisons. The generators,
 raw JSON, scripts, and usage guide live in the repository's
 [`performance/benchmark`](../performance/benchmark) directory.
+
+&nbsp;
+## Performance Characteristics
+
+xOverlay uses a column-partitioned scanline solver with a compact, contiguous active topology.
+This design is optimized for spatially distributed Manhattan geometry with batched topology
+changes, as commonly found in EDA layouts, routing data, grids, and rectilinear CAD workloads.
+Column partitioning keeps the active topology local while contiguous storage provides predictable
+memory access and good cache utilization.
+
+Runtime is sensitive to the distribution of edges across scanlines. Deeply nested
+contours[^nested-squares] are a worst-case pattern: an input may contain `O(N)` distinct scanlines
+while retaining an `O(N)` active topology and changing only a small part of it on each line.
+Repeated updates to that topology can therefore approach `O(N²)` work. More uniformly distributed
+EDA geometry typically changes a larger portion of each local topology and benefits more from
+column partitioning, so this nested pattern is not expected to represent the primary target
+workload.
+
+As with any geometry engine, benchmark representative production data when throughput is a design
+constraint. In particular, the number of distinct scanlines, the average and maximum active
+topology size, and the number of segments changed per scanline are useful indicators of expected
+performance.
+
+[^nested-squares]: The **Nested squares** benchmark scenario intentionally exercises this deeply
+    nested worst-case pattern.
 
 &nbsp;
 ## xOverlay and iOverlay

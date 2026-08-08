@@ -2,11 +2,13 @@ use crate::model::{Case, Contour, Operation, ScenarioInfo};
 use x_overlay::i_float::int::number::int::IntNumber;
 use x_overlay::i_float::int::point::IntPoint;
 
-pub const SCENARIOS: [&str; 7] = [
+pub const SCENARIOS: [&str; 9] = [
     "checkerboard",
     "not_overlap",
     "lines_net",
     "wind_mill",
+    "cross",
+    "tetris_square",
     "windows",
     "nested_squares",
     "sieve",
@@ -55,6 +57,18 @@ pub fn scenario_info() -> Vec<ScenarioInfo> {
             Operation::Difference,
         ),
         info(
+            "cross",
+            "Cross",
+            "Two overlapping rectangles with square holes near four arm ends and at the center.",
+            Operation::Difference,
+        ),
+        info(
+            "tetris_square",
+            "Tetris square",
+            "Four diagonally paired L tetrominoes form a square frame around a 3x3-cell hole.",
+            Operation::Union,
+        ),
+        info(
             "windows",
             "Windows",
             "A grid of square frames, each producing one hole.",
@@ -87,7 +101,7 @@ fn info(id: &str, label: &str, description: &str, operation: Operation) -> Scena
 
 pub fn preview_n(scenario: &str) -> usize {
     match scenario {
-        "checkerboard" | "not_overlap" | "wind_mill" | "windows" => 3,
+        "checkerboard" | "not_overlap" | "wind_mill" | "cross" | "tetris_square" | "windows" => 3,
         "lines_net" | "nested_squares" | "sieve" => 5,
         _ => panic!("unknown scenario: {scenario}"),
     }
@@ -95,7 +109,7 @@ pub fn preview_n(scenario: &str) -> usize {
 
 pub fn smoke_sizes(scenario: &str) -> Vec<usize> {
     match scenario {
-        "wind_mill" => vec![1, 2],
+        "wind_mill" | "cross" | "tetris_square" => vec![1, 2],
         "checkerboard" | "not_overlap" | "lines_net" | "windows" | "nested_squares" | "sieve" => {
             vec![2, 4]
         }
@@ -113,6 +127,8 @@ pub fn max_n(scenario: &str) -> usize {
         "not_overlap" => 2048,
         "lines_net" => 4096,
         "wind_mill" => 1024,
+        "cross" => 1024,
+        "tetris_square" => 1024,
         "windows" => 2048,
         "nested_squares" => 16_384,
         "sieve" => 1024,
@@ -152,6 +168,8 @@ fn make_case<I: Coordinate>(scenario: &str, n: usize, translation: i64) -> Case<
         "not_overlap" => not_overlap(n),
         "lines_net" => lines_net(n),
         "wind_mill" => wind_mill(n),
+        "cross" => cross(n),
+        "tetris_square" => tetris_square(n),
         "windows" => windows(n),
         "nested_squares" => nested_squares(n),
         "sieve" => sieve(n),
@@ -309,6 +327,125 @@ fn transform_contour(points: &[(i64, i64)], center: (i64, i64), quarter: usize) 
         .collect()
 }
 
+fn cross(n: usize) -> Case<i64> {
+    let cell = 80_i64;
+    let arm_length = 60_i64;
+    let arm_thickness = 20_i64;
+    let square_size = 10_i64;
+    let half_length = arm_length / 2;
+    let half_thickness = arm_thickness / 2;
+    let half_square = square_size / 2;
+    let end_square_offset = half_length - square_size;
+    let grid_start = -((n as i64 - 1) * cell) / 2;
+    let mut subject = Vec::with_capacity(2 * n * n);
+    let mut clip = Vec::with_capacity(5 * n * n);
+
+    for row in 0..n {
+        for column in 0..n {
+            let center_x = grid_start + column as i64 * cell;
+            let center_y = grid_start + row as i64 * cell;
+            subject.push(rectangle(
+                center_x - half_length,
+                center_y - half_thickness,
+                arm_length,
+                arm_thickness,
+            ));
+            subject.push(rectangle(
+                center_x - half_thickness,
+                center_y - half_length,
+                arm_thickness,
+                arm_length,
+            ));
+
+            for (dx, dy) in [
+                (-end_square_offset, 0),
+                (end_square_offset, 0),
+                (0, -end_square_offset),
+                (0, end_square_offset),
+                (0, 0),
+            ] {
+                clip.push(rectangle(
+                    center_x + dx - half_square,
+                    center_y + dy - half_square,
+                    square_size,
+                    square_size,
+                ));
+            }
+        }
+    }
+
+    Case {
+        scenario: "cross",
+        label: "Cross",
+        operation: Operation::Difference,
+        n,
+        subject,
+        clip,
+    }
+}
+
+fn tetris_square(n: usize) -> Case<i64> {
+    let cell = 70_i64;
+    let grid_start = -((n as i64 - 1) * cell) / 2;
+    let mut subject = Vec::with_capacity(2 * n * n);
+    let mut clip = Vec::with_capacity(2 * n * n);
+
+    for row in 0..n {
+        for column in 0..n {
+            let center = (
+                grid_start + column as i64 * cell,
+                grid_start + row as i64 * cell,
+            );
+            subject.push(offset_contour(
+                &[
+                    (-25, -25),
+                    (5, -25),
+                    (5, -15),
+                    (-15, -15),
+                    (-15, -5),
+                    (-25, -5),
+                ],
+                center,
+            ));
+            subject.push(offset_contour(
+                &[(15, 5), (25, 5), (25, 25), (-5, 25), (-5, 15), (15, 15)],
+                center,
+            ));
+            clip.push(offset_contour(
+                &[(5, -25), (25, -25), (25, 5), (15, 5), (15, -15), (5, -15)],
+                center,
+            ));
+            clip.push(offset_contour(
+                &[
+                    (-25, -5),
+                    (-15, -5),
+                    (-15, 15),
+                    (-5, 15),
+                    (-5, 25),
+                    (-25, 25),
+                ],
+                center,
+            ));
+        }
+    }
+
+    Case {
+        scenario: "tetris_square",
+        label: "Tetris square",
+        operation: Operation::Union,
+        n,
+        subject,
+        clip,
+    }
+}
+
+fn offset_contour(points: &[(i64, i64)], offset: (i64, i64)) -> Contour<i64> {
+    points
+        .iter()
+        .map(|&(x, y)| IntPoint::new(offset.0 + x, offset.1 + y))
+        .collect()
+}
+
 fn windows(n: usize) -> Case<i64> {
     let extent = (n as i64 - 1) * 30 + 20;
     let start = -extent / 2;
@@ -398,8 +535,13 @@ fn rectangle(x: i64, y: i64, width: i64, height: i64) -> Contour<i64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SCENARIOS, full_sizes, make_i64, make_preview, max_n};
+    use super::{
+        SCENARIOS, cross, full_sizes, make_i64, make_preview, max_n, rectangle, tetris_square,
+    };
     use crate::model::Operation;
+    use x_overlay::core::fill_rule::FillRule;
+    use x_overlay::core::overlay::Overlay;
+    use x_overlay::core::overlay_rule::OverlayRule;
 
     #[test]
     fn every_preview_is_orthogonal_and_centered() {
@@ -452,6 +594,8 @@ mod tests {
         assert_eq!(full_sizes("checkerboard"), vec![32, 128, 512, 2048]);
         assert_eq!(full_sizes("lines_net"), vec![64, 256, 1024, 4096]);
         assert_eq!(full_sizes("wind_mill"), vec![16, 64, 256, 1024]);
+        assert_eq!(full_sizes("cross"), vec![16, 64, 256, 1024]);
+        assert_eq!(full_sizes("tetris_square"), vec![16, 64, 256, 1024]);
         assert_eq!(full_sizes("nested_squares"), vec![256, 1024, 4096, 16_384]);
         assert_eq!(full_sizes("sieve"), vec![16, 64, 256, 1024]);
     }
@@ -470,5 +614,50 @@ mod tests {
         assert_eq!(case.subject.len(), 1);
         assert_eq!(case.clip.len(), 16);
         assert!(matches!(case.operation, Operation::Difference));
+    }
+
+    #[test]
+    fn cross_has_two_subject_rectangles_and_five_clip_squares_per_cell() {
+        let case = cross(1);
+        assert_eq!(
+            case.subject,
+            vec![rectangle(-30, -10, 60, 20), rectangle(-10, -30, 20, 60)]
+        );
+        assert_eq!(
+            case.clip,
+            vec![
+                rectangle(-25, -5, 10, 10),
+                rectangle(15, -5, 10, 10),
+                rectangle(-5, -25, 10, 10),
+                rectangle(-5, 15, 10, 10),
+                rectangle(-5, -5, 10, 10),
+            ]
+        );
+        assert!(matches!(case.operation, Operation::Difference));
+
+        let shapes = Overlay::<i64>::with_contours(&case.subject, &case.clip)
+            .overlay(FillRule::NonZero, OverlayRule::Difference);
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 6);
+    }
+
+    #[test]
+    fn tetris_square_has_diagonal_inputs_and_one_square_hole() {
+        let case = tetris_square(1);
+        assert_eq!(case.subject.len(), 2);
+        assert_eq!(case.clip.len(), 2);
+        assert!(matches!(case.operation, Operation::Union));
+
+        let shapes = Overlay::<i64>::with_contours(&case.subject, &case.clip)
+            .overlay(FillRule::NonZero, OverlayRule::Union);
+        assert_eq!(shapes.len(), 1);
+        assert_eq!(shapes[0].len(), 2);
+        assert_eq!(
+            shapes[0][1]
+                .iter()
+                .map(|point| (point.x, point.y))
+                .collect::<Vec<_>>(),
+            vec![(-15, -15), (-15, 15), (15, 15), (15, -15)]
+        );
     }
 }
