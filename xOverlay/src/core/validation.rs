@@ -89,9 +89,17 @@ impl<I: OverlayInt> Contour<I> for [IntPoint<I>] {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContourValidationError {
     /// The contour contains fewer than four vertices.
-    TooFewVertices { count: usize },
+    TooFewVertices {
+        /// Number of vertices found in the contour.
+        count: usize,
+    },
     /// An edge changes both coordinates and is therefore neither horizontal nor vertical.
-    NonOrthogonalEdge { start: usize, end: usize },
+    NonOrthogonalEdge {
+        /// Index of the edge's first vertex.
+        start: usize,
+        /// Index of the edge's second vertex.
+        end: usize,
+    },
 }
 
 impl fmt::Display for ContourValidationError {
@@ -113,9 +121,17 @@ impl core::error::Error for ContourValidationError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContourWarning {
     /// Two adjacent vertices describe an edge with no length.
-    ZeroLengthEdge { start: usize, end: usize },
+    ZeroLengthEdge {
+        /// Index of the edge's first vertex.
+        start: usize,
+        /// Index of the edge's second vertex.
+        end: usize,
+    },
     /// The vertex lies between two collinear edges and is redundant for the solver.
-    CollinearVertex { index: usize },
+    CollinearVertex {
+        /// Index of the redundant vertex.
+        index: usize,
+    },
 }
 
 impl fmt::Display for ContourWarning {

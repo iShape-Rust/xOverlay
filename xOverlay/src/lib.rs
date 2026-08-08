@@ -2,6 +2,7 @@
 //!
 //! `xOverlay` provides high-performance Boolean operations for orthogonal (Manhattan) polygons.
 #![no_std]
+#![deny(missing_docs)]
 extern crate alloc;
 
 pub mod core;

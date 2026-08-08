@@ -1,3 +1,5 @@
+//! Parallel-execution configuration for the overlay solver.
+
 /// Controls how much parallelism the overlay solver may use.
 #[derive(Debug, Clone, Copy)]
 pub enum CPUCount {

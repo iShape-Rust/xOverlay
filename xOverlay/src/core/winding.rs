@@ -32,10 +32,14 @@ pub trait WindingCount:
     + Sub<Output = Self>
     + BitAnd<Output = Self>
 {
+    /// Additive identity used for an empty winding count.
     const ZERO: Self;
+    /// Positive unit winding contribution.
     const ONE: Self;
+    /// Negative unit winding contribution.
     const NEG_ONE: Self;
 
+    /// Returns `true` when the winding count is odd.
     #[inline(always)]
     fn is_odd(self) -> bool {
         self & Self::ONE != Self::ZERO

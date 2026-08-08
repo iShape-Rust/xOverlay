@@ -1,3 +1,5 @@
+//! Boolean operations supported by the overlay solver.
+
 use crate::definition::segment::{BOTH_BOTTOM, BOTH_TOP, CLIP_TOP, NONE, SUBJ_TOP, SegmentFill};
 use core::fmt;
 
@@ -11,12 +13,19 @@ use core::fmt;
 /// - `Xor`: Produces a shape consisting of areas unique to each shape, excluding any parts where the subject and clip overlap.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum OverlayRule {
+    /// Returns the filled area of the subject contours.
     Subject,
+    /// Returns the filled area of the clip contours.
     Clip,
+    /// Returns the area shared by the subject and clip.
     Intersect,
+    /// Returns the area covered by either the subject or the clip.
     Union,
+    /// Subtracts the clip area from the subject area.
     Difference,
+    /// Subtracts the subject area from the clip area.
     InverseDifference,
+    /// Returns the area covered by exactly one of the subject or clip.
     Xor,
 }
 

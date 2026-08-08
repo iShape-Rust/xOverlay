@@ -1,3 +1,5 @@
+//! Prepared input geometry and execution methods for orthogonal Boolean operations.
+
 use crate::core::cpu_count::CPUCount;
 use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;

@@ -1,3 +1,5 @@
+//! Public types for configuring, validating, and executing orthogonal Boolean operations.
+
 pub mod cpu_count;
 pub mod fill_rule;
 pub mod integer;
