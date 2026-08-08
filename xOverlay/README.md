@@ -90,6 +90,10 @@ assert_eq!(result[0].len(), 1);
 
 Contours are closed automatically; do not repeat the first point at the end.
 
+`Overlay` is a one-shot value: `overlay` and `overlay_contours` consume it so the solver does not
+need to clone its internal column representation. Construct a new `Overlay` to execute another
+Boolean rule for the same input contours.
+
 &nbsp;
 ## Boolean Operations
 

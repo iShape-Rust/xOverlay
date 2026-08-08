@@ -10,8 +10,13 @@ use i_shape::int::shape::{IntContour, IntShapes};
 
 /// Input geometry prepared for an orthogonal Boolean operation.
 ///
+/// An `Overlay` is a one-shot value. [`Self::overlay`] and [`Self::overlay_contours`] consume it so
+/// the solver can process its internal column representation without cloning it. Construct a new
+/// `Overlay` to execute another rule for the same input contours.
+///
 /// `I` is the coordinate type. `W` stores intermediate subject and clip winding counts and
 /// defaults to [`i16`]. Use [`i32`] or [`i64`] when the winding depth may exceed the `i16` range.
+#[must_use = "an Overlay must be consumed by overlay or overlay_contours to produce a result"]
 pub struct Overlay<I: OverlayInt, W: WindingCount = i16> {
     pub(crate) options: IntOverlayOptions,
     #[cfg(feature = "allow_multithreading")]
@@ -67,7 +72,8 @@ impl<I: OverlayInt, W: WindingCount> Overlay<I, W> {
     /// Executes one Boolean operation and returns shapes with holes grouped under their outer
     /// contours.
     ///
-    /// This method consumes the prepared input geometry.
+    /// This method consumes the prepared input geometry. Construct a new [`Overlay`] to execute a
+    /// different rule for the same contours.
     #[inline]
     pub fn overlay(self, overlay_rule: OverlayRule, fill_rule: FillRule) -> IntShapes<I> {
         self.process_overlay(fill_rule, overlay_rule)
@@ -77,7 +83,8 @@ impl<I: OverlayInt, W: WindingCount> Overlay<I, W> {
     ///
     /// Unlike [`Self::overlay`], this method does not group holes with their containing outer
     /// contours. Outer contours and holes are distinguished by their winding direction.
-    /// This method consumes the prepared input geometry.
+    /// This method consumes the prepared input geometry. Construct a new [`Overlay`] to execute a
+    /// different rule for the same contours.
     #[inline]
     pub fn overlay_contours(
         self,
