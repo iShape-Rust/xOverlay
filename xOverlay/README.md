@@ -1,7 +1,7 @@
 # xOverlay
 
 [![status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#project-status)
-[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 xOverlay is a high-performance polygon Boolean engine specialized for orthogonal (Manhattan) geometry. It processes contours made exclusively of horizontal and vertical edges using integer coordinates.
 
@@ -358,4 +358,4 @@ against representative workloads.
 &nbsp;
 ## License
 
-xOverlay is distributed under the [MIT License](LICENSE).
+xOverlay is distributed under the [MIT License](./LICENSE).

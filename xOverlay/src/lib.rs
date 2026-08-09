@@ -1,6 +1,4 @@
-//! # xOverlay
-//!
-//! `xOverlay` provides high-performance Boolean operations for orthogonal (Manhattan) polygons.
+#![doc = include_str!("../README.md")]
 #![no_std]
 #![deny(missing_docs)]
 extern crate alloc;
