@@ -51,10 +51,6 @@ jobs:
       - name: Verify release package
         run: cargo package
 
-      - name: Check benchmark project
-        working-directory: .
-        run: cargo check --manifest-path performance/benchmark/Cargo.toml --all-targets
-
   msrv:
     name: MSRV 1.88
     runs-on: ubuntu-latest

@@ -115,6 +115,20 @@ struct NodeCursor {
 
 const IN_PLACE_SEGMENTS_LIMIT: usize = 16;
 
+#[inline(always)]
+fn checked_node_index(index: usize) -> u32 {
+    u32::try_from(index).expect("a column graph cannot contain more than 2^32 nodes")
+}
+
+#[inline(always)]
+fn checked_node_pair(index: usize) -> (u32, u32) {
+    let this = checked_node_index(index);
+    let up = this
+        .checked_add(1)
+        .expect("a column graph cannot contain more than 2^32 nodes");
+    (this, up)
+}
+
 #[derive(Default)]
 pub(crate) struct ScanBuffer<I: OverlayInt, W: WindingCount = i16> {
     active: Vec<Anchor<I, W>>,
@@ -294,7 +308,7 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
 
                     let mut up_node = 0;
                     if up_link {
-                        let up = n as u32;
+                        let up = checked_node_index(n);
                         node.set_link(Link::new(up, up_fill), LinkIndex::Up);
 
                         let mut top = Node::new(IntPoint::EMPTY);
@@ -308,8 +322,7 @@ impl<I: OverlayInt, W: WindingCount> ScanBuffer<I, W> {
                     // down node is not exist
                     // this and up node must be created
 
-                    let this = nodes.len() as u32;
-                    let up = this + 1;
+                    let (this, up) = checked_node_pair(nodes.len());
 
                     let mut node = Node::new(p);
                     node.set_link(Link::new(up, up_fill), LinkIndex::Up);
@@ -405,7 +418,7 @@ mod tests {
     use crate::core::fill_rule::FillRule;
     use crate::core::overlay_rule::OverlayRule;
     use crate::definition::segment::SegmentFill;
-    use crate::deg_90::column::build::ScanBuffer;
+    use crate::deg_90::column::build::{ScanBuffer, checked_node_index, checked_node_pair};
     use crate::deg_90::column::graph::ColumnGraph;
     use crate::deg_90::column::link::LinkIndex;
     use crate::deg_90::column_map::ColumnMap;
@@ -418,6 +431,25 @@ mod tests {
     use i_shape::int::shape::{IntContour, IntShape};
     use i_shape::int_shape;
     use rand::RngExt;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn link_index_accepts_the_u32_boundary() {
+        assert_eq!(checked_node_index(u32::MAX as usize), u32::MAX);
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    #[should_panic(expected = "a column graph cannot contain more than 2^32 nodes")]
+    fn link_index_rejects_more_than_u32_nodes() {
+        _ = checked_node_index(u32::MAX as usize + 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "a column graph cannot contain more than 2^32 nodes")]
+    fn link_pair_rejects_an_unrepresentable_second_index() {
+        _ = checked_node_pair(u32::MAX as usize);
+    }
 
     #[test]
     fn test_0() {

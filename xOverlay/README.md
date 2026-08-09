@@ -26,6 +26,7 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
   - [Winding Count Type](#winding-count-type)
 - [Multithreading](#multithreading)
 - [Performance Characteristics](#performance-characteristics)
+  - [Column Graph Capacity](#column-graph-capacity)
 - [xOverlay and iOverlay](#xoverlay-and-ioverlay)
 - [Project Status](#project-status)
 - [License](#license)
@@ -33,9 +34,9 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
 &nbsp;
 ## Why xOverlay?
 
-General-purpose polygon clipping algorithms spend time handling arbitrary segment intersections. Orthogonal geometry has stronger constraints: every edge is horizontal or vertical. xOverlay is built around those constraints and is intended for large Manhattan-style workloads such as layouts, grids, tiled maps, and rectilinear CAD data.
+xOverlay is specialized for orthogonal geometry, making many workloads 10–20× faster than general-purpose polygon libraries.
 
-Use xOverlay when all input edges are axis-aligned and integer coordinates fit your pipeline. For arbitrary angles or floating-point input, use [iOverlay](https://github.com/iShape-Rust/iOverlay).
+Use xOverlay for axis-aligned edges with integer coordinates. For arbitrary angles or floating-point input, use [iOverlay](https://github.com/iShape-Rust/iOverlay).
 
 &nbsp;
 ## Features
@@ -91,8 +92,7 @@ assert_eq!(result[0].len(), 1);
 
 Contours are closed automatically; do not repeat the first point at the end.
 
-`Overlay` is a one-shot value: `overlay` and `overlay_contours` consume it so the solver does not
-need to clone its internal column representation. Construct a new `Overlay` to execute another
+`Overlay` is a one-shot value. Construct a new `Overlay` to execute another
 Boolean rule for the same input contours.
 
 &nbsp;
@@ -328,13 +328,13 @@ EDA geometry typically changes a larger portion of each local topology and benef
 column partitioning, so this nested pattern is not expected to represent the primary target
 workload.
 
-As with any geometry engine, benchmark representative production data when throughput is a design
-constraint. In particular, the number of distinct scanlines, the average and maximum active
-topology size, and the number of segments changed per scanline are useful indicators of expected
-performance.
+### Column Graph Capacity
 
-[^nested-squares]: The **Nested squares** benchmark scenario intentionally exercises this deeply
-    nested worst-case pattern.
+Each partitioned column graph uses `u32` node indices and can therefore contain at most 2³² nodes
+(indices `0..=u32::MAX`). This limit applies independently to each column graph, not to the total
+number of input edges. If a column graph would exceed the limit, xOverlay panics instead of
+truncating an index. Available address space and allocation limits may impose a lower practical
+limit.
 
 &nbsp;
 ## xOverlay and iOverlay

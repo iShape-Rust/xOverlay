@@ -4,16 +4,10 @@ use crate::definition::segment::SegmentFill;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct LinkIndex(u8);
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Link {
     index: u32,
     fill: SegmentFill,
-}
-#[cfg(not(debug_assertions))]
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Link {
-    data: u32,
 }
 
 #[allow(non_upper_case_globals)]
@@ -41,7 +35,6 @@ impl LinkIndex {
     }
 }
 
-#[cfg(debug_assertions)]
 impl Link {
     #[inline(always)]
     pub(super) fn index(&self) -> usize {
@@ -74,41 +67,13 @@ impl Link {
     }
 }
 
-#[cfg(not(debug_assertions))]
-impl Link {
-    const INDEX_BITS: u32 = 28;
-    const INDEX_MASK: u32 = (1 << Self::INDEX_BITS) - 1;
+#[cfg(test)]
+mod tests {
+    use super::Link;
+    use core::mem::size_of;
 
-    #[inline(always)]
-    pub(super) fn index(&self) -> usize {
-        (self.data & Self::INDEX_MASK) as usize
-    }
-
-    #[inline(always)]
-    pub(super) fn fill(&self) -> SegmentFill {
-        (self.data >> Self::INDEX_BITS) as SegmentFill
-    }
-
-    #[cfg(test)]
-    #[inline(always)]
-    pub(super) fn is_empty(&self) -> bool {
-        self.data == 0
-    }
-
-    #[inline(always)]
-    pub(super) fn is_not_empty(&self) -> bool {
-        self.data != 0
-    }
-
-    #[inline(always)]
-    pub(super) fn empty() -> Self {
-        Self { data: 0 }
-    }
-    #[inline(always)]
-    pub(super) fn new(node: u32, fill: SegmentFill) -> Self {
-        debug_assert!(node <= Self::INDEX_MASK);
-        Self {
-            data: node | ((fill as u32) << Self::INDEX_BITS),
-        }
+    #[test]
+    fn link_stores_a_u32_index_and_u8_fill_in_eight_bytes() {
+        assert_eq!(size_of::<Link>(), 8);
     }
 }
