@@ -1,6 +1,6 @@
 # xOverlay
 
-[![status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#project-status)
+[![crates.io version](https://img.shields.io/crates/v/x_overlay.svg)](https://crates.io/crates/x_overlay)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 xOverlay is a high-performance polygon Boolean engine specialized for orthogonal (Manhattan) geometry. It processes contours made exclusively of horizontal and vertical edges using integer coordinates.
