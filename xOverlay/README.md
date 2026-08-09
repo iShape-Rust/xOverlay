@@ -12,6 +12,7 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
 ## Table of Contents
 
 - [Why xOverlay?](#why-xoverlay)
+- [Union Algorithm Walkthrough](#union-algorithm-walkthrough)
 - [Features](#features)
 - [Getting Started](#getting-started)
   - [Quick Start](#quick-start)
@@ -37,6 +38,13 @@ xOverlay is a high-performance polygon Boolean engine specialized for orthogonal
 xOverlay is specialized for orthogonal geometry, making many workloads 10–20× faster than general-purpose polygon libraries.
 
 Use xOverlay for axis-aligned edges with integer coordinates. For arbitrary angles or floating-point input, use [iOverlay](https://github.com/iShape-Rust/iOverlay).
+
+&nbsp;
+## Union Algorithm Walkthrough
+
+The animation below follows union processing from directed input segments through column-graph construction, contour extraction, and border-contour merging.
+
+![xOverlay union algorithm walkthrough](https://raw.githubusercontent.com/iShape-Rust/xOverlay/main/animation/TetrisUnionScene.gif)
 
 &nbsp;
 ## Features

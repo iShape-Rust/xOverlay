@@ -26,3 +26,9 @@ Cargo.lock
 
 # Generated benchmark reports
 /performance/benchmark/results/latest.json
+
+# Keep only Manim scene sources and the published walkthrough GIF.
+/animation/*
+!/animation/tetris.svg
+!/animation/tetris_union.py
+!/animation/TetrisUnionScene.gif
