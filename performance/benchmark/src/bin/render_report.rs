@@ -5,6 +5,8 @@ use xoverlay_benchmark::model::BenchmarkReport;
 use xoverlay_benchmark::scenarios;
 
 fn main() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let site_root = crate_root.join("../../docs/performance");
     let mut args = env::args().skip(1);
     let input = args
         .next()
@@ -13,13 +15,12 @@ fn main() {
     let output = args
         .next()
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("site/index.html"));
-    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let template = fs::read_to_string(crate_root.join("site/template/index.html"))
+        .unwrap_or_else(|| site_root.join("index.html"));
+    let template = fs::read_to_string(site_root.join("template/index.html"))
         .expect("unable to read report template");
-    let css = fs::read_to_string(crate_root.join("site/template/style.css"))
+    let css = fs::read_to_string(site_root.join("template/style.css"))
         .expect("unable to read report stylesheet");
-    let javascript = fs::read_to_string(crate_root.join("site/template/app.js"))
+    let javascript = fs::read_to_string(site_root.join("template/app.js"))
         .expect("unable to read report script");
     let source = fs::read_to_string(resolve(crate_root, &input))
         .expect("unable to read benchmark result JSON");

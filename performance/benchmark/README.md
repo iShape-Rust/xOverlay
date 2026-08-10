@@ -32,7 +32,7 @@ All user-facing scripts live together in [`scripts`](scripts):
 | `build.sh` | Builds all Rust tools and the C++ Boost Polygon 90 runner. |
 | `run.sh` | Runs the benchmark, writes JSON, regenerates SVGs, and rebuilds the page. |
 | `generate-svgs.sh` | Recreates the nine centered, uncropped scenario illustrations. |
-| `render.sh` | Rebuilds `site/index.html` from a result JSON file and the page template. |
+| `render.sh` | Rebuilds `docs/performance/index.html` from a result JSON file and the page template. |
 
 ## Quick start
 
@@ -69,11 +69,11 @@ is stored in JSON as `metadata.scenario_sizes`.
 The command writes:
 
 - raw benchmark data to [`results/latest.json`](results/latest.json);
-- generated illustrations to [`site/assets`](site/assets);
-- the standalone report to [`site/index.html`](site/index.html).
+- generated illustrations to [`docs/performance/assets`](../../docs/performance/assets);
+- the standalone report to [`docs/performance/index.html`](../../docs/performance/index.html).
 
-Open `site/index.html` directly in a browser. Its JSON data, CSS, and JavaScript
-are embedded, so a local web server is not required.
+Open `docs/performance/index.html` directly in a browser. Its JSON data, CSS,
+and JavaScript are embedded, so a local web server is not required.
 
 ## Smoke run
 
@@ -169,7 +169,8 @@ series.
 
 ## Report sources
 
-The editable report files are in [`site/template`](site/template). The renderer
-embeds the selected JSON, stylesheet, and JavaScript into a standalone
-`site/index.html`. Scenario SVGs are generated from the benchmark geometry;
-they should not be edited by hand.
+The editable report files are in
+[`docs/performance/template`](../../docs/performance/template). The renderer
+embeds the selected JSON, stylesheet, and JavaScript into the standalone
+`docs/performance/index.html`. Scenario SVGs are generated from the benchmark
+geometry; they should not be edited by hand.
