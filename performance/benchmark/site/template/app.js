@@ -64,6 +64,13 @@
     suite.innerHTML = report.scenarios.map((scenario, index) => {
       const measurements = scenarioMeasurements(scenario.id);
       const warning = measurements.find(item => item.warning)?.warning;
+      const input = scenario.input_polygons;
+      const inputNote = input ? `
+        <aside class="input-polygons" aria-label="Input polygon count">
+          <strong>Input polygons</strong>
+          <span>${escapeHtml(input.formula)}</span>
+          <span>At max N = ${input.max_n.toLocaleString()}. Polygons = ${input.total.toLocaleString()}.</span>
+        </aside>` : "";
       return `
         <article class="scenario" id="${escapeHtml(scenario.id)}">
           <div class="scenario-copy">
@@ -75,6 +82,7 @@
           <div class="result-panel">
             ${warning ? `<p class="warning">${escapeHtml(warning)}</p>` : ""}
             ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">Not measured in this run.</div>`}
+            ${inputNote}
           </div>
         </article>`;
     }).join("");
@@ -103,7 +111,7 @@
       <div class="chart-shell"><canvas id="chart-${escapeHtml(id)}" role="img" aria-label="${escapeHtml(id)} performance chart"></canvas></div>
       <div class="legend">${names.map(name => `<span class="legend-item"><span class="legend-line ${name.startsWith("Boost") ? "dashed" : ""}" style="border-color:${colors[name] || "#18201e"}"></span>${escapeHtml(name)}</span>`).join("")}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>N</th>${names.map(name => `<th>${escapeHtml(name)}</th>`).join("")}</tr></thead>
+        <thead><tr><th>Generator N</th>${names.map(name => `<th>${escapeHtml(name)}</th>`).join("")}</tr></thead>
         <tbody>${tableRows}</tbody>
       </table></div>`;
   }
@@ -143,7 +151,7 @@
       context.textAlign = "center"; context.textBaseline = "top";
       context.fillText(String(n), x, height - padding.bottom + 12);
     });
-    context.textAlign = "right"; context.fillText("N", width - padding.right, height - 13);
+    context.textAlign = "right"; context.fillText("Generator N", width - padding.right, height - 13);
 
     [...new Set(measurements.map(seriesName))].forEach(name => {
       const series = measurements.filter(item => seriesName(item) === name).sort((a, b) => a.n - b.n);

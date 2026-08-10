@@ -187,6 +187,17 @@ pub struct ScenarioInfo {
     pub description: String,
     pub operation: Operation,
     pub illustration: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_polygons: Option<InputPolygonCount>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct InputPolygonCount {
+    pub formula: String,
+    pub max_n: usize,
+    pub subject: usize,
+    pub clip: usize,
+    pub total: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

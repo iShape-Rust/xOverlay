@@ -67,6 +67,9 @@ h1 { margin: 0; max-width: none; white-space: nowrap; font-size: clamp(24px, 3.2
 .scenario-index { flex: none; color: var(--teal); font: inherit; letter-spacing: inherit; }
 .scenario-index::after { content: "."; }
 .scenario-description { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.input-polygons { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; padding: 12px 14px; border-left: 3px solid var(--teal); color: var(--muted); background: var(--surface); font-size: 11px; line-height: 1.45; }
+.input-polygons strong { color: var(--ink); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.input-polygons span:first-of-type { color: var(--ink); font-family: ui-monospace, monospace; }
 .operation { display: inline-block; margin-top: 8px; padding: 6px 9px; border: 1px solid var(--ink); font: 700 11px ui-monospace, monospace; text-transform: uppercase; }
 .illustration { display: block; width: 100%; aspect-ratio: 1 / 1; margin-top: 28px; object-fit: contain; background: var(--surface); border: 1px solid var(--line); }
 
@@ -232,63 +235,126 @@ tbody tr:last-child td { border-bottom: 0; }
       "label": "Checkerboard",
       "description": "Two interleaved square grids with regular overlap.",
       "operation": "xor",
-      "illustration": "assets/checkerboard.svg"
+      "illustration": "assets/checkerboard.svg",
+      "input_polygons": {
+        "formula": "N² subject + (N − 1)² clip",
+        "max_n": 2048,
+        "subject": 4194304,
+        "clip": 4190209,
+        "total": 8384513
+      }
     },
     {
       "id": "not_overlap",
       "label": "Not overlap",
       "description": "Two interleaved grids whose squares never intersect.",
       "operation": "union",
-      "illustration": "assets/not_overlap.svg"
+      "illustration": "assets/not_overlap.svg",
+      "input_polygons": {
+        "formula": "N² subject + (N − 1)² clip",
+        "max_n": 2048,
+        "subject": 4194304,
+        "clip": 4190209,
+        "total": 8384513
+      }
     },
     {
       "id": "lines_net",
       "label": "Lines net",
       "description": "A dense grid formed by intersecting horizontal and vertical bars.",
       "operation": "intersect",
-      "illustration": "assets/lines_net.svg"
+      "illustration": "assets/lines_net.svg",
+      "input_polygons": {
+        "formula": "N subject + N clip",
+        "max_n": 4096,
+        "subject": 4096,
+        "clip": 4096,
+        "total": 8192
+      }
     },
     {
       "id": "wind_mill",
       "label": "Orthogonal wind mill",
       "description": "A repeated four-fold pinwheel made only from orthogonal blades.",
       "operation": "difference",
-      "illustration": "assets/wind_mill.svg"
+      "illustration": "assets/wind_mill.svg",
+      "input_polygons": {
+        "formula": "4N² subject + 4N² clip",
+        "max_n": 1024,
+        "subject": 4194304,
+        "clip": 4194304,
+        "total": 8388608
+      }
     },
     {
       "id": "cross",
       "label": "Cross",
       "description": "Two overlapping rectangles with square holes near four arm ends and at the center.",
       "operation": "difference",
-      "illustration": "assets/cross.svg"
+      "illustration": "assets/cross.svg",
+      "input_polygons": {
+        "formula": "2N² subject + 5N² clip",
+        "max_n": 1024,
+        "subject": 2097152,
+        "clip": 5242880,
+        "total": 7340032
+      }
     },
     {
       "id": "tetris_square",
       "label": "Tetris square",
       "description": "Four diagonally paired L tetrominoes form a square frame around a 3x3-cell hole.",
       "operation": "union",
-      "illustration": "assets/tetris_square.svg"
+      "illustration": "assets/tetris_square.svg",
+      "input_polygons": {
+        "formula": "2N² subject + 2N² clip",
+        "max_n": 1024,
+        "subject": 2097152,
+        "clip": 2097152,
+        "total": 4194304
+      }
     },
     {
       "id": "windows",
       "label": "Windows",
       "description": "A grid of square frames, each producing one hole.",
       "operation": "difference",
-      "illustration": "assets/windows.svg"
+      "illustration": "assets/windows.svg",
+      "input_polygons": {
+        "formula": "N² subject + N² clip",
+        "max_n": 2048,
+        "subject": 4194304,
+        "clip": 4194304,
+        "total": 8388608
+      }
     },
     {
       "id": "nested_squares",
       "label": "Nested squares",
       "description": "Union of concentric square rails with deep shape nesting.",
       "operation": "union",
-      "illustration": "assets/nested_squares.svg"
+      "illustration": "assets/nested_squares.svg",
+      "input_polygons": {
+        "formula": "2N subject + 2N clip",
+        "max_n": 16384,
+        "subject": 32768,
+        "clip": 32768,
+        "total": 65536
+      }
     },
     {
       "id": "sieve",
       "label": "Sieve",
       "description": "One large square perforated by a regular grid of square holes.",
       "operation": "difference",
-      "illustration": "assets/sieve.svg"
+      "illustration": "assets/sieve.svg",
+      "input_polygons": {
+        "formula": "1 subject + N² clip",
+        "max_n": 1024,
+        "subject": 1,
+        "clip": 1048576,
+        "total": 1048577
+      }
     }
   ],
   "measurements": [
@@ -29168,6 +29234,13 @@ tbody tr:last-child td { border-bottom: 0; }
     suite.innerHTML = report.scenarios.map((scenario, index) => {
       const measurements = scenarioMeasurements(scenario.id);
       const warning = measurements.find(item => item.warning)?.warning;
+      const input = scenario.input_polygons;
+      const inputNote = input ? `
+        <aside class="input-polygons" aria-label="Input polygon count">
+          <strong>Input polygons</strong>
+          <span>${escapeHtml(input.formula)}</span>
+          <span>At max N = ${input.max_n.toLocaleString()}. Polygons = ${input.total.toLocaleString()}.</span>
+        </aside>` : "";
       return `
         <article class="scenario" id="${escapeHtml(scenario.id)}">
           <div class="scenario-copy">
@@ -29179,6 +29252,7 @@ tbody tr:last-child td { border-bottom: 0; }
           <div class="result-panel">
             ${warning ? `<p class="warning">${escapeHtml(warning)}</p>` : ""}
             ${measurements.length ? renderResults(scenario.id, measurements) : `<div class="empty">Not measured in this run.</div>`}
+            ${inputNote}
           </div>
         </article>`;
     }).join("");
@@ -29207,7 +29281,7 @@ tbody tr:last-child td { border-bottom: 0; }
       <div class="chart-shell"><canvas id="chart-${escapeHtml(id)}" role="img" aria-label="${escapeHtml(id)} performance chart"></canvas></div>
       <div class="legend">${names.map(name => `<span class="legend-item"><span class="legend-line ${name.startsWith("Boost") ? "dashed" : ""}" style="border-color:${colors[name] || "#18201e"}"></span>${escapeHtml(name)}</span>`).join("")}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th>N</th>${names.map(name => `<th>${escapeHtml(name)}</th>`).join("")}</tr></thead>
+        <thead><tr><th>Generator N</th>${names.map(name => `<th>${escapeHtml(name)}</th>`).join("")}</tr></thead>
         <tbody>${tableRows}</tbody>
       </table></div>`;
   }
@@ -29247,7 +29321,7 @@ tbody tr:last-child td { border-bottom: 0; }
       context.textAlign = "center"; context.textBaseline = "top";
       context.fillText(String(n), x, height - padding.bottom + 12);
     });
-    context.textAlign = "right"; context.fillText("N", width - padding.right, height - 13);
+    context.textAlign = "right"; context.fillText("Generator N", width - padding.right, height - 13);
 
     [...new Set(measurements.map(seriesName))].forEach(name => {
       const series = measurements.filter(item => seriesName(item) === name).sort((a, b) => a.n - b.n);

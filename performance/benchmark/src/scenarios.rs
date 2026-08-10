@@ -1,4 +1,4 @@
-use crate::model::{Case, Contour, Operation, ScenarioInfo};
+use crate::model::{Case, Contour, InputPolygonCount, Operation, ScenarioInfo};
 use x_overlay::i_float::int::number::int::IntNumber;
 use x_overlay::i_float::int::point::IntPoint;
 
@@ -90,12 +90,49 @@ pub fn scenario_info() -> Vec<ScenarioInfo> {
 }
 
 fn info(id: &str, label: &str, description: &str, operation: Operation) -> ScenarioInfo {
+    let max_n = max_n(id);
+    let (subject, clip) = input_polygon_counts(id, max_n);
     ScenarioInfo {
         id: id.to_string(),
         label: label.to_string(),
         description: description.to_string(),
         operation,
         illustration: format!("assets/{id}.svg"),
+        input_polygons: Some(InputPolygonCount {
+            formula: input_polygon_formula(id).to_string(),
+            max_n,
+            subject,
+            clip,
+            total: subject + clip,
+        }),
+    }
+}
+
+fn input_polygon_formula(scenario: &str) -> &'static str {
+    match scenario {
+        "checkerboard" | "not_overlap" => "N² subject + (N − 1)² clip",
+        "lines_net" => "N subject + N clip",
+        "wind_mill" => "4N² subject + 4N² clip",
+        "cross" => "2N² subject + 5N² clip",
+        "tetris_square" => "2N² subject + 2N² clip",
+        "windows" => "N² subject + N² clip",
+        "nested_squares" => "2N subject + 2N clip",
+        "sieve" => "1 subject + N² clip",
+        _ => panic!("unknown scenario: {scenario}"),
+    }
+}
+
+pub fn input_polygon_counts(scenario: &str, n: usize) -> (usize, usize) {
+    match scenario {
+        "checkerboard" | "not_overlap" => (n * n, n.saturating_sub(1).pow(2)),
+        "lines_net" => (n, n),
+        "wind_mill" => (4 * n * n, 4 * n * n),
+        "cross" => (2 * n * n, 5 * n * n),
+        "tetris_square" => (2 * n * n, 2 * n * n),
+        "windows" => (n * n, n * n),
+        "nested_squares" => (2 * n, 2 * n),
+        "sieve" => (1, n * n),
+        _ => panic!("unknown scenario: {scenario}"),
     }
 }
 
@@ -536,7 +573,8 @@ fn rectangle(x: i64, y: i64, width: i64, height: i64) -> Contour<i64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SCENARIOS, cross, full_sizes, make_i64, make_preview, max_n, rectangle, tetris_square,
+        SCENARIOS, cross, full_sizes, input_polygon_counts, make_i64, make_preview, max_n,
+        rectangle, scenario_info, tetris_square,
     };
     use crate::model::Operation;
     use x_overlay::core::fill_rule::FillRule;
@@ -598,6 +636,41 @@ mod tests {
         assert_eq!(full_sizes("tetris_square"), vec![16, 64, 256, 1024]);
         assert_eq!(full_sizes("nested_squares"), vec![256, 1024, 4096, 16_384]);
         assert_eq!(full_sizes("sieve"), vec![16, 64, 256, 1024]);
+    }
+
+    #[test]
+    fn input_polygon_formulas_match_generated_cases() {
+        for scenario in SCENARIOS {
+            for n in [1, 2, 3] {
+                let case = make_i64(scenario, n);
+                assert_eq!(
+                    input_polygon_counts(scenario, n),
+                    (case.subject.len(), case.clip.len()),
+                    "{scenario} has a stale input polygon formula"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scenario_info_reports_polygon_count_at_maximum_n() {
+        let totals = scenario_info()
+            .into_iter()
+            .map(|scenario| {
+                let input = scenario.input_polygons.expect("input polygon metadata");
+                (scenario.id, input.total)
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        assert_eq!(totals["checkerboard"], 8_384_513);
+        assert_eq!(totals["not_overlap"], 8_384_513);
+        assert_eq!(totals["lines_net"], 8_192);
+        assert_eq!(totals["wind_mill"], 8_388_608);
+        assert_eq!(totals["cross"], 7_340_032);
+        assert_eq!(totals["tetris_square"], 4_194_304);
+        assert_eq!(totals["windows"], 8_388_608);
+        assert_eq!(totals["nested_squares"], 65_536);
+        assert_eq!(totals["sieve"], 1_048_577);
     }
 
     #[test]

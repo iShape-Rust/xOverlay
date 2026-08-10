@@ -60,6 +60,9 @@ h1 { margin: 0; max-width: none; white-space: nowrap; font-size: clamp(24px, 3.2
 .scenario-index { flex: none; color: var(--teal); font: inherit; letter-spacing: inherit; }
 .scenario-index::after { content: "."; }
 .scenario-description { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.input-polygons { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 12px; padding: 12px 14px; border-left: 3px solid var(--teal); color: var(--muted); background: var(--surface); font-size: 11px; line-height: 1.45; }
+.input-polygons strong { color: var(--ink); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.input-polygons span:first-of-type { color: var(--ink); font-family: ui-monospace, monospace; }
 .operation { display: inline-block; margin-top: 8px; padding: 6px 9px; border: 1px solid var(--ink); font: 700 11px ui-monospace, monospace; text-transform: uppercase; }
 .illustration { display: block; width: 100%; aspect-ratio: 1 / 1; margin-top: 28px; object-fit: contain; background: var(--surface); border: 1px solid var(--line); }
 

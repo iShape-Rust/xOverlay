@@ -46,17 +46,21 @@ The maximum `N` was selected once using xOverlay single-threaded with `i64`
 shape output: it is a power of two whose operation completed in at most four
 seconds. Benchmark runs use these fixed values and do not recalibrate them:
 
-| Scenario | Maximum `N` |
-|---|---:|
-| Checkerboard | 2048 |
-| Not overlap | 2048 |
-| Lines net | 4096 |
-| Orthogonal wind mill | 1024 |
-| Cross | 1024 |
-| Tetris square | 1024 |
-| Windows | 2048 |
-| Nested squares | 16384 |
-| Sieve | 1024 |
+`N` is a scenario-specific generator parameter, not the number of input
+polygons. The report shows the corresponding formula and the subject, clip,
+and total polygon counts at the maximum `N` beside every scenario.
+
+| Scenario | Maximum `N` | Input polygon formula | Polygons at maximum `N` |
+|---|---:|---|---:|
+| Checkerboard | 2048 | `N² + (N − 1)²` | 8,384,513 |
+| Not overlap | 2048 | `N² + (N − 1)²` | 8,384,513 |
+| Lines net | 4096 | `N + N` | 8,192 |
+| Orthogonal wind mill | 1024 | `4N² + 4N²` | 8,388,608 |
+| Cross | 1024 | `2N² + 5N²` | 7,340,032 |
+| Tetris square | 1024 | `2N² + 2N²` | 4,194,304 |
+| Windows | 2048 | `N² + N²` | 8,388,608 |
+| Nested squares | 16384 | `2N + 2N` | 65,536 |
+| Sieve | 1024 | `1 + N²` | 1,048,577 |
 
 Each scenario benchmarks the ascending series `N/64`, `N/16`, `N/4`, `N`.
 The same series is used for both coordinate widths and both output forms, and

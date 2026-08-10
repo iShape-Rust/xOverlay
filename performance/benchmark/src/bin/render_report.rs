@@ -43,19 +43,24 @@ fn main() {
 
 fn include_current_scenarios(report: &mut BenchmarkReport) {
     for scenario in scenarios::scenario_info() {
-        if report.scenarios.iter().any(|item| item.id == scenario.id) {
-            continue;
-        }
-        let sizes = if report.metadata.profile == "smoke" {
-            scenarios::smoke_sizes(&scenario.id)
+        if let Some(existing) = report
+            .scenarios
+            .iter_mut()
+            .find(|item| item.id == scenario.id)
+        {
+            *existing = scenario;
         } else {
-            scenarios::full_sizes(&scenario.id)
-        };
-        report
-            .metadata
-            .scenario_sizes
-            .insert(scenario.id.clone(), sizes);
-        report.scenarios.push(scenario);
+            let sizes = if report.metadata.profile == "smoke" {
+                scenarios::smoke_sizes(&scenario.id)
+            } else {
+                scenarios::full_sizes(&scenario.id)
+            };
+            report
+                .metadata
+                .scenario_sizes
+                .insert(scenario.id.clone(), sizes);
+            report.scenarios.push(scenario);
+        }
     }
 }
 
